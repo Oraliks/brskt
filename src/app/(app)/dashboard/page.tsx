@@ -45,6 +45,8 @@ export default async function DashboardPage() {
 
   const firstName = session.user.telegramFirstName ?? session.user.name ?? '';
 
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+
   return (
     <>
       <Section className="pt-24 pb-12">
@@ -56,6 +58,24 @@ export default async function DashboardPage() {
             Salut {firstName}.
           </h1>
         </div>
+
+        {botUsername && (
+          <div className="mt-8 inline-flex items-start gap-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/25 px-4 py-3 max-w-xl">
+            <MessageCircle className="h-4 w-4 text-blue-300 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <strong className="text-blue-200">Notifications temps réel :</strong>{' '}
+              <Link
+                href={`https://t.me/${botUsername}?start=hello`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-white"
+              >
+                envoie <code className="font-mono bg-white/5 px-1.5 py-0.5 rounded">/start</code> à @{botUsername}
+              </Link>{' '}
+              une fois pour recevoir confirmations & alertes directement sur Telegram.
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section className="py-0">

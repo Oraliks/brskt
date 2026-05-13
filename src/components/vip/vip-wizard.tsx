@@ -308,7 +308,7 @@ function DepositStep({ application }: { application: VipApplication }) {
     <StepCard
       badge="04"
       title="Déclare ton dépôt"
-      description="Tu as effectué un dépôt sur ton compte broker — déclare-le ici."
+      description="Le montant que tu as déposé sur TON compte broker. Cet argent reste à toi, c'est ton capital pour trader. On vérifie juste que tu as bien déposé pour t'envoyer ton accès VIP."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

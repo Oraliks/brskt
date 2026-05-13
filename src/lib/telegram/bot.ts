@@ -10,21 +10,50 @@ export function getBot(): Bot<Context> {
 
   const bot = new Bot<Context>(token);
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
   // === Commandes ===
   bot.command('start', async (ctx) => {
+    const firstName = ctx.from?.first_name ?? '';
+    const greeting = firstName ? `👋 Salut ${firstName} !` : '👋 Bienvenue !';
+
     await ctx.reply(
-      `👋 Bienvenue chez Boursikotons.\n\n` +
-        `Tout passe par le site web — formation, groupe VIP, suivi :\n` +
-        `${process.env.NEXT_PUBLIC_APP_URL}`
+      `${greeting}\n\n` +
+        `Tu es bien connecté au bot Boursikotons. À partir d'ici tu vas recevoir en temps réel :\n` +
+        `• Confirmations de réservation formation\n` +
+        `• Validations VIP (inscription, dépôt, accès Telegram)\n` +
+        `• Messages de l'équipe\n\n` +
+        `🔗 Mon espace : ${appUrl}/dashboard\n` +
+        `💎 VIP Telegram (gratuit) : ${appUrl}/vip\n` +
+        `📚 Réserver une formation : ${appUrl}/formation`,
+      { link_preview_options: { is_disabled: true } }
     );
   });
 
   bot.command('help', async (ctx) => {
     await ctx.reply(
-      `Commandes disponibles :\n` +
+      `<b>Commandes disponibles</b>\n\n` +
         `/start — Démarrer\n` +
-        `/status — Vérifier ton statut VIP\n` +
-        `/help — Cette aide`
+        `/dashboard — Mon espace\n` +
+        `/vip — Funnel VIP\n` +
+        `/help — Cette aide\n\n` +
+        `Site : ${appUrl}`,
+      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+    );
+  });
+
+  bot.command('dashboard', async (ctx) => {
+    await ctx.reply(`🔗 Mon espace : ${appUrl}/dashboard`, {
+      link_preview_options: { is_disabled: true },
+    });
+  });
+
+  bot.command('vip', async (ctx) => {
+    await ctx.reply(
+      `💎 <b>VIP Telegram — 100% gratuit</b>\n\n` +
+        `Tu payes 0€ à Boursikotons. Notre rémunération vient du broker partenaire quand tu trades.\n\n` +
+        `Funnel : ${appUrl}/vip`,
+      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
     );
   });
 

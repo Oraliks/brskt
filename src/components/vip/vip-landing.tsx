@@ -8,13 +8,22 @@ const benefits = [
   'Setups Forex / indices / crypto au quotidien',
   'Alertes en temps réel + débriefs',
   'Communauté de traders sérieux',
-  'Accès gratuit tant que ton compte broker est actif',
+  "Accès illimité tant que ton compte broker reste actif",
 ];
 
 const conditions = [
-  { icon: Wallet, text: 'Inscription chez notre broker partenaire via lien' },
-  { icon: ShieldCheck, text: 'Dépôt minimum 250€ sur ton compte' },
-  { icon: MessageCircle, text: "Validation puis lien d'invitation Telegram" },
+  {
+    icon: Wallet,
+    text: 'Inscription chez notre broker partenaire via notre lien — 100% gratuit',
+  },
+  {
+    icon: ShieldCheck,
+    text: 'Tu déposes 250€+ sur TON compte broker pour trader — c\'est ton argent, pas notre rémunération',
+  },
+  {
+    icon: MessageCircle,
+    text: 'Lien d\'invitation Telegram VIP envoyé après validation du dépôt',
+  },
 ];
 
 export function VipLanding() {
@@ -22,15 +31,15 @@ export function VipLanding() {
     <>
       <Section className="pt-32 pb-12">
         <div className="max-w-3xl mx-auto text-center space-y-6">
-          <Badge variant="gold">VIP Telegram</Badge>
+          <Badge variant="gold">VIP Telegram · 100% gratuit</Badge>
           <h1 className="font-serif text-5xl md:text-7xl text-gradient leading-[1.05]">
             Le groupe
             <br />
             <span className="italic text-gradient-accent">qui change tout.</span>
           </h1>
           <p className="text-lg text-[var(--color-text-dim)] max-w-xl mx-auto">
-            Accès gratuit à vie en passant par notre lien partenaire broker.
-            Pas d'abonnement, pas de paiement direct.
+            Aucun frais à nous payer — jamais. On gagne notre commission directement
+            auprès du broker quand tu trades. Toi, tu gardes ton argent pour le trader.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
             <Button asChild size="xl" variant="glow">
@@ -95,18 +104,38 @@ export function VipLanding() {
       </Section>
 
       <Section className="py-12">
-        <div className="max-w-2xl mx-auto glass-strong rounded-[var(--radius-2xl)] p-10 text-center">
-          <p className="text-sm font-medium text-amber-300 mb-2">
-            ⚠ Règle importante
-          </p>
-          <h3 className="font-serif text-2xl md:text-3xl">
-            Tu retires avant d'avoir tradé ? Tu sors du groupe.
-          </h3>
-          <p className="mt-4 text-sm text-[var(--color-text-dim)]">
-            Notre groupe est financé par la commission que le broker nous verse
-            sur ton activité. Si tu retires ton dépôt avant qu'on touche, tu es
-            automatiquement éjecté. C'est le deal.
-          </p>
+        <div className="max-w-3xl mx-auto glass-strong rounded-[var(--radius-2xl)] p-10 text-center space-y-8">
+          <div>
+            <p className="text-sm font-medium text-emerald-300 mb-2">
+              💡 Comment c'est gratuit pour toi ?
+            </p>
+            <h3 className="font-serif text-2xl md:text-3xl">
+              Le broker nous paye, pas toi.
+            </h3>
+            <p className="mt-4 text-sm text-[var(--color-text-dim)]">
+              Quand tu ouvres ton compte via notre lien partenaire et que tu trades,
+              le broker nous reverse une commission. Cette commission finance le
+              groupe VIP et notre travail. <strong className="text-white">Ton dépôt reste à 100% sur ton compte broker</strong> — c'est ton capital pour trader,
+              tu peux le retirer (sous conditions, voir ci-dessous).
+            </p>
+          </div>
+
+          <div className="h-px bg-[var(--color-border)]" />
+
+          <div>
+            <p className="text-sm font-medium text-amber-300 mb-2">
+              ⚠ Règle importante
+            </p>
+            <h3 className="font-serif text-2xl md:text-3xl">
+              Tu retires avant d'avoir tradé ? Tu sors du groupe.
+            </h3>
+            <p className="mt-4 text-sm text-[var(--color-text-dim)]">
+              Comme notre rémunération vient de ton activité de trading, si tu retires
+              ton dépôt sans avoir tradé, le broker ne nous reverse rien. Dans ce cas
+              tu es automatiquement éjecté du VIP. C'est le seul deal — sinon tout est
+              gratuit pour toi.
+            </p>
+          </div>
         </div>
       </Section>
     </>

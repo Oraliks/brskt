@@ -5,9 +5,13 @@ import { useLanding } from '../landing-context';
 
 const steps = [
   { n: 1, title: 'Inscription', body: 'Connexion via Telegram en un clic.' },
-  { n: 2, title: 'Compte broker', body: 'Ouverture via notre lien partenaire.' },
-  { n: 3, title: 'Dépôt', body: 'À partir de 250€ sur ton compte.' },
-  { n: 4, title: 'Accès VIP', body: 'Lien Telegram envoyé après validation.' },
+  { n: 2, title: 'Compte broker', body: 'Ouverture via notre lien partenaire — 100% gratuit.' },
+  {
+    n: 3,
+    title: 'Ton dépôt',
+    body: 'À partir de 250€ — ton argent reste à toi, c\'est ce que tu vas trader.',
+  },
+  { n: 4, title: 'Accès VIP', body: 'Lien Telegram envoyé après validation. Rien à payer.' },
 ];
 
 export function VipSection() {
@@ -29,8 +33,13 @@ export function VipSection() {
           VIP Telegram
         </span>
       </h2>
-      <p className="text-[17px] text-[var(--color-text-dim)] max-w-[540px] mx-auto mb-12">
-        Accès en 4 étapes simples. Aucun abonnement, aucun frais caché.
+      <p className="text-[17px] text-[var(--color-text-dim)] max-w-[600px] mx-auto mb-3">
+        <strong className="text-white">L'accès au groupe VIP est gratuit.</strong>{' '}
+        Tu déposes ton propre argent sur ton compte broker pour trader —
+        nous, on est payés en commission par le broker, pas par toi.
+      </p>
+      <p className="text-sm text-[var(--color-text-faint)] max-w-[540px] mx-auto mb-12">
+        Aucun abonnement, aucun frais caché. 4 étapes simples.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-12">
