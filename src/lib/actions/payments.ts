@@ -31,13 +31,11 @@ export async function createPaymentAction(
     return { success: false, error: 'Réservation introuvable' };
   }
 
-  if (
-    booking.status !== 'confirmed' &&
-    booking.status !== 'pending_payment'
-  ) {
+  // Le checkout sert à reprendre un paiement abandonné.
+  if (booking.status !== 'pending_payment') {
     return {
       success: false,
-      error: "La réservation n'est pas prête au paiement",
+      error: "Cette réservation n'est pas en attente de paiement",
     };
   }
 

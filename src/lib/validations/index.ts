@@ -16,6 +16,7 @@ export const bookingFormSchema = z
       )
       .max(3, 'Maximum 3 créneaux'),
     preferredAsap: z.boolean().default(false),
+    paymentMethod: z.enum(['card', 'paypal', 'crypto']),
   })
   .refine((data) => data.preferredDates.length > 0 || data.preferredAsap, {
     message: 'Choisis au moins un créneau ou coche "Dès que possible"',
@@ -23,6 +24,12 @@ export const bookingFormSchema = z
   });
 
 export type BookingFormInput = z.infer<typeof bookingFormSchema>;
+
+export const respondProposedDateSchema = z.object({
+  bookingId: z.string().uuid(),
+  action: z.enum(['accept', 'reject']),
+  reason: z.string().optional(),
+});
 
 // ============================================================
 // ADMIN BOOKING ACTIONS

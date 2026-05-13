@@ -16,6 +16,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Section } from '@/components/shared/section';
+import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
 import { formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -160,13 +161,12 @@ interface BookingRowProps {
 function BookingRow({ booking }: BookingRowProps) {
   const status = booking.status;
   const formation = booking.formation;
-  const isPayable = status === 'confirmed';
 
   const statusConfig = {
+    pending_payment: { label: 'Paiement en attente', variant: 'warning' as const },
     pending_admin: { label: 'En attente de validation', variant: 'warning' as const },
     date_proposed: { label: 'Date alternative proposée', variant: 'warning' as const },
-    confirmed: { label: 'Dates confirmées · à payer', variant: 'default' as const },
-    pending_payment: { label: 'Paiement en cours', variant: 'warning' as const },
+    confirmed: { label: 'Confirmé', variant: 'success' as const },
     paid: { label: 'Payé', variant: 'success' as const },
     completed: { label: 'Terminée', variant: 'secondary' as const },
     cancelled: { label: 'Annulée', variant: 'danger' as const },
@@ -175,38 +175,73 @@ function BookingRow({ booking }: BookingRowProps) {
   const conf = statusConfig[status];
 
   return (
-    <div className="glass rounded-[var(--radius-lg)] p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <Badge variant={conf.variant}>{conf.label}</Badge>
-          <span className="text-xs text-[var(--color-text-faint)] font-mono">
-            #{booking.id.slice(0, 8)}
-          </span>
+    <div className="glass rounded-[var(--radius-lg)] p-5 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <Badge variant={conf.variant}>{conf.label}</Badge>
+            <span className="text-xs text-[var(--color-text-faint)] font-mono">
+              #{booking.id.slice(0, 8)}
+            </span>
+          </div>
+          <h3 className="font-medium">{formation.title}</h3>
+          <p className="text-sm text-[var(--color-text-dim)] mt-1">
+            {booking.confirmedDate
+              ? `Confirmé · ${formatDate(booking.confirmedDate)}`
+              : booking.preferredAsap
+              ? 'Dès que possible'
+              : 'Dates proposées en attente'}
+          </p>
         </div>
-        <h3 className="font-medium">{formation.title}</h3>
-        <p className="text-sm text-[var(--color-text-dim)] mt-1">
-          {booking.confirmedDate
-            ? `Confirmé · ${formatDate(booking.confirmedDate)}`
-            : booking.adminProposedDate
-            ? `Proposé · ${formatDate(booking.adminProposedDate)}`
-            : booking.preferredAsap
-            ? 'Dès que possible'
-            : 'Dates proposées en attente'}
-        </p>
+        <div className="text-right">
+          <div className="font-mono text-sm text-[var(--color-text-dim)]">
+            {formatPrice(Number(formation.priceEur))}
+          </div>
+          {status === 'pending_payment' && (
+            <Button asChild size="sm" className="mt-2">
+              <Link href={`/checkout/${booking.id}`}>
+                <CreditCard className="h-3 w-3" />
+                Finaliser le paiement
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="text-right">
-        <div className="font-mono text-sm text-[var(--color-text-dim)]">
-          {formatPrice(Number(formation.priceEur))}
+
+      {status === 'date_proposed' && booking.adminProposedDate && (
+        <ProposedDateBlock
+          bookingId={booking.id}
+          proposedDate={booking.adminProposedDate}
+          adminNotes={booking.adminNotes}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProposedDateBlock({
+  bookingId,
+  proposedDate,
+  adminNotes,
+}: {
+  bookingId: string;
+  proposedDate: string;
+  adminNotes: string | null;
+}) {
+  return (
+    <div className="rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/25 p-4 space-y-3">
+      <div>
+        <div className="text-xs font-medium text-amber-200 uppercase tracking-wider mb-1">
+          L'équipe te propose une autre date
         </div>
-        {isPayable && (
-          <Button asChild size="sm" className="mt-2">
-            <Link href={`/checkout/${booking.id}`}>
-              <CreditCard className="h-3 w-3" />
-              Payer
-            </Link>
-          </Button>
+        <div className="text-base font-medium">{formatDate(proposedDate)}</div>
+        {adminNotes && (
+          <p className="text-sm text-[var(--color-text-dim)] mt-2 italic">
+            « {adminNotes} »
+          </p>
         )}
       </div>
+      <ProposedDateActions bookingId={bookingId} />
     </div>
   );
 }

@@ -29,11 +29,9 @@ export default async function CheckoutPage({ params }: PageProps) {
 
   if (!booking) notFound();
 
-  // Seulement payable si confirmed ou pending_payment
-  if (
-    booking.status !== 'confirmed' &&
-    booking.status !== 'pending_payment'
-  ) {
+  // /checkout sert à reprendre un paiement abandonné (status pending_payment).
+  // Dans le nouveau flow, le paiement initial se fait depuis /formation/reserver.
+  if (booking.status !== 'pending_payment') {
     redirect('/dashboard');
   }
 

@@ -1,8 +1,15 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader2, MapPin, Plus, Trash2, Wifi } from 'lucide-react';
+import {
+  Bitcoin,
+  CreditCard,
+  Loader2,
+  MapPin,
+  Plus,
+  Trash2,
+  Wifi,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +20,7 @@ import { toast } from '@/components/ui/use-toast';
 import { createBookingAction } from '@/lib/actions/bookings';
 import { formatPrice, cn } from '@/lib/utils';
 import type { Formation } from '@/lib/db/schema';
+import type { PaymentMethodType } from '@/lib/payments/types';
 
 interface BookingFormProps {
   formations: Formation[];
@@ -21,8 +29,18 @@ interface BookingFormProps {
 
 type Slot = { start: string; end: string };
 
+const PAYMENT_METHODS: Array<{
+  id: PaymentMethodType;
+  label: string;
+  sub: string;
+  icon: React.ElementType;
+}> = [
+  { id: 'card', label: 'Carte bancaire', sub: 'Visa, Mastercard via Paddle', icon: CreditCard },
+  { id: 'paypal', label: 'PayPal', sub: 'Compte PayPal ou carte', icon: PayPalIcon },
+  { id: 'crypto', label: 'Crypto', sub: 'USDT, USDC, BTC, ETH', icon: Bitcoin },
+];
+
 export function BookingForm({ formations, defaultMode }: BookingFormProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const initialFormation =
@@ -39,6 +57,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
   const [slots, setSlots] = useState<Slot[]>([{ start: '', end: '' }]);
   const [asap, setAsap] = useState(false);
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('card');
 
   const selected = formations.find((f) => f.id === formationId);
 
@@ -80,14 +99,14 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         formationId,
         preferredDates: validSlots,
         preferredAsap: asap,
+        paymentMethod,
       });
 
       if (result.success) {
         toast({
-          title: '✓ Demande envoyée',
-          description: 'On revient vers toi sous 24h pour valider les dates.',
+          title: 'Redirection vers le paiement…',
         });
-        router.push('/dashboard');
+        window.location.href = result.data.redirectUrl;
       } else {
         toast({
           title: 'Erreur',
@@ -98,12 +117,11 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
     });
   }
 
-  // Min date = aujourd'hui (YYYY-MM-DD)
   const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Choix formation */}
+      {/* 1. Choix formation */}
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium mb-3 block">
           1. Format
@@ -149,14 +167,14 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         </div>
       </fieldset>
 
-      {/* Créneaux préférés */}
+      {/* 2. Créneaux préférés */}
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium mb-1 block">
           2. Tes créneaux préférés
         </legend>
         <p className="text-xs text-[var(--color-text-dim)] mb-4">
-          Propose jusqu'à 3 plages de dates. On validera l'une d'elles ou on te
-          proposera une alternative.
+          Propose jusqu'à 3 plages de dates. On validera l'une d'elles ou on
+          te proposera une alternative — que tu pourras accepter ou refuser.
         </p>
 
         <div className="space-y-3">
@@ -166,9 +184,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
               className="glass rounded-[var(--radius-md)] p-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"
             >
               <div className="space-y-1.5">
-                <Label htmlFor={`start-${idx}`} className="text-xs">
-                  Début
-                </Label>
+                <Label htmlFor={`start-${idx}`} className="text-xs">Début</Label>
                 <Input
                   id={`start-${idx}`}
                   type="date"
@@ -179,9 +195,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`end-${idx}`} className="text-xs">
-                  Fin
-                </Label>
+                <Label htmlFor={`end-${idx}`} className="text-xs">Fin</Label>
                 <Input
                   id={`end-${idx}`}
                   type="date"
@@ -232,7 +246,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         </div>
       </fieldset>
 
-      {/* Notes (optionnel) */}
+      {/* 3. Notes */}
       <div className="space-y-2">
         <Label htmlFor="notes" className="text-sm font-medium">
           3. Note pour l'équipe <span className="text-[var(--color-text-faint)]">(optionnel)</span>
@@ -246,26 +260,81 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         />
       </div>
 
+      {/* 4. Mode de paiement */}
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1 block">
+          4. Mode de paiement
+        </legend>
+        <p className="text-xs text-[var(--color-text-dim)] mb-4">
+          Tu paies maintenant pour bloquer ta place. La date sera ensuite
+          validée par l'équipe sous 24h. En cas de refus ou de non-accord,
+          remboursement intégral.
+        </p>
+        <div className="grid gap-2">
+          {PAYMENT_METHODS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setPaymentMethod(m.id)}
+              className={cn(
+                'w-full glass rounded-[var(--radius-md)] p-3 flex items-center gap-3 text-left transition-all',
+                paymentMethod === m.id
+                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
+                  : 'hover:border-white/14'
+              )}
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)] flex-shrink-0">
+                <m.icon className="h-4 w-4" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{m.label}</div>
+                <div className="text-xs text-[var(--color-text-dim)] mt-0.5">{m.sub}</div>
+              </div>
+              <span
+                className={cn(
+                  'h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                  paymentMethod === m.id
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                    : 'border-[var(--color-border-strong)]'
+                )}
+              >
+                {paymentMethod === m.id && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                )}
+              </span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
       {/* Récap */}
       {selected && (
         <div className="glass-strong rounded-[var(--radius-lg)] p-5 flex items-center justify-between">
           <div>
             <div className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
-              Total
+              À payer maintenant
             </div>
             <div className="font-serif text-3xl text-gradient mt-1">
               {formatPrice(Number(selected.priceEur))}
             </div>
             <p className="text-xs text-[var(--color-text-faint)] mt-1">
-              Payable une fois les dates confirmées par l'équipe.
+              Remboursement intégral si refus d'une contre-proposition de date.
             </p>
           </div>
           <Button type="submit" size="lg" disabled={isPending}>
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isPending ? 'Envoi…' : 'Envoyer ma demande'}
+            {isPending ? 'Préparation…' : 'Payer et réserver'}
           </Button>
         </div>
       )}
     </form>
+  );
+}
+
+function PayPalIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z" />
+    </svg>
   );
 }

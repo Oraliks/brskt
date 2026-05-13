@@ -137,16 +137,19 @@ async function processPaymentEvent(
     .where(eq(payments.id, payment.id));
 
   // Mettre à jour le booking lié
+  // Nouveau flow : paiement reçu AVANT validation admin de la date.
+  // Donc completed → pending_admin (admin doit valider la date)
+  // failed → cancelled (la réservation est annulée, user devra recommencer)
   if (payment.bookingId) {
     if (event.status === 'completed') {
       await db
         .update(bookings)
-        .set({ status: 'paid', updatedAt: new Date() })
+        .set({ status: 'pending_admin', updatedAt: new Date() })
         .where(eq(bookings.id, payment.bookingId));
     } else if (event.status === 'failed') {
       await db
         .update(bookings)
-        .set({ status: 'confirmed', updatedAt: new Date() })
+        .set({ status: 'cancelled', updatedAt: new Date() })
         .where(eq(bookings.id, payment.bookingId));
     }
   }

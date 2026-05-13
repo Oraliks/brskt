@@ -104,9 +104,16 @@ export function BookingsTable({ bookings }: Props) {
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={STATUS_VARIANT[b.status]}>
-                  {b.status.replace('_', ' ')}
-                </Badge>
+                <div className="flex flex-col gap-1">
+                  <Badge variant={STATUS_VARIANT[b.status]}>
+                    {b.status.replace('_', ' ')}
+                  </Badge>
+                  {b.status === 'cancelled' && b.paymentId && (
+                    <Badge variant="warning" className="text-[10px]">
+                      💰 remboursement à faire
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-sm">
                 {b.confirmedDate
