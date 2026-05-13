@@ -37,9 +37,13 @@ export async function startVipFunnelAction(): Promise<
   }
 
   const ref = nanoid(10);
+  // On append notre ref au query string du lien IronFX comme sub_id.
+  // IronAffiliates renvoie ce paramètre dans les postbacks S2S (mode API).
   const baseLink =
     process.env.IRONFX_AFFILIATE_BASE_LINK ?? 'https://ironfx.com/?ref=';
-  const affiliateLink = `${baseLink}${ref}`;
+  const subIdParam = process.env.IRONFX_AFFILIATE_SUBID_PARAM ?? 'sub_id';
+  const separator = baseLink.includes('?') ? '&' : '?';
+  const affiliateLink = `${baseLink}${separator}${subIdParam}=${ref}`;
 
   const [app] = await db
     .insert(vipApplications)

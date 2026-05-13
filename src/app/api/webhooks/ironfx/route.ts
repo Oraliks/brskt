@@ -124,7 +124,14 @@ function verifyPostbackSignature(
 async function processIronfxEvent(payload: Record<string, string>) {
   const eventType = payload.event_type;
   const accountId = payload.account_id;
-  const ref = payload.ref ?? payload.affiliate_ref;
+  // IronAffiliates renvoie le sub_id qu'on a passé dans le lien.
+  // On accepte plusieurs noms possibles selon la config du tracking.
+  const ref =
+    payload.ref ??
+    payload.affiliate_ref ??
+    payload.sub_id ??
+    payload.subid ??
+    payload.sub1;
 
   if (!accountId) {
     throw new Error('Missing account_id in postback');
