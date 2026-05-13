@@ -215,6 +215,17 @@ function BookingRow({ booking }: BookingRowProps) {
           adminNotes={booking.adminNotes}
         />
       )}
+
+      {status === 'cancelled' && booking.adminNotes && (
+        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-4">
+          <div className="text-xs font-medium text-rose-200 uppercase tracking-wider mb-1">
+            Message de l'équipe
+          </div>
+          <p className="text-sm text-[var(--color-text)]">
+            {booking.adminNotes}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

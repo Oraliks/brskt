@@ -104,7 +104,7 @@ export function BookingsTable({ bookings }: Props) {
                 )}
               </TableCell>
               <TableCell>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <Badge variant={STATUS_VARIANT[b.status]}>
                     {b.status.replace('_', ' ')}
                   </Badge>
@@ -112,6 +112,16 @@ export function BookingsTable({ bookings }: Props) {
                     <Badge variant="warning" className="text-[10px]">
                       💰 remboursement à faire
                     </Badge>
+                  )}
+                  {b.adminNotes && (
+                    <details className="text-xs text-[var(--color-text-dim)] max-w-[240px]">
+                      <summary className="cursor-pointer hover:text-white underline-offset-2 hover:underline">
+                        Voir la note
+                      </summary>
+                      <p className="mt-1.5 italic text-[var(--color-text)] leading-snug">
+                        « {b.adminNotes} »
+                      </p>
+                    </details>
                   )}
                 </div>
               </TableCell>
@@ -124,13 +134,14 @@ export function BookingsTable({ bookings }: Props) {
               </TableCell>
               <TableCell className="text-right">
                 {(b.status === 'pending_admin' || b.status === 'date_proposed') && (
-                  <div className="inline-flex gap-1">
+                  <div className="inline-flex flex-wrap gap-1.5 justify-end">
                     <Button
                       size="sm"
                       variant="secondary"
                       onClick={() => setDialog({ type: 'confirm', row: b })}
                     >
                       <Check className="h-3 w-3" />
+                      Confirmer
                     </Button>
                     <Button
                       size="sm"
@@ -138,14 +149,16 @@ export function BookingsTable({ bookings }: Props) {
                       onClick={() => setDialog({ type: 'propose', row: b })}
                     >
                       <Clock className="h-3 w-3" />
+                      Proposer
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setDialog({ type: 'refuse', row: b })}
-                      className="text-rose-300 hover:text-rose-200"
+                      className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10"
                     >
                       <X className="h-3 w-3" />
+                      Refuser
                     </Button>
                   </div>
                 )}
@@ -210,6 +223,14 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
           notes,
         };
       } else {
+        if (!notes.trim()) {
+          toast({
+            title: 'Note obligatoire pour refuser',
+            description: 'Explique pourquoi pour le user et pour ta propre référence.',
+            variant: 'destructive',
+          });
+          return;
+        }
         payload = { action: 'refuse', bookingId: dialog.row.id, notes };
       }
 
@@ -256,7 +277,17 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
           {(dialog.type === 'propose' || dialog.type === 'refuse') && (
             <div>
               <Label htmlFor="notes">
-                Note (envoyée à l'utilisateur)
+                Note{' '}
+                {dialog.type === 'refuse' ? (
+                  <span className="text-rose-300">*</span>
+                ) : (
+                  <span className="text-[var(--color-text-faint)]">
+                    (optionnel)
+                  </span>
+                )}
+                <span className="text-[var(--color-text-faint)] text-xs ml-2">
+                  · sera visible par l'utilisateur sur son dashboard
+                </span>
               </Label>
               <Textarea
                 id="notes"
@@ -264,10 +295,11 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="mt-2"
+                required={dialog.type === 'refuse'}
                 placeholder={
                   dialog.type === 'refuse'
-                    ? 'Indique pourquoi tu refuses et propose un contact privé'
-                    : "Explique pourquoi tu proposes une autre date"
+                    ? "Ex: créneau trop court, je n'ai pas d'autre date qui matche. Contacte-moi en privé sur Telegram pour qu'on trouve."
+                    : "Ex: j'ai proposé la semaine d'après car celle-ci est déjà complète."
                 }
               />
             </div>
