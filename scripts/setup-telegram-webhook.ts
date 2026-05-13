@@ -5,8 +5,11 @@
  *   tsx scripts/setup-telegram-webhook.ts
  */
 
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { Bot } from 'grammy';
+
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN;

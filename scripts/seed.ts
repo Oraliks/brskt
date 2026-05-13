@@ -5,11 +5,13 @@
  *   tsx scripts/seed.ts
  */
 
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/lib/db/schema';
-import { sql } from 'drizzle-orm';
+
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 
 async function main() {
   const client = postgres(process.env.DATABASE_URL!, { prepare: false });

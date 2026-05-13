@@ -5,11 +5,14 @@
  *   pnpm tsx scripts/promote-admin.ts <email-ou-telegram-id>
  */
 
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { eq, or } from 'drizzle-orm';
 import * as schema from '../src/lib/db/schema';
+
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 
 async function main() {
   const identifier = process.argv[2];
