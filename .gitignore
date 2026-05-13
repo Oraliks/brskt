@@ -15,3 +15,5 @@ coverage
 playwright-report
 test-results
 .turbo
+tsconfig.tsbuildinfo
+next-env.d.ts
