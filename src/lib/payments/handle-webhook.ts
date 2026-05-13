@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
 import { bookings, payments } from '@/lib/db/schema';
-import { sendEmail } from '@/lib/email';
+import { notifyUser } from '@/lib/notify';
 import PaymentReceiptEmail from '@root/emails/payment-receipt';
 import { getProviderByName } from './index';
 import type { ParsedWebhookEvent } from './types';
@@ -91,19 +91,29 @@ async function sendPaymentReceipt(providerSessionId: string) {
     with: { user: true, booking: { with: { formation: true } } },
   });
 
-  if (!payment?.user?.email || !payment.booking) return;
+  if (!payment?.user || !payment.booking) return;
 
-  await sendEmail({
-    to: payment.user.email,
-    subject: `Paiement confirmé — ${payment.booking.formation.title}`,
-    react: PaymentReceiptEmail({
-      firstName: payment.user.telegramFirstName ?? payment.user.name ?? '',
-      formationTitle: payment.booking.formation.title,
-      amount: Number(payment.amountEur),
-      currency: 'EUR',
-      paymentMethod: payment.method,
-      paymentId: payment.id,
-    }),
+  const firstName =
+    payment.user.telegramFirstName ?? payment.user.name ?? '';
+  const amount = Number(payment.amountEur);
+
+  await notifyUser(payment.user, {
+    email: {
+      subject: `Paiement confirmé — ${payment.booking.formation.title}`,
+      react: PaymentReceiptEmail({
+        firstName,
+        formationTitle: payment.booking.formation.title,
+        amount,
+        currency: 'EUR',
+        paymentMethod: payment.method,
+        paymentId: payment.id,
+      }),
+    },
+    telegram:
+      `✅ <b>Paiement confirmé</b>\n\n` +
+      `<b>${payment.booking.formation.title}</b>\n` +
+      `Montant : ${amount}€\n\n` +
+      `On valide ta date sous 24h et on te prévient ici.`,
   });
 }
 

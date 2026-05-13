@@ -12,6 +12,7 @@ import {
 } from '@/lib/db/schema';
 import { requireOnboarded } from '@/lib/auth/server';
 import { ADMIN_EMAIL, sendEmail } from '@/lib/email';
+import { notifyUser } from '@/lib/notify';
 import BookingReceivedEmail from '@root/emails/booking-received';
 import AdminNotificationEmail from '@root/emails/admin-notification';
 import { getPaymentProvider } from '@/lib/payments';
@@ -152,9 +153,8 @@ export async function createBookingAction(
       },
     });
 
-    if (session.user.email) {
-      await sendEmail({
-        to: session.user.email,
+    await notifyUser(session.user, {
+      email: {
         subject: `On a reçu ta demande — ${formation.title}`,
         react: BookingReceivedEmail({
           firstName:
@@ -162,8 +162,13 @@ export async function createBookingAction(
           formationTitle: formation.title,
           bookingId: booking.id,
         }),
-      });
-    }
+      },
+      telegram:
+        `📝 <b>Réservation reçue</b>\n\n` +
+        `<b>${formation.title}</b>\n` +
+        `Montant : ${amount}€\n\n` +
+        `Une fois ton paiement reçu, on validera ta date sous 24h.`,
+    });
 
     await sendEmail({
       to: ADMIN_EMAIL,

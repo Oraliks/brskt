@@ -115,14 +115,20 @@ export async function ejectFromTelegram(
  */
 export async function sendDirectMessage(
   telegramId: number,
-  message: string
+  message: string,
+  options?: { disableWebPreview?: boolean }
 ): Promise<boolean> {
   try {
     const bot = getBot();
-    await bot.api.sendMessage(telegramId, message);
+    await bot.api.sendMessage(telegramId, message, {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: options?.disableWebPreview ?? true },
+    });
     return true;
   } catch (err) {
-    console.error('[Telegram] sendDirectMessage error', err);
+    // Causes typiques: l'user n'a jamais fait /start au bot, ou a bloqué le bot.
+    // C'est best-effort, on log mais on ne throw pas.
+    console.warn('[Telegram] sendDirectMessage failed', err);
     return false;
   }
 }

@@ -17,11 +17,16 @@ import {
 } from '@/lib/validations';
 import { setIronFXMode } from '@/lib/ironfx';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
-import { sendEmail } from '@/lib/email';
+import { notifyUser } from '@/lib/notify';
 import BookingConfirmedEmail from '@root/emails/booking-confirmed';
+import BookingProposedEmail from '@root/emails/booking-proposed';
+import BookingRefusedEmail from '@root/emails/booking-refused';
 import VipSignupValidatedEmail from '@root/emails/vip-signup-validated';
 import VipDepositValidatedEmail from '@root/emails/vip-deposit-validated';
+import { formatDate } from '@/lib/utils';
 import type { ActionResult } from './bookings';
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
 // ============================================================
 // BOOKINGS
@@ -52,6 +57,9 @@ export async function adminBookingAction(
     return { success: false, error: 'Réservation introuvable' };
   }
 
+  const firstName =
+    booking.user.telegramFirstName ?? booking.user.name ?? '';
+
   if (data.action === 'confirm') {
     await db
       .update(bookings)
@@ -62,22 +70,26 @@ export async function adminBookingAction(
       })
       .where(eq(bookings.id, data.bookingId));
 
-    after(async () => {
-      if (booking.user.email) {
-        await sendEmail({
-          to: booking.user.email,
+    after(() =>
+      notifyUser(booking.user, {
+        email: {
           subject: `Confirmé — ${booking.formation.title}`,
           react: BookingConfirmedEmail({
-            firstName:
-              booking.user.telegramFirstName ?? booking.user.name ?? '',
+            firstName,
             formationTitle: booking.formation.title,
             isOnsite: booking.formation.mode === 'onsite',
-            confirmedDate: data.confirmedDate,
+            confirmedDate: formatDate(data.confirmedDate),
             bookingId: booking.id,
           }),
-        });
-      }
-    });
+        },
+        telegram:
+          `✅ <b>Ta formation est confirmée</b>\n\n` +
+          `<b>${escapeHtml(booking.formation.title)}</b>\n` +
+          `Date : <b>${escapeHtml(formatDate(data.confirmedDate))}</b>\n\n` +
+          `Tu recevras les détails pratiques quelques jours avant.\n` +
+          `Voir : ${APP_URL}/dashboard`,
+      })
+    );
   } else if (data.action === 'propose_alternative') {
     await db
       .update(bookings)
@@ -88,7 +100,29 @@ export async function adminBookingAction(
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, data.bookingId));
+
+    after(() =>
+      notifyUser(booking.user, {
+        email: {
+          subject: `Nouvelle date proposée — ${booking.formation.title}`,
+          react: BookingProposedEmail({
+            firstName,
+            formationTitle: booking.formation.title,
+            proposedDate: formatDate(data.proposedDate),
+            adminNotes: data.notes,
+            bookingId: booking.id,
+          }),
+        },
+        telegram:
+          `📅 <b>L'équipe te propose une autre date</b>\n\n` +
+          `<b>${escapeHtml(booking.formation.title)}</b>\n` +
+          `Date proposée : <b>${escapeHtml(formatDate(data.proposedDate))}</b>\n` +
+          (data.notes ? `\n<i>«${escapeHtml(data.notes)}»</i>\n` : '') +
+          `\nTu peux accepter ou refuser depuis ton dashboard :\n${APP_URL}/dashboard`,
+      })
+    );
   } else if (data.action === 'refuse') {
+    const reason = data.notes ?? 'Pas de raison précisée.';
     await db
       .update(bookings)
       .set({
@@ -97,6 +131,26 @@ export async function adminBookingAction(
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, data.bookingId));
+
+    after(() =>
+      notifyUser(booking.user, {
+        email: {
+          subject: `Réservation refusée — ${booking.formation.title}`,
+          react: BookingRefusedEmail({
+            firstName,
+            formationTitle: booking.formation.title,
+            adminNotes: reason,
+            bookingId: booking.id,
+          }),
+        },
+        telegram:
+          `❌ <b>Réservation refusée</b>\n\n` +
+          `<b>${escapeHtml(booking.formation.title)}</b>\n\n` +
+          `<i>«${escapeHtml(reason)}»</i>\n\n` +
+          `Tu seras remboursé intégralement dans les 48h.\n` +
+          `Détails : ${APP_URL}/dashboard`,
+      })
+    );
   }
 
   revalidatePath('/admin/bookings');
@@ -124,17 +178,20 @@ export async function adminValidateSignupAction(
     .set({ step: 'signup_validated', updatedAt: new Date() })
     .where(eq(vipApplications.id, applicationId));
 
-  after(async () => {
-    if (app.user.email) {
-      await sendEmail({
-        to: app.user.email,
+  const firstName = app.user.telegramFirstName ?? app.user.name ?? '';
+
+  after(() =>
+    notifyUser(app.user, {
+      email: {
         subject: 'Inscription broker validée — étape suivante',
-        react: VipSignupValidatedEmail({
-          firstName: app.user.telegramFirstName ?? app.user.name ?? '',
-        }),
-      });
-    }
-  });
+        react: VipSignupValidatedEmail({ firstName }),
+      },
+      telegram:
+        `✅ <b>Ton inscription broker est validée</b>\n\n` +
+        `Tu peux maintenant déposer (250€ minimum) puis revenir sur ` +
+        `${APP_URL}/vip pour déclarer ton dépôt.`,
+    })
+  );
 
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
@@ -157,17 +214,20 @@ export async function adminValidateDepositAction(
     .set({ step: 'deposit_validated', updatedAt: new Date() })
     .where(eq(vipApplications.id, applicationId));
 
-  after(async () => {
-    if (app.user.email) {
-      await sendEmail({
-        to: app.user.email,
+  const firstName = app.user.telegramFirstName ?? app.user.name ?? '';
+
+  after(() =>
+    notifyUser(app.user, {
+      email: {
         subject: 'Dépôt validé — récupère ton lien Telegram VIP',
-        react: VipDepositValidatedEmail({
-          firstName: app.user.telegramFirstName ?? app.user.name ?? '',
-        }),
-      });
-    }
-  });
+        react: VipDepositValidatedEmail({ firstName }),
+      },
+      telegram:
+        `🎉 <b>Bienvenue dans le VIP</b>\n\n` +
+        `Ton dépôt est validé. Récupère ton lien d'invitation Telegram ` +
+        `(à usage unique, expire en 24h) :\n${APP_URL}/vip`,
+    })
+  );
 
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
@@ -264,4 +324,15 @@ export async function adminSetIronfxModeAction(
   await setIronFXMode(parsed.data.mode, session.user.id);
   revalidatePath('/admin/settings');
   return { success: true, data: undefined };
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
