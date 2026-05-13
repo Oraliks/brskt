@@ -20,6 +20,7 @@ interface LandingShellProps {
 }
 
 const ANIM_MS = 800;
+const DESKTOP_BREAKPOINT = '(min-width: 768px)';
 
 export function LandingShell({ labels, nav, children }: LandingShellProps) {
   const sections = useMemo(
@@ -29,29 +30,51 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
   const total = sections.length;
 
   const [active, setActive] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(true);
 
-  // Lock via timestamp (plus simple que isAnimating + setTimeout qui peut rester coincé)
   const lockedUntil = useRef(0);
   const touchStartY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  // Détecter desktop vs mobile
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_BREAKPOINT);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   const goTo = useCallback(
     (index: number) => {
+      if (index < 0 || index >= total) return;
+
+      if (!isDesktop) {
+        // Mobile : scroll natif vers la section
+        const el = sectionRefs.current[index];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setActive(index);
+        }
+        return;
+      }
+
       const now = Date.now();
       if (now < lockedUntil.current) return;
-      if (index < 0 || index >= total) return;
       lockedUntil.current = now + ANIM_MS;
-      setActive((prev) => (index === prev ? prev : index));
+      setActive(index);
     },
-    [total]
+    [total, isDesktop]
   );
 
-  // Wheel — attaché uniquement à window (les events sur le container bubble)
+  // ----- Desktop only : wheel + keyboard + body lock -----
   useEffect(() => {
+    if (!isDesktop) return;
+
     function onWheel(e: WheelEvent) {
       if (Date.now() < lockedUntil.current) return;
       if (e.deltaY === 0) return;
-      // Lock IMMÉDIATEMENT pour bloquer les events suivants dans la même rafale
       lockedUntil.current = Date.now() + ANIM_MS;
       const direction = e.deltaY > 0 ? 1 : -1;
       setActive((prev) => {
@@ -62,10 +85,10 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
     }
     window.addEventListener('wheel', onWheel, { passive: true });
     return () => window.removeEventListener('wheel', onWheel);
-  }, [total]);
+  }, [total, isDesktop]);
 
-  // Keyboard
   useEffect(() => {
+    if (!isDesktop) return;
     function onKey(e: KeyboardEvent) {
       let direction: 1 | -1 | 0 = 0;
       if (e.key === 'ArrowDown' || e.key === 'PageDown') direction = 1;
@@ -82,62 +105,100 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [total]);
+  }, [total, isDesktop]);
 
-  // Touch
   useEffect(() => {
+    if (!isDesktop) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isDesktop]);
+
+  // ----- Mobile only : touch swipe (optionnel) + intersection observer pour active dot -----
+  useEffect(() => {
+    if (isDesktop) return;
+
     function onStart(e: TouchEvent) {
       touchStartY.current = e.touches[0]?.clientY ?? 0;
     }
     function onEnd(e: TouchEvent) {
       const endY = e.changedTouches[0]?.clientY ?? 0;
       const diff = touchStartY.current - endY;
-      if (Math.abs(diff) <= 50) return;
+      if (Math.abs(diff) <= 80) return;
       if (Date.now() < lockedUntil.current) return;
-      lockedUntil.current = Date.now() + ANIM_MS;
       const direction = diff > 0 ? 1 : -1;
-      setActive((prev) => {
-        const next = prev + direction;
-        if (next < 0 || next >= total) return prev;
-        return next;
-      });
+      const next = active + direction;
+      if (next < 0 || next >= total) return;
+      const el = sectionRefs.current[next];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
-    window.addEventListener('touchstart', onStart, { passive: true });
-    window.addEventListener('touchend', onEnd, { passive: true });
-    return () => {
-      window.removeEventListener('touchstart', onStart);
-      window.removeEventListener('touchend', onEnd);
-    };
-  }, [total]);
+    // Swipe désactivé sur mobile pour laisser le scroll natif libre.
+    // Le indicator suit via IntersectionObserver ci-dessous.
+    void onStart;
+    void onEnd;
+  }, [isDesktop, active, total]);
 
-  // Bloque le scroll du body uniquement quand le landing est monté
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+    if (isDesktop) return;
+    const els = sectionRefs.current.filter(
+      (el): el is HTMLDivElement => el !== null
+    );
+    if (els.length === 0) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && e.intersectionRatio > 0.4) {
+            const idx = els.indexOf(e.target as HTMLDivElement);
+            if (idx !== -1) setActive(idx);
+          }
+        }
+      },
+      { threshold: [0.4, 0.7] }
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [isDesktop, total]);
 
   return (
     <LandingContext.Provider value={{ active, total, goTo }}>
       <div
         ref={containerRef}
-        className="relative h-[100dvh] w-screen overflow-hidden"
+        className={cn(
+          'relative',
+          isDesktop ? 'h-[100dvh] w-screen overflow-hidden' : 'min-h-screen'
+        )}
       >
         {nav}
 
-        {/* Sections empilées */}
-        <div className="sections relative z-10 h-full w-full">
+        {/* Sections */}
+        <div
+          className={cn(
+            'relative z-10',
+            isDesktop ? 'h-full w-full' : 'flex flex-col'
+          )}
+        >
           {sections.map((child, i) => (
             <div
               key={i}
+              ref={(el) => {
+                sectionRefs.current[i] = el;
+              }}
               data-section={i}
               className={cn(
-                'absolute inset-0 flex items-center justify-center px-6 sm:px-12 py-24 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]',
-                active === i
-                  ? 'opacity-100 translate-y-0 pointer-events-auto'
-                  : 'opacity-0 translate-y-5 pointer-events-none'
+                'flex items-center justify-center px-5 sm:px-12',
+                isDesktop
+                  ? cn(
+                      'absolute inset-0 py-24 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]',
+                      active === i
+                        ? 'opacity-100 translate-y-0 pointer-events-auto'
+                        : 'opacity-0 translate-y-5 pointer-events-none'
+                    )
+                  : 'min-h-[100dvh] py-20'
               )}
             >
               {child}
@@ -145,7 +206,7 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
           ))}
         </div>
 
-        {/* Side nav dots (desktop) */}
+        {/* Side nav dots (desktop only) */}
         <div className="fixed right-8 top-1/2 -translate-y-1/2 z-50 hidden md:flex flex-col gap-4 opacity-0 animate-[radix-fade-in_1s_1s_forwards]">
           {labels.map((label, i) => (
             <button
@@ -169,15 +230,15 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
           ))}
         </div>
 
-        {/* Section counter (bottom-left) */}
-        <div className="fixed bottom-8 left-8 z-50 font-mono text-xs text-[var(--color-text-dim)] tracking-[0.1em] opacity-0 animate-[radix-fade-in_1s_1.2s_forwards]">
+        {/* Compteur — desktop bottom-left ; mobile : caché (les sections s'enchainent) */}
+        <div className="fixed bottom-8 left-8 z-50 hidden md:block font-mono text-xs text-[var(--color-text-dim)] tracking-[0.1em] opacity-0 animate-[radix-fade-in_1s_1.2s_forwards]">
           <span className="text-white font-medium">
             {String(active + 1).padStart(2, '0')}
           </span>{' '}
           / {String(total).padStart(2, '0')}
         </div>
 
-        {/* Scroll hint (bottom-center, desktop) */}
+        {/* Scroll hint (desktop only) */}
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-2 text-[11px] text-[var(--color-text-dim)] opacity-0 animate-[radix-fade-in_1s_1.5s_forwards] pointer-events-none">
           Navigation :
           <kbd className="rounded border border-[var(--color-border)] bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-mono">

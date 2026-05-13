@@ -52,11 +52,11 @@ export function HeroSection() {
         </button>
       </div>
 
-      {/* Floating chart */}
+      {/* Floating chart — absolu sur desktop pour overlay, dans le flow sur mobile */}
       <svg
         viewBox="0 0 600 120"
         preserveAspectRatio="none"
-        className="absolute left-1/2 -translate-x-1/2 -bottom-32 w-[80%] max-w-[600px] h-[120px] opacity-0 animate-[radix-fade-in_1.5s_1.5s_forwards] pointer-events-none"
+        className="mt-10 md:mt-0 md:absolute md:left-1/2 md:-translate-x-1/2 md:-bottom-32 w-full md:w-[80%] max-w-[600px] mx-auto h-[80px] md:h-[120px] opacity-0 animate-[radix-fade-in_1.5s_1.5s_forwards] pointer-events-none"
       >
         <defs>
           <linearGradient id="chart-grad" x1="0%" y1="0%" x2="0%" y2="100%">
