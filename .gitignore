@@ -1,0 +1,17 @@
+node_modules
+.next
+.env
+.env*.local
+.vercel
+dist
+build
+*.log
+.DS_Store
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+coverage
+playwright-report
+test-results
+.turbo
