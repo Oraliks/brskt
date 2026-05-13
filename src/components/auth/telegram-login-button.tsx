@@ -1,7 +1,6 @@
 'use client';
 
-import Script from 'next/script';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
@@ -29,8 +28,10 @@ declare global {
 
 export function TelegramLoginButton({ botUsername, redirectTo }: Props) {
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
 
+  // Handler global pour le callback Telegram
   useEffect(() => {
     window.onTelegramAuth = async (data: TelegramAuthData) => {
       setLoading(true);
@@ -64,28 +65,42 @@ export function TelegramLoginButton({ botUsername, redirectTo }: Props) {
     };
   }, [redirectTo, router]);
 
+  // Injection manuelle du script Telegram DANS le container
+  // (sinon le widget génère son iframe à la fin du body)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botUsername);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-radius', '10');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    script.setAttribute('data-request-access', 'write');
+    container.appendChild(script);
+
+    return () => {
+      // Cleanup : retire le script ET l'iframe générée à côté
+      container.innerHTML = '';
+    };
+  }, [botUsername]);
+
   return (
     <div className="space-y-4">
       <div className="relative flex min-h-[60px] items-center justify-center rounded-[var(--radius-md)] bg-white/[0.02] border border-[var(--color-border)] p-3">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg)]/80 rounded-[var(--radius-md)]">
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg)]/80 rounded-[var(--radius-md)] z-10">
             <Loader2 className="h-5 w-5 animate-spin text-[var(--color-accent)]" />
             <span className="ml-2 text-sm">Connexion…</span>
           </div>
         )}
 
-        {/* Le widget Telegram s'injecte ici */}
-        <div id="telegram-login-container" className="flex items-center justify-center w-full">
-          <Script
-            src="https://telegram.org/js/telegram-widget.js?22"
-            strategy="afterInteractive"
-            data-telegram-login={botUsername}
-            data-size="large"
-            data-radius="10"
-            data-onauth="onTelegramAuth(user)"
-            data-request-access="write"
-          />
-        </div>
+        <div
+          ref={containerRef}
+          className="flex items-center justify-center w-full min-h-[44px]"
+        />
       </div>
 
       <p className="text-center text-xs text-[var(--color-text-faint)]">
