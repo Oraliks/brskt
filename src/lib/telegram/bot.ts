@@ -94,13 +94,21 @@ export function getBot(): Bot<Context> {
 
   bot.command('help', async (ctx) => {
     await ctx.reply(
-      `<b>Commandes disponibles</b>\n\n` +
+      `<b>📋 Toutes les commandes</b>\n\n` +
+        `<b>Compte</b>\n` +
         `/start — Démarrer\n` +
-        `/login — Lien de connexion direct au site (fallback si le widget bug)\n` +
+        `/login — Lien de connexion direct au site\n` +
         `/status — Ma progression VIP & CPA\n` +
-        `/qualify — Mini-questionnaire pour personnaliser ton suivi\n` +
-        `/dashboard — Mon espace\n` +
-        `/vip — Funnel VIP\n` +
+        `/streak — Mon streak d'interaction quotidien\n` +
+        `/qualify — Personnalise ton suivi\n` +
+        `/dashboard — Mon espace web\n` +
+        `/vip — Funnel VIP\n\n` +
+        `<b>🛠 Calculatrices trading</b>\n` +
+        `/size — Taille de position (capital, risk%, SL pips)\n` +
+        `/rr — Ratio risk/reward (entry, SL, TP)\n` +
+        `/pip — Valeur du pip (paire, lots)\n` +
+        `/convert — Conversion devises live\n\n` +
+        `<b>Aide</b>\n` +
         `/help — Cette aide\n\n` +
         `Site : ${appUrl}`,
       { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
@@ -119,6 +127,197 @@ export function getBot(): Bot<Context> {
         `Tu payes 0€ à Boursikotons. Notre rémunération vient du broker partenaire quand tu trades.\n\n` +
         `Funnel : ${appUrl}/vip`,
       { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+    );
+  });
+
+  // ============================================================
+  // Calculatrices trading
+  // ============================================================
+
+  // /size <capital> <risk%> <sl_pips>
+  bot.command('size', async (ctx) => {
+    if (ctx.from?.id) {
+      const { bumpBotStreak } = await import('@/lib/bot/streak');
+      void bumpBotStreak(ctx.from.id);
+    }
+    const args = (ctx.match ?? '').trim().split(/\s+/);
+    if (args.length < 3 || args[0] === '') {
+      await ctx.reply(
+        `📐 <b>Calcul de taille de position</b>\n\n` +
+          `Usage : <code>/size &lt;capital&gt; &lt;risk%&gt; &lt;sl_pips&gt;</code>\n\n` +
+          `Exemple : <code>/size 10000 1 50</code>\n` +
+          `(capital 10 000€, risque 1%, stop-loss 50 pips)`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    const { calcPositionSize } = await import('@/lib/bot/calculators');
+    const result = calcPositionSize(
+      Number(args[0]),
+      Number(args[1]),
+      Number(args[2])
+    );
+    if ('error' in result) {
+      await ctx.reply(`❌ ${result.error}`);
+      return;
+    }
+    await ctx.reply(
+      `📐 <b>Taille de position</b>\n\n` +
+        `Capital : <b>${args[0]}</b>\n` +
+        `Risque : <b>${args[1]}%</b> = <b>${result.riskMoney}€</b>\n` +
+        `SL : <b>${args[2]} pips</b>\n\n` +
+        `🎯 <b>Taille à trader : ${result.lots} lots</b>\n\n` +
+        `<i>Note : assume 10€/pip par lot standard (paires USD-quote). ` +
+        `Pour les exotiques, calcul à ajuster.</i>`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /rr <entry> <sl> <tp>
+  bot.command('rr', async (ctx) => {
+    if (ctx.from?.id) {
+      const { bumpBotStreak } = await import('@/lib/bot/streak');
+      void bumpBotStreak(ctx.from.id);
+    }
+    const args = (ctx.match ?? '').trim().split(/\s+/);
+    if (args.length < 3 || args[0] === '') {
+      await ctx.reply(
+        `⚖️ <b>Ratio risk/reward</b>\n\n` +
+          `Usage : <code>/rr &lt;entry&gt; &lt;sl&gt; &lt;tp&gt;</code>\n\n` +
+          `Exemple : <code>/rr 1.0900 1.0850 1.0980</code>\n` +
+          `(entry 1.0900, SL 1.0850, TP 1.0980 → R:R 1.6)`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    const { calcRiskReward } = await import('@/lib/bot/calculators');
+    const result = calcRiskReward(
+      Number(args[0]),
+      Number(args[1]),
+      Number(args[2])
+    );
+    if ('error' in result) {
+      await ctx.reply(`❌ ${result.error}`);
+      return;
+    }
+    const verdict =
+      result.ratio >= 2
+        ? '✅ Excellent'
+        : result.ratio >= 1.5
+        ? '👍 Bon'
+        : result.ratio >= 1
+        ? '⚠️ Médiocre'
+        : '❌ Mauvais';
+    await ctx.reply(
+      `⚖️ <b>R:R = ${result.ratio} ${verdict}</b>\n\n` +
+        `Direction : <b>${result.direction === 'long' ? '📈 Long' : '📉 Short'}</b>\n` +
+        `Risque : ${result.risk}\n` +
+        `Reward : ${result.reward}\n\n` +
+        `<i>Vise R:R ≥ 2 pour un edge solide sur le long terme.</i>`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /pip <pair> <lots>
+  bot.command('pip', async (ctx) => {
+    if (ctx.from?.id) {
+      const { bumpBotStreak } = await import('@/lib/bot/streak');
+      void bumpBotStreak(ctx.from.id);
+    }
+    const args = (ctx.match ?? '').trim().split(/\s+/);
+    if (args.length < 2 || args[0] === '') {
+      await ctx.reply(
+        `💰 <b>Valeur du pip</b>\n\n` +
+          `Usage : <code>/pip &lt;paire&gt; &lt;lots&gt;</code>\n\n` +
+          `Exemple : <code>/pip EURUSD 1</code>\n` +
+          `(1 lot standard sur EURUSD)`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    const { calcPipValue } = await import('@/lib/bot/calculators');
+    const result = calcPipValue(args[0] ?? '', Number(args[1]));
+    if ('error' in result) {
+      await ctx.reply(`❌ ${result.error}`);
+      return;
+    }
+    await ctx.reply(
+      `💰 <b>Valeur du pip</b>\n\n` +
+        `Paire : <b>${args[0]?.toUpperCase()}</b>\n` +
+        `Taille : <b>${args[1]} lot(s)</b>\n\n` +
+        `🎯 <b>1 pip = ${result.value} ${result.currency}</b>`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /convert <amount> <from> <to>
+  bot.command('convert', async (ctx) => {
+    if (ctx.from?.id) {
+      const { bumpBotStreak } = await import('@/lib/bot/streak');
+      void bumpBotStreak(ctx.from.id);
+    }
+    const args = (ctx.match ?? '').trim().split(/\s+/);
+    if (args.length < 3 || args[0] === '') {
+      await ctx.reply(
+        `💱 <b>Conversion de devises</b>\n\n` +
+          `Usage : <code>/convert &lt;montant&gt; &lt;de&gt; &lt;vers&gt;</code>\n\n` +
+          `Exemple : <code>/convert 1000 EUR USD</code>\n` +
+          `<i>Taux ECB live via Frankfurter API.</i>`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    await ctx.replyWithChatAction('typing');
+    const { convertCurrency } = await import('@/lib/bot/calculators');
+    const result = await convertCurrency(
+      Number(args[0]),
+      args[1] ?? '',
+      args[2] ?? ''
+    );
+    if ('error' in result) {
+      await ctx.reply(`❌ ${result.error}`);
+      return;
+    }
+    await ctx.reply(
+      `💱 <b>${args[0]} ${args[1]?.toUpperCase()} = ${result.converted} ${args[2]?.toUpperCase()}</b>\n\n` +
+        `Taux : 1 ${args[1]?.toUpperCase()} = ${result.rate} ${args[2]?.toUpperCase()}\n` +
+        `Date : ${result.date}`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /streak — affiche le streak d'interaction quotidien
+  bot.command('streak', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    const newStreak = await bumpBotStreak(ctx.from.id);
+    if (newStreak === 0) {
+      await ctx.reply(
+        `Tu n'as pas encore de compte. Connecte-toi : ${appUrl}/login`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+    const emoji =
+      newStreak >= 30
+        ? '🔥🔥🔥'
+        : newStreak >= 14
+        ? '🔥🔥'
+        : newStreak >= 7
+        ? '🔥'
+        : '✨';
+    const milestone =
+      newStreak === 7
+        ? '\n\n🎉 1 semaine d\'affilée !'
+        : newStreak === 30
+        ? '\n\n🏆 30 jours — tu es vraiment dans le truc.'
+        : newStreak === 100
+        ? '\n\n👑 100 jours. Hall of fame.'
+        : '';
+    await ctx.reply(
+      `${emoji} <b>Streak : ${newStreak} jour${newStreak > 1 ? 's' : ''}</b>${milestone}\n\n` +
+        `Reviens demain pour continuer la série. Si tu sautes un jour, le streak retombe à 1.`,
+      { parse_mode: 'HTML' }
     );
   });
 

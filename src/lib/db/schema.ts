@@ -22,6 +22,12 @@ import { relations } from 'drizzle-orm';
 
 export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
 
+/**
+ * Note : Le tracking d'interaction bot (streak quotidien, dernière
+ * interaction, etc.) est stocké sur la table `users` (colonnes
+ * bot_streak_count + bot_last_interaction_at, voir plus bas).
+ */
+
 export const formationModeEnum = pgEnum('formation_mode', ['remote', 'onsite']);
 
 export const bookingStatusEnum = pgEnum('booking_status', [
@@ -112,12 +118,24 @@ export const users = pgTable(
     // Onboarding
     onboardingCompletedAt: timestamp('onboarding_completed_at'),
 
+    // Bot engagement : streak quotidien (incrémente si interaction dans
+    // les 24-48h depuis la dernière, sinon reset à 1).
+    botStreakCount: integer('bot_streak_count').notNull().default(0),
+    botLastInteractionAt: timestamp('bot_last_interaction_at'),
+
+    // Parrainage : code unique généré au /invite, et qui a parrainé ce user
+    // (référence vers users.id du parrain).
+    referralCode: text('referral_code').unique(),
+    referredBy: uuid('referred_by'),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => ({
     telegramIdIdx: index('users_telegram_id_idx').on(t.telegramId),
     emailIdx: index('users_email_idx').on(t.email),
+    referralCodeIdx: index('users_referral_code_idx').on(t.referralCode),
+    referredByIdx: index('users_referred_by_idx').on(t.referredBy),
   })
 );
 
