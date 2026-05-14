@@ -226,9 +226,7 @@ export default async function FormationPage() {
       </Section>
 
       <Section className="pt-2 pb-12">
-        <div className="max-w-3xl mx-auto">
-          <PaymentDisclaimer variant="full" tone="neutral" />
-        </div>
+        <PaymentDisclaimer variant="full" tone="neutral" />
       </Section>
     </>
   );

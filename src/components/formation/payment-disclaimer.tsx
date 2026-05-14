@@ -51,28 +51,28 @@ export function PaymentDisclaimer({
 
   return (
     <div
-      className={`rounded-[var(--radius-lg)] border ${bg} p-5 text-sm space-y-3`}
+      className={`rounded-[var(--radius-lg)] border ${bg} p-4 text-xs space-y-2.5`}
     >
-      <h4 className={`font-semibold ${textColor} flex items-center gap-2`}>
-        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+      <h4 className={`font-semibold text-sm ${textColor} flex items-center gap-2`}>
+        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
         Conditions à connaître avant de réserver
       </h4>
 
-      <ul className="space-y-3 text-[var(--color-text)]">
-        <li className="flex items-start gap-3">
-          <Lock className="h-4 w-4 mt-0.5 text-amber-300 flex-shrink-0" />
+      <ul className="space-y-2 text-[var(--color-text)] leading-relaxed">
+        <li className="flex items-start gap-2.5">
+          <Lock className="h-3.5 w-3.5 mt-0.5 text-amber-300 flex-shrink-0" />
           <div>
             <strong>Aucun remboursement une fois la réservation initiée.</strong>{' '}
             Dès le 1<sup>er</sup> paiement, ton créneau est bloqué et la
             préparation démarre : planification instructeur, accès aux
             ressources privées, organisation logistique (présentiel : salle,
-            matériel, repas). Annuler représente un travail
-            d'organisation que nous ne pouvons plus reprendre une fois lancé.
+            matériel, repas). Annuler représente un travail d&apos;organisation
+            que nous ne pouvons plus reprendre une fois lancé.
           </div>
         </li>
 
-        <li className="flex items-start gap-3">
-          <Lock className="h-4 w-4 mt-0.5 text-amber-300 flex-shrink-0" />
+        <li className="flex items-start gap-2.5">
+          <Lock className="h-3.5 w-3.5 mt-0.5 text-amber-300 flex-shrink-0" />
           <div>
             <strong>
               La formation a lieu uniquement après réception de la totalité du
@@ -84,13 +84,13 @@ export function PaymentDisclaimer({
           </div>
         </li>
 
-        <li className="flex items-start gap-3">
-          <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-400 flex-shrink-0" />
+        <li className="flex items-start gap-2.5">
+          <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-emerald-400 flex-shrink-0" />
           <div>
             <strong>Notre flexibilité :</strong> le paiement en 3 fois sans
-            frais. C'est déjà une marge de manœuvre rare dans le secteur — on
-            l'offre pour rendre la formation accessible, donc on ne peut pas
-            cumuler avec un droit de remboursement.
+            frais. C&apos;est déjà une marge de manœuvre rare dans le secteur —
+            on l&apos;offre pour rendre la formation accessible, donc on ne
+            peut pas cumuler avec un droit de remboursement.
           </div>
         </li>
       </ul>
