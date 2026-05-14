@@ -48,20 +48,31 @@ export default async function AdminDiagnosticsPage() {
     },
     {
       label: 'TELEGRAM_BOT_USERNAME correspond au bot',
-      status:
-        !botUsername
-          ? 'error'
-          : expectedUsername && botUsername === expectedUsername
-          ? 'ok'
-          : 'warn',
+      status: !botUsername
+        ? 'error'
+        : !expectedUsername
+        ? 'warn'
+        : botUsername.toLowerCase() === expectedUsername.toLowerCase()
+        ? 'ok'
+        : 'warn',
       detail: !botUsername
         ? 'Variable manquante.'
         : expectedUsername
-        ? `Configuré : @${botUsername} · Telegram dit : @${expectedUsername}`
+        ? `Configuré : @${botUsername} · Telegram dit : @${expectedUsername}` +
+          (botUsername !== expectedUsername &&
+          botUsername.toLowerCase() === expectedUsername.toLowerCase()
+            ? ' (case différente — sans incidence car Telegram est case-insensitive)'
+            : '')
         : 'Telegram API inaccessible, impossible de comparer.',
       action:
-        botUsername && expectedUsername && botUsername !== expectedUsername
-          ? `Mismatch ! Le widget pointera vers @${botUsername} mais le bot est @${expectedUsername}. Aligner les deux dans Vercel.`
+        botUsername &&
+        expectedUsername &&
+        botUsername.toLowerCase() !== expectedUsername.toLowerCase()
+          ? `Mismatch réel : Le widget pointera vers @${botUsername} mais le bot est @${expectedUsername}. Aligner les deux dans Vercel.`
+          : botUsername &&
+            expectedUsername &&
+            botUsername !== expectedUsername
+          ? `Cosmétique : pour aligner, mets TELEGRAM_BOT_USERNAME=${expectedUsername} dans Vercel (case réelle du bot).`
           : undefined,
     },
     {
@@ -106,14 +117,20 @@ export default async function AdminDiagnosticsPage() {
     {
       label: 'MAGIC_LINK_SECRET ou BETTER_AUTH_SECRET configuré',
       status:
-        process.env.MAGIC_LINK_SECRET || process.env.BETTER_AUTH_SECRET
+        process.env.MAGIC_LINK_SECRET?.trim() ||
+        process.env.BETTER_AUTH_SECRET?.trim()
           ? 'ok'
           : 'error',
-      detail: process.env.MAGIC_LINK_SECRET
-        ? 'MAGIC_LINK_SECRET set'
-        : process.env.BETTER_AUTH_SECRET
-        ? 'BETTER_AUTH_SECRET set (utilisé en fallback)'
-        : 'Aucun secret — le magic-link /login ne marchera pas.',
+      detail: process.env.MAGIC_LINK_SECRET?.trim()
+        ? 'MAGIC_LINK_SECRET set ✓'
+        : process.env.BETTER_AUTH_SECRET?.trim()
+        ? 'BETTER_AUTH_SECRET set (utilisé en fallback) ✓'
+        : 'Aucun secret — la commande /login du bot ne pourra pas générer de magic-link.',
+      action:
+        !process.env.MAGIC_LINK_SECRET?.trim() &&
+        !process.env.BETTER_AUTH_SECRET?.trim()
+          ? "Sur Vercel → Settings → Environment Variables → ajoute MAGIC_LINK_SECRET avec une valeur aléatoire de 32+ chars (commande shell : `openssl rand -base64 32`). Coche prod/preview/dev. Redéploie."
+          : undefined,
     },
     {
       label: 'ADMIN_TELEGRAM_IDS configuré',
