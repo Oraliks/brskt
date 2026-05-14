@@ -95,7 +95,7 @@ export default async function AdminOverview() {
         <div className="glass rounded-[var(--radius-lg)] divide-y divide-[var(--color-border)]">
           {recentBookings.length === 0 ? (
             <div className="p-8 text-center text-sm text-[var(--color-text-dim)]">
-              Aucune réservation pour le moment.
+              Aucune réservation pour le moment. 
             </div>
           ) : (
             recentBookings.map((b) => (
