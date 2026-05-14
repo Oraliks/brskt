@@ -172,7 +172,7 @@ export default async function FormationPage() {
           <p className="mt-4 text-[var(--color-text-dim)] max-w-xl mx-auto">
             Tu proposes jusqu'à 3 créneaux préférés. On revient vers toi sous 24h
             pour valider ou te proposer une alternative.{' '}
-            <strong className="text-white">
+            <strong className="text-[var(--color-text)]">
               Paiement en 1 fois ou en 3 fois sans frais.
             </strong>
           </p>

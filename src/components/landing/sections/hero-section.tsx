@@ -42,14 +42,14 @@ export function HeroSection() {
       <div className="flex flex-col sm:flex-row gap-3 justify-center opacity-0 translate-y-4 animate-[hero-slide-up_0.7s_0.7s_forwards]">
         <button
           onClick={() => goTo(1)}
-          className="btn-shimmer group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white text-[var(--color-bg)] text-sm font-medium hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_16px_40px_-8px_rgba(255,255,255,0.4)] active:scale-[0.98] transition-all duration-300"
+          className="btn-shimmer group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--color-inverse)] text-[var(--color-on-inverse)] text-sm font-medium hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.18)] active:scale-[0.98] transition-all duration-300"
         >
           Rejoindre le VIP
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
         </button>
         <button
           onClick={() => goTo(2)}
-          className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white/5 border border-[var(--color-border)] text-white text-sm font-medium backdrop-blur-sm hover:bg-white/10 hover:border-white/30 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300"
+          className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--color-surface-tint)] border border-[var(--color-border)] text-[var(--color-text)] text-sm font-medium backdrop-blur-sm hover:bg-[var(--color-surface-tint-strong)] hover:border-[var(--color-border-strong)] hover:-translate-y-1 active:scale-[0.98] transition-all duration-300"
         >
           Voir les formations
           <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0" />

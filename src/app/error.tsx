@@ -60,14 +60,14 @@ export default function ErrorPage({ error, reset }: ErrorProps) {
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
               <button
                 onClick={() => reset()}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white text-[var(--color-bg)] px-6 py-3 text-sm font-medium hover:-translate-y-0.5 transition-all"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-inverse)] text-[var(--color-on-inverse)] px-6 py-3 text-sm font-medium hover:-translate-y-0.5 transition-all"
               >
                 <RotateCw className="h-4 w-4" />
                 Réessayer
               </button>
               <Link
                 href="/"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/5 border border-[var(--color-border)] px-6 py-3 text-sm hover:bg-white/10 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-surface-tint)] border border-[var(--color-border)] px-6 py-3 text-sm hover:bg-[var(--color-surface-tint-strong)] transition-colors"
               >
                 <Home className="h-4 w-4" />
                 Retour à l&apos;accueil

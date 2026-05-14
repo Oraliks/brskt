@@ -54,7 +54,7 @@ export function VipSection({ qualifiedCount = 0 }: Props) {
       )}
 
       <p className="text-[17px] text-[var(--color-text-dim)] max-w-[600px] mx-auto mb-3">
-        <strong className="text-white">L'accès au groupe VIP est gratuit.</strong>{' '}
+        <strong className="text-[var(--color-text)]">L'accès au groupe VIP est gratuit.</strong>{' '}
         Tu déposes ton propre argent sur ton compte broker pour trader —
         nous, on est payés en commission par le broker, pas par toi.
       </p>
@@ -66,7 +66,7 @@ export function VipSection({ qualifiedCount = 0 }: Props) {
         {steps.map((s, i) => (
           <div
             key={s.n}
-            className="text-left bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40 hover:bg-[rgba(99,102,241,0.05)] hover:shadow-xl group"
+            className="text-left bg-[rgba(20,20,30,0.5)] light:bg-white/90 backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40 hover:bg-[rgba(99,102,241,0.05)] light:hover:bg-indigo-50 hover:shadow-xl group"
             style={{ animationDelay: `${i * 80}ms` }}
           >
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[14px] font-semibold mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[6deg] shadow-lg shadow-indigo-500/30">

@@ -248,14 +248,14 @@ function ProgressCell({
   return (
     <div className="space-y-1 max-w-[140px]">
       <div className="flex items-baseline justify-between text-xs">
-        <span className="font-mono tabular-nums text-white font-medium">
+        <span className="font-mono tabular-nums text-[var(--color-text)] font-medium">
           {pct}%
         </span>
         {pct >= 100 && (
           <span className="text-[10px] text-emerald-300">qualifié</span>
         )}
       </div>
-      <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
         <div
           className={cn(
             'h-full transition-all rounded-full',
@@ -350,7 +350,7 @@ function ProgressDialog({
               onChange={(e) => setValue(Number(e.target.value))}
               className="w-full accent-[var(--color-accent)]"
             />
-            <div className="mt-2 h-2 w-full rounded-full bg-white/5 overflow-hidden">
+            <div className="mt-2 h-2 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
               <div
                 className={cn(
                   'h-full transition-all rounded-full',

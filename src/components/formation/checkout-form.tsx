@@ -90,10 +90,10 @@ export function CheckoutForm({
               'w-full glass rounded-[var(--radius-md)] p-4 flex items-center gap-4 text-left transition-all',
               selected === m.id
                 ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-                : 'hover:border-white/14'
+                : 'hover:border-[var(--color-border-strong)]'
             )}
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)] flex-shrink-0">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)] flex-shrink-0">
               <m.icon className="h-4 w-4" />
             </span>
             <div className="flex-1 min-w-0">

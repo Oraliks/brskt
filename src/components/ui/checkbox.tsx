@@ -30,10 +30,10 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
           />
           <span
             className={cn(
-              'flex h-5 w-5 items-center justify-center rounded-[6px] border border-[var(--color-border-strong)] bg-white/[0.02] transition-all',
+              'flex h-5 w-5 items-center justify-center rounded-[6px] border border-[var(--color-border-strong)] bg-[var(--color-surface-tint)] transition-all',
               'peer-checked:bg-[var(--color-accent)] peer-checked:border-[var(--color-accent)]',
               'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--color-accent)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--color-bg)]',
-              'group-hover:border-white/30',
+              'group-hover:border-[var(--color-border-strong)]',
               className
             )}
           >

@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
       </div>
 
       <div className="glass-strong rounded-[var(--radius-lg)] p-8 space-y-6">
-        <Suspense fallback={<div className="h-12 animate-pulse bg-white/5 rounded-md" />}>
+        <Suspense fallback={<div className="h-12 animate-pulse bg-[var(--color-surface-tint)] rounded-md" />}>
           {botUsername ? (
             <TelegramLoginButton
               botUsername={botUsername}
@@ -78,7 +78,7 @@ function Perk({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)] flex-shrink-0">
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)] flex-shrink-0">
         <Icon className="h-4 w-4 text-[var(--color-accent-hover)]" />
       </span>
       <div>

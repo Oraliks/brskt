@@ -30,8 +30,11 @@ export function PaymentDisclaimer({
   const bg =
     tone === 'amber'
       ? 'bg-amber-500/8 border-amber-500/30'
-      : 'bg-white/[0.03] border-[var(--color-border)]';
-  const textColor = tone === 'amber' ? 'text-amber-200' : 'text-white';
+      : 'bg-[var(--color-surface-tint)] border-[var(--color-border)]';
+  const textColor =
+    tone === 'amber'
+      ? 'text-amber-200 light:text-amber-700'
+      : 'text-[var(--color-text)]';
 
   if (variant === 'compact') {
     return (

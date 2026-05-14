@@ -85,9 +85,9 @@ export default async function DashboardPage() {
                 href={`https://t.me/${botUsername}?start=hello`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-white"
+                className="underline underline-offset-2 hover:text-[var(--color-text)]"
               >
-                envoie <code className="font-mono bg-white/5 px-1.5 py-0.5 rounded">/start</code> à @{botUsername}
+                envoie <code className="font-mono bg-[var(--color-surface-tint)] px-1.5 py-0.5 rounded">/start</code> à @{botUsername}
               </Link>{' '}
               une fois pour recevoir confirmations & alertes directement sur Telegram.
             </div>
@@ -107,7 +107,7 @@ export default async function DashboardPage() {
           {/* Formation CTA */}
           <Link
             href={userBookings.length === 0 ? '/formation/reserver' : '/formation'}
-            className="glass rounded-[var(--radius-lg)] p-6 hover:border-white/14 transition-colors group"
+            className="glass rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group"
           >
             <div className="flex items-start justify-between">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--color-accent)]/15 border border-[var(--color-accent)]/30">
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
               href={channelUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="glass rounded-[var(--radius-lg)] p-6 hover:border-white/14 transition-colors group"
+              className="glass rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group"
             >
               <div className="flex items-start justify-between">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-blue-500/15 border border-blue-500/30">
@@ -307,7 +307,7 @@ function InstallmentsBlock({
             Paiement en {installmentTotal} fois
           </div>
           <div className="text-sm">
-            <strong className="text-white font-mono tabular-nums">
+            <strong className="text-[var(--color-text)] font-mono tabular-nums">
               {installmentsPaid}/{installmentTotal}
             </strong>{' '}
             échéances réglées · {perInstallment}€ par échéance
@@ -329,7 +329,7 @@ function InstallmentsBlock({
                 ? 'bg-emerald-400'
                 : i === installmentsPaid
                 ? 'bg-indigo-400'
-                : 'bg-white/10'
+                : 'bg-[var(--color-surface-tint-strong)]'
             }`}
           />
         ))}
@@ -408,7 +408,7 @@ function VipCard({
   return (
     <Link
       href={href}
-      className="glass-strong rounded-[var(--radius-lg)] p-6 hover:border-white/20 transition-colors group relative overflow-hidden block"
+      className="glass-strong rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group relative overflow-hidden block"
     >
       <div
         className={cn(
@@ -469,7 +469,7 @@ function VipCard({
         {/* Progress bar : funnel avant in_group, trading après */}
         {inProgress && (
           <div className="mt-4 space-y-2">
-            <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+            <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all duration-500"
                 style={{ width: `${(stepNum / 7) * 100}%` }}
@@ -488,7 +488,7 @@ function VipCard({
                 {tradingProgressPct}%
               </span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+            <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
               <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',

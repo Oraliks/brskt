@@ -28,21 +28,21 @@ export default function NotFound() {
               </h2>
               <p className="text-[var(--color-text-dim)] text-sm md:text-base">
                 Le lien que tu as suivi est cassé, ou la ressource a été
-                supprimée. Code <code className="font-mono text-[var(--color-text)] bg-white/5 px-1.5 py-0.5 rounded">404</code> renvoyé par notre serveur.
+                supprimée. Code <code className="font-mono text-[var(--color-text)] bg-[var(--color-surface-tint)] px-1.5 py-0.5 rounded">404</code> renvoyé par notre serveur.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
               <Link
                 href="/"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white text-[var(--color-bg)] px-6 py-3 text-sm font-medium hover:-translate-y-0.5 transition-all"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-inverse)] text-[var(--color-on-inverse)] px-6 py-3 text-sm font-medium hover:-translate-y-0.5 transition-all"
               >
                 <Home className="h-4 w-4" />
                 Retour à l&apos;accueil
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/5 border border-[var(--color-border)] px-6 py-3 text-sm hover:bg-white/10 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-surface-tint)] border border-[var(--color-border)] px-6 py-3 text-sm hover:bg-[var(--color-surface-tint-strong)] transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Mon espace

@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { logoutAction } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
 
@@ -58,8 +59,10 @@ export function AppNavbar({ userName, userImage, isAdmin }: AppNavbarProps) {
           </nav>
         </div>
 
+        <div className="flex items-center gap-2">
+          <ThemeToggle variant="ghost" className="hidden md:inline-flex" />
         <DropdownMenu>
-          <DropdownMenuTrigger className="hidden md:inline-flex items-center gap-2 rounded-full hover:bg-white/5 transition-colors p-1 pr-3">
+          <DropdownMenuTrigger className="hidden md:inline-flex items-center gap-2 rounded-full hover:bg-[var(--color-surface-tint)] transition-colors p-1 pr-3">
             {userImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -88,7 +91,7 @@ export function AppNavbar({ userName, userImage, isAdmin }: AppNavbarProps) {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-rose-300 focus:text-rose-200"
+              className="text-rose-400 light:text-rose-600 focus:text-rose-300"
               onSelect={() => {
                 void logoutAction();
               }}
@@ -98,14 +101,18 @@ export function AppNavbar({ userName, userImage, isAdmin }: AppNavbarProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
 
-        <button
-          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/5"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="md:hidden flex items-center gap-1">
+          <ThemeToggle variant="ghost" />
+          <button
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-[var(--color-surface-tint)]"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Menu"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       <div

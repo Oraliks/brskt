@@ -219,8 +219,8 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
                 className={cn(
                   'block h-2 w-2 rounded-full transition-all',
                   active === i
-                    ? 'bg-white scale-[1.4]'
-                    : 'bg-white/20 group-hover:bg-white/40'
+                    ? 'bg-[var(--color-text)] scale-[1.4]'
+                    : 'bg-[var(--color-surface-tint-strong)] group-hover:bg-[var(--color-text-dim)]'
                 )}
               />
               <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[var(--color-bg-elevated)] border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-text)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -232,7 +232,7 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
 
         {/* Compteur — desktop bottom-left ; mobile : caché (les sections s'enchainent) */}
         <div className="fixed bottom-8 left-8 z-50 hidden md:block font-mono text-xs text-[var(--color-text-dim)] tracking-[0.1em] opacity-0 animate-[radix-fade-in_1s_1.2s_forwards]">
-          <span className="text-white font-medium">
+          <span className="text-[var(--color-text)] font-medium">
             {String(active + 1).padStart(2, '0')}
           </span>{' '}
           / {String(total).padStart(2, '0')}
@@ -241,14 +241,14 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
         {/* Scroll hint (desktop only) */}
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-2 text-[11px] text-[var(--color-text-dim)] opacity-0 animate-[radix-fade-in_1s_1.5s_forwards] pointer-events-none">
           Navigation :
-          <kbd className="rounded border border-[var(--color-border)] bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-mono">
+          <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface-tint-strong)] px-1.5 py-0.5 text-[10px] font-mono">
             ↑
           </kbd>
-          <kbd className="rounded border border-[var(--color-border)] bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-mono">
+          <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface-tint-strong)] px-1.5 py-0.5 text-[10px] font-mono">
             ↓
           </kbd>
           ou
-          <kbd className="rounded border border-[var(--color-border)] bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-mono">
+          <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface-tint-strong)] px-1.5 py-0.5 text-[10px] font-mono">
             scroll
           </kbd>
         </div>

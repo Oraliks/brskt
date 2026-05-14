@@ -76,7 +76,7 @@ function FormationCard({ data }: { data: FormationCardData }) {
       href={data.href}
       onMouseMove={handleMouseMove}
       className={cn(
-        'spotlight-card group block bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-3xl p-10 transition-all duration-300 hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl',
+        'spotlight-card group block bg-[rgba(20,20,30,0.5)] light:bg-white/90 backdrop-blur-xl border border-[var(--color-border)] rounded-3xl p-10 transition-all duration-300 hover:-translate-y-1.5 hover:border-[var(--color-border-strong)] hover:shadow-2xl',
         data.variant === 'onsite' ? 'spotlight-amber' : 'spotlight-indigo'
       )}
     >
@@ -129,8 +129,8 @@ function FormationCard({ data }: { data: FormationCardData }) {
       <div
         className={cn(
           'flex items-center justify-between px-5 py-3.5 rounded-xl border border-[var(--color-border)] text-sm font-medium transition-all',
-          'bg-white/5 text-white',
-          'group-hover:bg-white group-hover:text-[var(--color-bg)] group-hover:border-white'
+          'bg-[var(--color-surface-tint)] text-[var(--color-text)]',
+          'group-hover:bg-[var(--color-inverse)] group-hover:text-[var(--color-on-inverse)] group-hover:border-[var(--color-inverse)]'
         )}
       >
         <span>{data.ctaLabel}</span>

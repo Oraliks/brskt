@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeScript } from '@/components/theme/theme-script';
 
 export const metadata: Metadata = {
   title: {
@@ -32,6 +33,9 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
+        {/* DOIT être le premier child du <head> : applique data-theme avant
+            le premier paint pour éviter le flash dark→light */}
+        <ThemeScript />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"

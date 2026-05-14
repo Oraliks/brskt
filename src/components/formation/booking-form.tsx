@@ -142,7 +142,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
             <label
               key={f.id}
               className={cn(
-                'glass rounded-[var(--radius-lg)] p-5 cursor-pointer transition-all hover:border-white/14',
+                'glass rounded-[var(--radius-lg)] p-5 cursor-pointer transition-all hover:border-[var(--color-border-strong)]',
                 formationId === f.id &&
                   'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
               )}
@@ -292,10 +292,10 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
                 'w-full glass rounded-[var(--radius-md)] p-3 flex items-center gap-3 text-left transition-all',
                 paymentMethod === m.id
                   ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-                  : 'hover:border-white/14'
+                  : 'hover:border-[var(--color-border-strong)]'
               )}
             >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)] flex-shrink-0">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)] flex-shrink-0">
                 <m.icon className="h-4 w-4" />
               </span>
               <div className="flex-1 min-w-0">
@@ -336,7 +336,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
               'glass rounded-[var(--radius-md)] p-4 text-left transition-all',
               paymentPlan === 'full'
                 ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-                : 'hover:border-white/14'
+                : 'hover:border-[var(--color-border-strong)]'
             )}
           >
             <div className="flex items-center justify-between mb-1">
@@ -365,7 +365,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
               'glass rounded-[var(--radius-md)] p-4 text-left transition-all',
               paymentPlan === 'installments_3x'
                 ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-                : 'hover:border-white/14'
+                : 'hover:border-[var(--color-border-strong)]'
             )}
           >
             <div className="flex items-center justify-between mb-1">
@@ -414,7 +414,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
             {paymentPlan === 'installments_3x' && (
               <p className="text-xs text-[var(--color-text-dim)] mt-1">
                 Échéances 2 et 3 réglables depuis ton dashboard. Total :{' '}
-                <strong className="text-white">{formatPrice(fullPrice)}</strong>.
+                <strong className="text-[var(--color-text)]">{formatPrice(fullPrice)}</strong>.
               </p>
             )}
           </div>

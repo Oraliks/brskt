@@ -11,11 +11,11 @@ const buttonVariants = cva(
         default:
           'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] shadow-[0_8px_24px_-8px_rgba(99,102,241,0.5)]',
         secondary:
-          'bg-white/5 text-[var(--color-text)] border border-[var(--color-border)] hover:bg-white/10',
+          'bg-[var(--color-surface-tint)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-surface-tint-strong)]',
         ghost:
-          'text-[var(--color-text)] hover:bg-white/5',
+          'text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]',
         outline:
-          'border border-[var(--color-border-strong)] text-[var(--color-text)] hover:bg-white/5',
+          'border border-[var(--color-border-strong)] text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]',
         destructive:
           'bg-[var(--color-danger)] text-white hover:bg-red-600',
         link:

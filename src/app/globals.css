@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
+/* Variant Tailwind v4 : `light:bg-X` ne s'applique que si data-theme=light */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
 @theme {
-  /* Couleurs (sombre premium / glass) */
+  /* Couleurs (sombre premium / glass) — palette par défaut */
   --color-bg: #07070b;
   --color-bg-elevated: #0e0e15;
   --color-bg-card: rgba(255, 255, 255, 0.03);
@@ -20,6 +23,16 @@
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-strong: rgba(255, 255, 255, 0.14);
 
+  /* Tints théme-aware utilisés à la place de bg-white/X et bg-black/X.
+     Permettent les "subtle elevations" qui s'inversent automatiquement
+     entre dark et light. */
+  --color-surface-tint: rgba(255, 255, 255, 0.05);
+  --color-surface-tint-strong: rgba(255, 255, 255, 0.10);
+  /* Couleur de référence "inverse du fond" — utile pour boutons primaires
+     qui sont blancs en dark et noirs/sombres en light. */
+  --color-inverse: #ffffff;
+  --color-on-inverse: #07070b;
+
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-serif: 'Instrument Serif', 'Times New Roman', serif;
@@ -35,6 +48,31 @@
   /* Shadows */
   --shadow-glow: 0 0 60px -10px rgba(99, 102, 241, 0.35);
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+}
+
+/* ===========================================================
+   MODE LIGHT — palette crème chaude, douce pour les yeux
+   Override des variables quand <html data-theme="light">
+   =========================================================== */
+:root[data-theme="light"] {
+  --color-bg: #faf7f0;
+  --color-bg-elevated: #ffffff;
+  --color-bg-card: rgba(0, 0, 0, 0.025);
+  --color-bg-card-hover: rgba(0, 0, 0, 0.04);
+  --color-text: #2c2c34;
+  --color-text-dim: #6b6b76;
+  --color-text-faint: #a8a8b2;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.14);
+
+  --color-surface-tint: rgba(0, 0, 0, 0.04);
+  --color-surface-tint-strong: rgba(0, 0, 0, 0.08);
+  --color-inverse: #1a1a22;
+  --color-on-inverse: #faf7f0;
+
+  /* Glow plus discret en light (sinon agressif sur fond clair) */
+  --shadow-glow: 0 0 60px -10px rgba(99, 102, 241, 0.25);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.12);
 }
 
 @layer base {
@@ -67,11 +105,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-border);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--color-border-strong);
   }
 
   :focus-visible {
@@ -104,8 +142,30 @@
     -webkit-backdrop-filter: blur(28px);
   }
 
+  /* Override glass en mode light : glass devient un white tinté avec un léger
+     "shadow" pour préserver la sensation d'élévation sans le faux-glass. */
+  :root[data-theme="light"] .glass {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.95),
+      rgba(255, 255, 255, 0.85)
+    );
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.06);
+  }
+  :root[data-theme="light"] .glass-strong {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 14px 36px -16px rgba(0, 0, 0, 0.10);
+  }
+
   .text-gradient {
     background: linear-gradient(180deg, #ffffff 0%, #b8b8c2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  /* En light : gradient inverse pour rester lisible sur fond clair */
+  :root[data-theme="light"] .text-gradient {
+    background: linear-gradient(180deg, #1a1a22 0%, #4d4d58 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -117,6 +177,13 @@
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+  /* En light : on garde les accents mais avec versions plus saturées */
+  :root[data-theme="light"] .text-gradient-accent {
+    background: linear-gradient(90deg, #4f46e5 0%, #db2777 50%, #0d9488 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 
   .bg-grid {
     background-image:
@@ -124,11 +191,23 @@
       linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
     background-size: 48px 48px;
   }
+  :root[data-theme="light"] .bg-grid {
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  }
 
   .bg-radial-glow {
     background: radial-gradient(
       ellipse 80% 60% at 50% 0%,
       rgba(99, 102, 241, 0.18),
+      transparent 70%
+    );
+  }
+  :root[data-theme="light"] .bg-radial-glow {
+    background: radial-gradient(
+      ellipse 80% 60% at 50% 0%,
+      rgba(99, 102, 241, 0.10),
       transparent 70%
     );
   }
@@ -179,6 +258,11 @@
   filter: blur(80px);
   opacity: 0.5;
   will-change: transform;
+}
+/* En light : opacity bien plus faible pour rester subtle sur fond clair */
+:root[data-theme="light"] .mesh-blob {
+  opacity: 0.18;
+  filter: blur(100px);
 }
 .mesh-blob.blob-1 {
   width: 600px; height: 600px;

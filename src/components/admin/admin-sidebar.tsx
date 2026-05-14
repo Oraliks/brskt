@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { logoutAction } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +60,7 @@ export function AdminSidebar() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Ouvrir le menu admin"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-border)] hover:bg-white/5"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-border)] hover:bg-[var(--color-surface-tint)]"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -97,7 +98,7 @@ export function AdminSidebar() {
           <button
             onClick={() => setOpen(false)}
             aria-label="Fermer le menu"
-            className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-white/5"
+            className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--color-surface-tint)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -117,7 +118,7 @@ export function AdminSidebar() {
                   'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
                   active
                     ? 'bg-white/8 text-[var(--color-text)]'
-                    : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-white/5'
+                    : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]'
                 )}
               >
                 <link.icon className="h-4 w-4" />
@@ -128,17 +129,20 @@ export function AdminSidebar() {
         </nav>
 
         <div className="border-t border-[var(--color-border)] p-3 space-y-1">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-white/5"
-          >
-            <ArrowLeftFromLine className="h-4 w-4" />
-            Retour côté user
-          </Link>
+          <div className="flex items-center justify-between px-1">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] flex-1"
+            >
+              <ArrowLeftFromLine className="h-4 w-4" />
+              Retour côté user
+            </Link>
+            <ThemeToggle variant="ghost" />
+          </div>
           <form action={logoutAction}>
             <button
               type="submit"
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-rose-300 hover:bg-rose-500/10"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-rose-400 light:text-rose-600 hover:bg-rose-500/10"
             >
               <ArrowLeftFromLine className="h-4 w-4 rotate-180" />
               Déconnexion

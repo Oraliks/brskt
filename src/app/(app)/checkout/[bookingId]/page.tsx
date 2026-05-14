@@ -125,7 +125,7 @@ export default async function CheckoutPage({ params }: PageProps) {
                               ? 'bg-emerald-400'
                               : i === booking.installmentsPaid
                               ? 'bg-indigo-400'
-                              : 'bg-white/10'
+                              : 'bg-[var(--color-surface-tint-strong)]'
                           }`}
                         />
                       )
@@ -133,7 +133,7 @@ export default async function CheckoutPage({ params }: PageProps) {
                   </div>
                   <p className="text-xs text-[var(--color-text-dim)] pt-2 leading-relaxed">
                     La formation aura lieu une fois{' '}
-                    <strong className="text-white">les 3 échéances</strong>{' '}
+                    <strong className="text-[var(--color-text)]">les 3 échéances</strong>{' '}
                     réglées.
                   </p>
                 </div>

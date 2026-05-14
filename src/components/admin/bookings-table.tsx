@@ -116,7 +116,7 @@ export function BookingsTable({ bookings }: Props) {
                   )}
                   {b.adminNotes && (
                     <details className="text-xs text-[var(--color-text-dim)] max-w-[240px]">
-                      <summary className="cursor-pointer hover:text-white underline-offset-2 hover:underline">
+                      <summary className="cursor-pointer hover:text-[var(--color-text)] underline-offset-2 hover:underline">
                         Voir la note
                       </summary>
                       <p className="mt-1.5 italic text-[var(--color-text)] leading-snug">

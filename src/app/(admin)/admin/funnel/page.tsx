@@ -227,7 +227,7 @@ export default async function AdminFunnelPage({
                     {stuckHere > 0 && (
                       <Link
                         href={`/admin/vip?step=${step.key}`}
-                        className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] hover:text-white bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded-sm"
+                        className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] hover:text-[var(--color-text)] bg-[var(--color-surface-tint)] hover:bg-[var(--color-surface-tint-strong)] px-1.5 py-0.5 rounded-sm"
                       >
                         {stuckHere} bloqués ici
                       </Link>
@@ -255,7 +255,7 @@ export default async function AdminFunnelPage({
                     )}
                   </div>
                 </div>
-                <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
                   <div
                     className={cn(
                       'h-full rounded-full transition-all duration-500',
@@ -299,7 +299,7 @@ function CohortSwitcher({ current }: { current: Cohort }) {
     { value: 'all', label: 'Tout' },
   ];
   return (
-    <div className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-white/5 p-1">
+    <div className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-tint)] p-1">
       {options.map((opt) => (
         <Link
           key={opt.value}
@@ -307,8 +307,8 @@ function CohortSwitcher({ current }: { current: Cohort }) {
           className={cn(
             'px-3 py-1 text-xs rounded-full transition-colors',
             current === opt.value
-              ? 'bg-white text-[var(--color-bg)] font-medium'
-              : 'text-[var(--color-text-dim)] hover:text-white'
+              ? 'bg-[var(--color-inverse)] text-[var(--color-on-inverse)] font-medium'
+              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           )}
         >
           {opt.label}
@@ -332,7 +332,7 @@ function KpiCard({
   return (
     <div className="glass rounded-[var(--radius-lg)] p-5">
       <div className="flex items-center justify-between">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)]">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)]">
           <Icon className="h-4 w-4 text-[var(--color-text-dim)]" />
         </span>
         <span className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
@@ -381,7 +381,7 @@ async function RecentBottleneck({
         </div>
         <Link
           href="/admin/vip"
-          className="text-xs text-[var(--color-text-dim)] hover:text-white inline-flex items-center gap-1"
+          className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] inline-flex items-center gap-1"
         >
           Voir toutes
           <ArrowRight className="h-3 w-3" />

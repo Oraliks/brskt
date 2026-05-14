@@ -67,7 +67,7 @@ export default async function AdminOverview() {
         {metrics.map((m) => (
           <div key={m.label} className="glass rounded-[var(--radius-lg)] p-5">
             <div className="flex items-center justify-between">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/5 border border-[var(--color-border)]">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)]">
                 <m.icon className="h-4 w-4 text-[var(--color-text-dim)]" />
               </span>
               <span className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
@@ -102,7 +102,7 @@ export default async function AdminOverview() {
               <Link
                 key={b.id}
                 href={`/admin/bookings#${b.id}`}
-                className="flex items-center gap-4 p-4 hover:bg-white/[0.02]"
+                className="flex items-center gap-4 p-4 hover:bg-[var(--color-surface-tint)]"
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">
