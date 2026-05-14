@@ -28,6 +28,7 @@ import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
 import { DeleteCancelledBooking } from '@/components/formation/delete-cancelled-booking';
 import { TradingHero } from '@/components/shared/trading-hero';
+import { LiveTicker } from '@/components/shared/live-ticker';
 import { ReferralLinkCopy } from '@/components/dashboard/referral-link-copy';
 import { buildReferralLink, ensureReferralCode } from '@/lib/referrals';
 import { getChannelMemberCount } from '@/lib/telegram/community-stats';
@@ -99,51 +100,70 @@ export default async function DashboardPage() {
 
   return (
     <>
-      {/* HEADER : Salut + 3 mini cards à droite, chart animé en arrière */}
-      <Section className="pt-20 pb-6">
-        <div className="relative">
-          {/* TradingHero en arrière-plan (absolu, derrière) */}
-          <div className="absolute inset-0 -z-10 opacity-50 pointer-events-none">
-            <TradingHero />
+      {/* HEADER : Salut + 3 mini cards à droite */}
+      <Section className="pt-20 pb-4">
+        <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-start">
+          {/* Gauche : Salut + bot CTA */}
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
+              Mon espace
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl text-gradient">
+              Salut {firstName}.
+            </h1>
+            {botUsername && (
+              <div className="inline-flex items-start gap-2.5 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 px-3 py-2 max-w-lg">
+                <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-[var(--color-text)]">
+                  <Link
+                    href={`https://t.me/${botUsername}?start=hello`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-2 hover:text-blue-200"
+                  >
+                    Envoie /start à @{botUsername}
+                  </Link>{' '}
+                  pour recevoir tes notifs sur Telegram.
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-start">
-            {/* Gauche : Salut + bot CTA */}
-            <div className="space-y-3">
-              <p className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
-                Mon espace
-              </p>
-              <h1 className="font-serif text-4xl md:text-5xl text-gradient">
-                Salut {firstName}.
-              </h1>
-              {botUsername && (
-                <div className="inline-flex items-start gap-2.5 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 px-3 py-2 max-w-lg">
-                  <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
-                  <div className="text-xs text-[var(--color-text)]">
-                    <Link
-                      href={`https://t.me/${botUsername}?start=hello`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium underline underline-offset-2 hover:text-blue-200"
-                    >
-                      Envoie /start à @{botUsername}
-                    </Link>{' '}
-                    pour recevoir tes notifs sur Telegram.
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* Droite : 3 mini cards stacked */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 lg:w-[280px]">
+            <MiniVipCard
+              application={vipApp ?? null}
+              tradingProgressPct={tradingProgressPct}
+              cpaQualified={cpaQualified}
+            />
+            <MiniFormationCard hasBooking={userBookings.length > 0} />
+            <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
+          </div>
+        </div>
+      </Section>
 
-            {/* Droite : 3 mini cards stacked */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 lg:w-[280px]">
-              <MiniVipCard
-                application={vipApp ?? null}
-                tradingProgressPct={tradingProgressPct}
-                cpaQualified={cpaQualified}
-              />
-              <MiniFormationCard hasBooking={userBookings.length > 0} />
-              <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
+      {/* LIVE TRADING — chart animé + ticker scrolling */}
+      <Section className="py-4">
+        <div className="glass rounded-[var(--radius-lg)] overflow-hidden">
+          <div className="flex items-center justify-between px-5 pt-4 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] font-medium">
+                Marchés en direct
+              </span>
             </div>
+            <span className="text-[10px] text-[var(--color-text-faint)] hidden sm:inline">
+              Survole pour pause
+            </span>
+          </div>
+          <div className="px-2 pb-2">
+            <TradingHero />
+          </div>
+          <div className="border-t border-[var(--color-border)] px-2 py-2">
+            <LiveTicker />
           </div>
         </div>
       </Section>

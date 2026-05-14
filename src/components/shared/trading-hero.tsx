@@ -36,7 +36,7 @@ const TICKERS = [
 
 export function TradingHero() {
   return (
-    <div className="trading-hero relative w-full h-32 md:h-44 pointer-events-none select-none overflow-hidden">
+    <div className="trading-hero relative w-full h-40 md:h-56 pointer-events-none select-none overflow-hidden rounded-[var(--radius-md)]">
       <svg
         viewBox="0 0 600 100"
         preserveAspectRatio="none"
@@ -172,8 +172,6 @@ export function TradingHero() {
         ))}
       </div>
 
-      {/* Fade gauche */}
-      <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[var(--color-bg)] to-transparent" />
     </div>
   );
 }

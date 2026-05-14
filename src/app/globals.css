@@ -445,6 +445,19 @@
   animation: trading-ticker-blink 3s ease-in-out infinite;
 }
 
+/* ----- Live ticker marquee (dashboard) ----- */
+@keyframes live-ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.live-ticker__track {
+  animation: live-ticker-scroll 60s linear infinite;
+  will-change: transform;
+}
+.live-ticker:hover .live-ticker__track {
+  animation-play-state: paused;
+}
+
 @keyframes trading-candle-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
