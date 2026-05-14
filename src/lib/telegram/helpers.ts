@@ -133,7 +133,60 @@ export async function ejectFromTelegram(
     });
   }
 
+  // Alerte admins : message dans le channel d'alertes internes (best-effort)
+  await notifyAdminsEjection({
+    userName:
+      user.telegramFirstName ??
+      user.name ??
+      (user.telegramUsername ? `@${user.telegramUsername}` : 'user inconnu'),
+    userId,
+    telegramId: Number(user.telegramId),
+    reason,
+  });
+
   return { success: true };
+}
+
+/**
+ * Envoie un message au channel admin Telegram (defini par
+ * ADMIN_ALERT_CHAT_ID en env). Best-effort : si l'env var est absente
+ * ou si Telegram échoue, on log mais on continue. Utile pour notifier
+ * une éjection automatique sans devoir checker manuellement la DB.
+ */
+export async function notifyAdminsEjection(opts: {
+  userName: string;
+  userId: string;
+  telegramId: number | null;
+  reason: string;
+}): Promise<void> {
+  const chatId = process.env.ADMIN_ALERT_CHAT_ID;
+  if (!chatId) return; // Pas configuré → silencieux
+
+  try {
+    const bot = getBot();
+    const lines = [
+      `🚨 <b>Éjection automatique VIP</b>`,
+      ``,
+      `User : <b>${escapeHtml(opts.userName)}</b>`,
+      opts.telegramId ? `Telegram ID : <code>${opts.telegramId}</code>` : '',
+      `User ID : <code>${opts.userId.slice(0, 8)}…</code>`,
+      ``,
+      `Raison : ${escapeHtml(opts.reason)}`,
+      ``,
+      `Voir l'historique : ${process.env.NEXT_PUBLIC_APP_URL}/admin/audit`,
+    ].filter(Boolean);
+
+    await bot.api.sendMessage(Number(chatId), lines.join('\n'), {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
+  } catch (err) {
+    console.warn('[Telegram] notifyAdminsEjection failed', err);
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**

@@ -386,6 +386,42 @@ export const webhookEvents = pgTable(
 );
 
 // ============================================================
+// ADMIN AUDIT LOG — trace des actions admin sensibles
+// ============================================================
+
+/**
+ * Log des actions admin pour traçabilité.
+ *
+ * Pattern : à chaque action admin sensible (changement progress, éjection,
+ * confirmation booking, toggle mode IronFX...) on insert un row.
+ *
+ * Colonnes JSONB `before` et `after` : permettent de reconstruire le diff
+ * exact. Pour les actions sans diff (ex. "envoyer email"), `after` contient
+ * un payload descriptif.
+ */
+export const adminAuditLogs = pgTable(
+  'admin_audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    adminId: uuid('admin_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    action: text('action').notNull(), // ex. 'booking_confirm', 'vip_eject', 'progress_set', 'ironfx_mode'
+    targetType: text('target_type'), // 'booking' | 'vip_application' | 'user' | 'settings' | null
+    targetId: text('target_id'), // UUID ou key selon le targetType (null si N/A)
+    before: jsonb('before').$type<Record<string, unknown>>(),
+    after: jsonb('after').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    adminIdIdx: index('audit_log_admin_id_idx').on(t.adminId),
+    actionIdx: index('audit_log_action_idx').on(t.action),
+    targetIdx: index('audit_log_target_idx').on(t.targetType, t.targetId),
+    createdAtIdx: index('audit_log_created_at_idx').on(t.createdAt),
+  })
+);
+
+// ============================================================
 // RATE LIMITING (sliding window per key, stocké en Postgres)
 // ============================================================
 
@@ -496,3 +532,4 @@ export type Payment = typeof payments.$inferSelect;
 export type VipApplication = typeof vipApplications.$inferSelect;
 export type AppSetting = typeof appSettings.$inferSelect;
 export type ManualIronfxStatus = typeof manualIronfxStatus.$inferSelect;
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;

@@ -36,6 +36,13 @@
       "when": 1778765458012,
       "tag": "0004_simple_valeria_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778771556582,
+      "tag": "0005_overjoyed_rhino",
+      "breakpoints": true
     }
   ]
 }

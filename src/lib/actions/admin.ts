@@ -19,6 +19,7 @@ import {
 import { setIronFXMode } from '@/lib/ironfx';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
+import { logAdminAction } from '@/lib/admin/audit';
 import BookingConfirmedEmail from '@root/emails/booking-confirmed';
 import BookingProposedEmail from '@root/emails/booking-proposed';
 import BookingRefusedEmail from '@root/emails/booking-refused';
@@ -36,7 +37,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 export async function adminBookingAction(
   input: unknown
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const parsed = adminBookingActionSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -154,6 +155,29 @@ export async function adminBookingAction(
     );
   }
 
+  // Audit log
+  await logAdminAction({
+    adminId: session.user.id,
+    action: `booking_${data.action}`,
+    targetType: 'booking',
+    targetId: booking.id,
+    before: {
+      status: booking.status,
+      confirmedDate: booking.confirmedDate,
+      adminProposedDate: booking.adminProposedDate,
+    },
+    after:
+      data.action === 'confirm'
+        ? { status: 'confirmed', confirmedDate: data.confirmedDate }
+        : data.action === 'propose_alternative'
+        ? {
+            status: 'date_proposed',
+            adminProposedDate: data.proposedDate,
+            notes: data.notes,
+          }
+        : { status: 'cancelled', notes: data.notes },
+  });
+
   revalidatePath('/admin/bookings');
   revalidatePath('/dashboard');
   return { success: true, data: undefined };
@@ -166,7 +190,7 @@ export async function adminBookingAction(
 export async function adminValidateSignupAction(
   applicationId: string
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const app = await db.query.vipApplications.findFirst({
     where: eq(vipApplications.id, applicationId),
@@ -194,6 +218,15 @@ export async function adminValidateSignupAction(
     })
   );
 
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'vip_validate_signup',
+    targetType: 'vip_application',
+    targetId: app.id,
+    before: { step: app.step },
+    after: { step: 'signup_validated' },
+  });
+
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
   return { success: true, data: undefined };
@@ -202,7 +235,7 @@ export async function adminValidateSignupAction(
 export async function adminValidateDepositAction(
   applicationId: string
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const app = await db.query.vipApplications.findFirst({
     where: eq(vipApplications.id, applicationId),
@@ -230,6 +263,15 @@ export async function adminValidateDepositAction(
     })
   );
 
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'vip_validate_deposit',
+    targetType: 'vip_application',
+    targetId: app.id,
+    before: { step: app.step },
+    after: { step: 'deposit_validated' },
+  });
+
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
   return { success: true, data: undefined };
@@ -239,11 +281,18 @@ export async function adminEjectAction(
   userId: string,
   reason: string
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const res = await ejectFromTelegram(userId, reason);
   if (!res.success) {
     return { success: false, error: res.error ?? 'Éjection échouée' };
   }
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'vip_eject_manual',
+    targetType: 'user',
+    targetId: userId,
+    after: { reason },
+  });
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
   revalidatePath('/dashboard');
@@ -326,6 +375,15 @@ export async function adminSetTradingProgressAction(
     updateTag('vip-qualified-count');
   }
 
+  // Audit log : on stocke le delta avant/après le %
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'progress_set',
+    targetType: 'manual_ironfx_status',
+    targetId: accountId,
+    after: { tradingProgressPct, cpaQualified: nowQualified, userId },
+  });
+
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
   revalidatePath('/dashboard');
@@ -391,6 +449,22 @@ export async function adminUpdateManualIronfxAction(
     updateTag('vip-qualified-count');
   }
 
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'manual_ironfx_update',
+    targetType: 'manual_ironfx_status',
+    targetId: accountId,
+    after: {
+      userId,
+      signupDetected,
+      depositTotal,
+      cpaQualified,
+      accountClosed,
+      hasWithdrawn,
+      notes,
+    },
+  });
+
   revalidatePath('/admin/vip');
   return { success: true, data: undefined };
 }
@@ -410,6 +484,15 @@ export async function adminSetIronfxModeAction(
   }
 
   await setIronFXMode(parsed.data.mode, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'ironfx_mode_set',
+    targetType: 'settings',
+    targetId: 'ironfx_mode',
+    after: { mode: parsed.data.mode },
+  });
+
   revalidatePath('/admin/settings');
   return { success: true, data: undefined };
 }

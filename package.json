@@ -16,6 +16,7 @@
     "seed": "tsx scripts/seed.ts",
     "promote-admin": "tsx scripts/promote-admin.ts",
     "telegram:setup": "tsx scripts/setup-telegram-webhook.ts",
+    "test:ironfx": "tsx scripts/test-ironfx-webhook.ts",
     "test": "vitest",
     "test:e2e": "playwright test"
   },

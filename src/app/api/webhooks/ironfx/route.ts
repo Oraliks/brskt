@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { manualIronfxStatus, vipApplications } from '@/lib/db/schema';
 import {
@@ -20,8 +21,39 @@ export const dynamic = 'force-dynamic';
  *   - Query params : ?event_type=signup&account_id=12345&ref=abc&sig=...
  *   - JSON POST avec signature en header
  *
- * On supporte les deux ici, à adapter selon la doc qu'on te donnera.
+ * On supporte les deux ici. Le payload est validé avec Zod avant traitement.
  */
+
+const KNOWN_EVENT_TYPES = [
+  'signup',
+  'deposit',
+  'cpa_qualified',
+  'withdrawal',
+  'account_closed',
+] as const;
+
+const postbackSchema = z.object({
+  event_type: z.enum(KNOWN_EVENT_TYPES),
+  account_id: z.string().min(1),
+  // L'event_id permet une idempotence parfaite. Si absent, on tombera sur un
+  // hash du payload — moins robuste mais utilisable pour le mode legacy.
+  event_id: z.string().optional(),
+  timestamp: z.string().optional(),
+  // Référence affiliée — accepte plusieurs nommages selon la config IronFX.
+  ref: z.string().optional(),
+  affiliate_ref: z.string().optional(),
+  sub_id: z.string().optional(),
+  subid: z.string().optional(),
+  sub1: z.string().optional(),
+  // Champs spécifiques à certains events
+  amount: z.string().optional(),
+  currency: z.string().optional(),
+  // Signature — peut venir du body ou des headers, donc optionnelle ici
+  sig: z.string().optional(),
+});
+
+type IronfxPayload = z.infer<typeof postbackSchema>;
+
 export async function POST(request: Request) {
   return handleIronfxPostback(request);
 }
@@ -42,37 +74,48 @@ async function handleIronfxPostback(request: Request): Promise<Response> {
   }
 
   // 1) Récupérer payload (query params en GET, body en POST)
-  let payload: Record<string, string>;
+  let rawPayload: Record<string, string>;
   let rawBody = '';
 
   if (request.method === 'GET') {
-    payload = Object.fromEntries(url.searchParams.entries());
+    rawPayload = Object.fromEntries(url.searchParams.entries());
   } else {
     rawBody = await request.text();
     try {
-      payload = JSON.parse(rawBody);
+      rawPayload = JSON.parse(rawBody);
     } catch {
-      // Try urlencoded
-      payload = Object.fromEntries(new URLSearchParams(rawBody).entries());
+      rawPayload = Object.fromEntries(new URLSearchParams(rawBody).entries());
     }
   }
 
-  // 2) Vérifier la signature
-  const providedSig = payload.sig ?? request.headers.get('x-ironfx-signature');
+  // 2) Validation Zod du payload
+  const parsed = postbackSchema.safeParse(rawPayload);
+  if (!parsed.success) {
+    console.warn('[IronFX] invalid payload', parsed.error.flatten());
+    return Response.json({ error: 'invalid_payload' }, { status: 400 });
+  }
+  const payload = parsed.data;
+
+  // 3) Vérifier la signature
+  const providedSig =
+    payload.sig ?? request.headers.get('x-ironfx-signature');
   if (!providedSig) {
     return Response.json({ error: 'missing_signature' }, { status: 401 });
   }
 
-  const valid = verifyPostbackSignature(payload, providedSig, secret);
+  const valid = verifyPostbackSignature(rawPayload, providedSig, secret);
   if (!valid) {
     console.warn('[IronFX] invalid postback signature');
     return Response.json({ error: 'invalid_signature' }, { status: 401 });
   }
 
-  // 3) Idempotence
+  // 4) Idempotence — préférer event_id quand fourni, sinon hash du payload
+  //    (incluant timestamp si présent). Plus stable que l'ancien fallback
+  //    qui utilisait Date.now() (= collision possible entre 2 postbacks
+  //    rapprochés avec le même payload sans event_id ni timestamp).
   const eventId =
     payload.event_id ??
-    `${payload.event_type}_${payload.account_id}_${payload.timestamp ?? Date.now()}`;
+    hashFallbackEventId(payload);
 
   if (await isEventProcessed('ironfx', eventId)) {
     return Response.json({ ok: true, duplicated: true });
@@ -80,7 +123,7 @@ async function handleIronfxPostback(request: Request): Promise<Response> {
 
   const eventDbId = await recordEvent('ironfx', eventId, payload);
 
-  // 4) Traitement
+  // 5) Traitement
   try {
     await processIronfxEvent(payload);
     await markEventProcessed(eventDbId);
@@ -94,13 +137,32 @@ async function handleIronfxPostback(request: Request): Promise<Response> {
   return Response.json({ ok: true });
 }
 
+/**
+ * Construit un event_id stable à partir du payload quand IronFX n'en
+ * fournit pas. On hash event_type + account_id + timestamp + amount —
+ * suffit pour distinguer 99% des doublons légitimes.
+ */
+function hashFallbackEventId(payload: IronfxPayload): string {
+  const parts = [
+    payload.event_type,
+    payload.account_id,
+    payload.timestamp ?? '',
+    payload.amount ?? '',
+  ];
+  return (
+    'fb_' +
+    crypto.createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 24)
+  );
+}
+
 function verifyPostbackSignature(
   payload: Record<string, string>,
   providedSig: string,
   secret: string
 ): boolean {
   // Format présumé : HMAC-SHA256 sur la liste des params triés (sans 'sig')
-  const { sig, ...fields } = payload;
+  const { sig: _sig, ...fields } = payload;
+  void _sig;
   const dataString = Object.keys(fields)
     .sort()
     .map((k) => `${k}=${fields[k]}`)
@@ -121,7 +183,7 @@ function verifyPostbackSignature(
   }
 }
 
-async function processIronfxEvent(payload: Record<string, string>) {
+async function processIronfxEvent(payload: IronfxPayload) {
   const eventType = payload.event_type;
   const accountId = payload.account_id;
   // IronAffiliates renvoie le sub_id qu'on a passé dans le lien.
@@ -132,10 +194,6 @@ async function processIronfxEvent(payload: Record<string, string>) {
     payload.sub_id ??
     payload.subid ??
     payload.sub1;
-
-  if (!accountId) {
-    throw new Error('Missing account_id in postback');
-  }
 
   // Trouver l'application VIP correspondante via le ref
   let application = ref
@@ -152,7 +210,9 @@ async function processIronfxEvent(payload: Record<string, string>) {
   }
 
   if (!application) {
-    console.warn(`[IronFX] No matching VIP application for ref=${ref}, account=${accountId}`);
+    console.warn(
+      `[IronFX] No matching VIP application for ref=${ref}, account=${accountId}`
+    );
     return;
   }
 
@@ -211,8 +271,5 @@ async function processIronfxEvent(payload: Record<string, string>) {
         })
         .where(eq(manualIronfxStatus.accountId, accountId));
       break;
-
-    default:
-      console.warn(`[IronFX] Unknown event_type: ${eventType}`);
   }
 }

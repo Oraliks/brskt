@@ -10,6 +10,7 @@ import {
   Menu,
   Settings,
   Shield,
+  ShieldCheck,
   Sparkles,
   TrendingDown,
   Users,
@@ -26,6 +27,7 @@ const links = [
   { href: '/admin/vip', label: 'VIP', icon: Sparkles },
   { href: '/admin/funnel', label: 'Funnel', icon: TrendingDown },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
+  { href: '/admin/audit', label: 'Audit log', icon: ShieldCheck },
   { href: '/admin/settings', label: 'Paramètres', icon: Settings },
 ];
 
