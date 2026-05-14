@@ -39,10 +39,31 @@ function getChannelTarget(): number | string | null {
 }
 
 /**
- * Renvoie le nombre de membres du canal. `null` si pas configuré ou API down.
- * Toujours best-effort, jamais throw.
+ * Renvoie le nombre de membres du canal.
+ *
+ * Priorité (du plus fort au plus faible) :
+ *  1. Override manuel admin (app_settings.community_count_override.enabled)
+ *  2. API Telegram getChatMemberCount (si bot membre/admin du canal)
+ *  3. null (caller décide de ne rien afficher)
+ *
+ * Best-effort, jamais throw.
  */
 export async function getChannelMemberCount(): Promise<number | null> {
+  // 1. Override admin manuel — court-circuit total
+  try {
+    const { getCommunityCountOverride } = await import(
+      '@/lib/settings/community-count'
+    );
+    const override = await getCommunityCountOverride();
+    if (override.enabled && override.value > 0) {
+      return override.value;
+    }
+  } catch (err) {
+    console.error('[community-stats] override lookup failed', err);
+    // continue vers l'API
+  }
+
+  // 2. Cache mémoire pour éviter de spammer Telegram
   const now = Date.now();
   if (cache && now - cache.cachedAt < TTL_MS) {
     return cache.value;
@@ -58,7 +79,6 @@ export async function getChannelMemberCount(): Promise<number | null> {
     return count;
   } catch (err) {
     console.error('[community-stats] getChatMemberCount failed', err);
-    // Garde l'ancien cache même expiré plutôt que de remonter null
     if (cache) return cache.value;
     return null;
   }

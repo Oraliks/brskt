@@ -8,8 +8,6 @@ import {
   Loader2,
   MoreHorizontal,
   Search,
-  Shield,
-  ShieldOff,
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -41,10 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
-import {
-  adminSetUserBannedAction,
-  adminSetUserRoleAction,
-} from '@/lib/actions/admin';
+import { adminSetUserBannedAction } from '@/lib/actions/admin';
 import { formatDate } from '@/lib/utils';
 
 export interface AdminUserRow {
@@ -91,27 +86,6 @@ export function UsersTable({ users, currentAdminId }: Props) {
       );
     });
   }, [users, query, filter]);
-
-  function setRole(user: AdminUserRow, role: 'user' | 'admin') {
-    start(async () => {
-      const result = await adminSetUserRoleAction({ userId: user.id, role });
-      if (result.success) {
-        toast({
-          title:
-            role === 'admin'
-              ? `✓ ${user.name} promu admin`
-              : `✓ ${user.name} redevenu user`,
-        });
-        router.refresh();
-      } else {
-        toast({
-          title: 'Erreur',
-          description: result.error,
-          variant: 'destructive',
-        });
-      }
-    });
-  }
 
   function ban() {
     if (!banDialog) return;
@@ -311,24 +285,6 @@ export function UsersTable({ users, currentAdminId }: Props) {
                         <DropdownMenuLabel className="text-xs">
                           {u.name}
                         </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {u.role === 'admin' ? (
-                          <DropdownMenuItem
-                            disabled={isSelf}
-                            onClick={() => setRole(u, 'user')}
-                          >
-                            <ShieldOff className="h-4 w-4" />
-                            Retirer le rôle admin
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            disabled={!!u.bannedAt}
-                            onClick={() => setRole(u, 'admin')}
-                          >
-                            <Shield className="h-4 w-4" />
-                            Promouvoir admin
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuSeparator />
                         {u.bannedAt ? (
                           <DropdownMenuItem onClick={() => unban(u)}>

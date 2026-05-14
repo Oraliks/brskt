@@ -1,4 +1,4 @@
-import { Database, Gift, KeyRound, Sun } from 'lucide-react';
+import { Database, Gift, KeyRound, Sun, Users } from 'lucide-react';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -13,17 +13,20 @@ import {
 import { IronFxModeForm } from '@/components/admin/ironfx-mode-form';
 import { WelcomeBonusForm } from '@/components/admin/welcome-bonus-form';
 import { DailyBriefingForm } from '@/components/admin/daily-briefing-form';
+import { CommunityCountForm } from '@/components/admin/community-count-form';
 import { getIronFXMode } from '@/lib/ironfx';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { getDailyBriefing } from '@/lib/settings/daily-briefing';
+import { getCommunityCountOverride } from '@/lib/settings/community-count';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  const [mode, welcomeBonus, briefing] = await Promise.all([
+  const [mode, welcomeBonus, briefing, communityCount] = await Promise.all([
     getIronFXMode(),
     getWelcomeBonus(),
     getDailyBriefing(),
+    getCommunityCountOverride(),
   ]);
 
   return (
@@ -46,6 +49,10 @@ export default async function AdminSettingsPage() {
           <TabsTrigger value="briefing" className="gap-1.5">
             <Sun className="h-3.5 w-3.5" />
             Daily briefing
+          </TabsTrigger>
+          <TabsTrigger value="community" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            Communauté
           </TabsTrigger>
           <TabsTrigger value="env" className="gap-1.5">
             <KeyRound className="h-3.5 w-3.5" />
@@ -80,6 +87,16 @@ export default async function AdminSettingsPage() {
             icon={<Sun className="h-4 w-4" />}
           >
             <DailyBriefingForm initial={briefing} />
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="community">
+          <SectionCard
+            title="Compteur de membres du canal"
+            description="Affiché sur le dashboard user et /admin. Si Telegram ne permet pas d'ajouter le bot au canal, override manuellement la valeur ici."
+            icon={<Users className="h-4 w-4" />}
+          >
+            <CommunityCountForm initial={communityCount} />
           </SectionCard>
         </TabsContent>
 

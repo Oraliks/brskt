@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Clock, Loader2, MessageSquare, X } from 'lucide-react';
+import {
+  Ban,
+  Check,
+  Clock,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  X,
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -24,6 +32,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
 import { adminBookingAction } from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
@@ -46,13 +62,16 @@ const STATUS_VARIANT: Record<Booking['status'], 'default' | 'success' | 'warning
   cancelled: 'danger',
 };
 
+type DialogState =
+  | null
+  | { type: 'confirm'; row: Row }
+  | { type: 'propose'; row: Row }
+  | { type: 'refuse'; row: Row }
+  | { type: 'force_cancel'; row: Row }
+  | { type: 'update_notes'; row: Row };
+
 export function BookingsTable({ bookings }: Props) {
-  const [dialog, setDialog] = useState<
-    | null
-    | { type: 'confirm'; row: Row }
-    | { type: 'propose'; row: Row }
-    | { type: 'refuse'; row: Row }
-  >(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
 
   return (
     <div className="glass rounded-[var(--radius-lg)] overflow-hidden">
@@ -134,35 +153,69 @@ export function BookingsTable({ bookings }: Props) {
                   : '—'}
               </TableCell>
               <TableCell className="text-right">
-                {(b.status === 'pending_admin' || b.status === 'date_proposed') && (
-                  <div className="inline-flex flex-wrap gap-1.5 justify-end">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setDialog({ type: 'confirm', row: b })}
-                    >
-                      <Check className="h-3 w-3" />
-                      Confirmer
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setDialog({ type: 'propose', row: b })}
-                    >
-                      <Clock className="h-3 w-3" />
-                      Proposer
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setDialog({ type: 'refuse', row: b })}
-                      className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10"
-                    >
-                      <X className="h-3 w-3" />
-                      Refuser
-                    </Button>
-                  </div>
-                )}
+                <div className="inline-flex items-center gap-1.5 justify-end">
+                  {(b.status === 'pending_admin' ||
+                    b.status === 'date_proposed') && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setDialog({ type: 'confirm', row: b })}
+                      >
+                        <Check className="h-3 w-3" />
+                        Confirmer
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setDialog({ type: 'propose', row: b })}
+                      >
+                        <Clock className="h-3 w-3" />
+                        Proposer
+                      </Button>
+                    </>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs">
+                        #{b.id.slice(0, 8)} · {b.user.name}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setDialog({ type: 'update_notes', row: b })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Modifier la note admin
+                      </DropdownMenuItem>
+                      {(b.status === 'pending_admin' ||
+                        b.status === 'date_proposed') && (
+                        <DropdownMenuItem
+                          onClick={() => setDialog({ type: 'refuse', row: b })}
+                          className="text-rose-300 light:text-rose-700"
+                        >
+                          <X className="h-4 w-4" />
+                          Refuser (avant paiement)
+                        </DropdownMenuItem>
+                      )}
+                      {b.status !== 'cancelled' && b.status !== 'completed' && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setDialog({ type: 'force_cancel', row: b })
+                          }
+                          className="text-rose-300 light:text-rose-700"
+                        >
+                          <Ban className="h-4 w-4" />
+                          Annuler (force)
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -180,10 +233,7 @@ export function BookingsTable({ bookings }: Props) {
 }
 
 interface ActionDialogProps {
-  dialog:
-    | { type: 'confirm'; row: Row }
-    | { type: 'propose'; row: Row }
-    | { type: 'refuse'; row: Row };
+  dialog: Exclude<DialogState, null>;
   onClose: () => void;
 }
 
@@ -191,13 +241,17 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [date, setDate] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(
+    dialog.type === 'update_notes' ? dialog.row.adminNotes ?? '' : ''
+  );
 
-  const titles = {
+  const titles: Record<Exclude<DialogState, null>['type'], string> = {
     confirm: 'Confirmer cette date',
     propose: 'Proposer une autre date',
     refuse: 'Refuser cette réservation',
-  } as const;
+    force_cancel: 'Annuler la réservation (force)',
+    update_notes: 'Modifier la note admin',
+  };
 
   function submit() {
     start(async () => {
@@ -223,16 +277,36 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
           proposedDate: date,
           notes,
         };
-      } else {
+      } else if (dialog.type === 'refuse') {
         if (!notes.trim()) {
           toast({
             title: 'Note obligatoire pour refuser',
-            description: 'Explique pourquoi pour le user et pour ta propre référence.',
+            description: 'Explique pourquoi.',
             variant: 'destructive',
           });
           return;
         }
         payload = { action: 'refuse', bookingId: dialog.row.id, notes };
+      } else if (dialog.type === 'force_cancel') {
+        if (notes.trim().length < 3) {
+          toast({
+            title: 'Raison requise',
+            description: 'Donne une raison (visible dans l\'audit log).',
+            variant: 'destructive',
+          });
+          return;
+        }
+        payload = {
+          action: 'force_cancel',
+          bookingId: dialog.row.id,
+          notes,
+        };
+      } else {
+        payload = {
+          action: 'update_notes',
+          bookingId: dialog.row.id,
+          notes,
+        };
       }
 
       const result = await adminBookingAction(payload);
@@ -250,6 +324,13 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
     });
   }
 
+  const needsDate = dialog.type === 'confirm' || dialog.type === 'propose';
+  const needsNotes =
+    dialog.type === 'propose' ||
+    dialog.type === 'refuse' ||
+    dialog.type === 'force_cancel' ||
+    dialog.type === 'update_notes';
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
@@ -262,7 +343,16 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4">
-          {(dialog.type === 'confirm' || dialog.type === 'propose') && (
+          {dialog.type === 'force_cancel' && (
+            <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-200">
+              ⚠ Cette action force l&apos;annulation quel que soit le statut
+              actuel ({dialog.row.status}). Le user est notifié sur Telegram.
+              Si des paiements existent, le remboursement est à organiser
+              séparément.
+            </div>
+          )}
+
+          {needsDate && (
             <div>
               <Label htmlFor="date">Date de début</Label>
               <Input
@@ -275,20 +365,18 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
             </div>
           )}
 
-          {(dialog.type === 'propose' || dialog.type === 'refuse') && (
+          {needsNotes && (
             <div>
               <Label htmlFor="notes">
-                Note{' '}
-                {dialog.type === 'refuse' ? (
-                  <span className="text-rose-300">*</span>
-                ) : (
-                  <span className="text-[var(--color-text-faint)]">
-                    (optionnel)
+                {dialog.type === 'update_notes' ? 'Note admin' : 'Raison'}
+                {(dialog.type === 'refuse' || dialog.type === 'force_cancel') && (
+                  <span className="text-rose-300 ml-1">*</span>
+                )}
+                {dialog.type === 'update_notes' && (
+                  <span className="text-[var(--color-text-faint)] text-xs ml-2">
+                    · visible par l&apos;utilisateur sur son dashboard
                   </span>
                 )}
-                <span className="text-[var(--color-text-faint)] text-xs ml-2">
-                  · sera visible par l'utilisateur sur son dashboard
-                </span>
               </Label>
               <Textarea
                 id="notes"
@@ -296,11 +384,14 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="mt-2"
-                required={dialog.type === 'refuse'}
                 placeholder={
                   dialog.type === 'refuse'
-                    ? "Ex: créneau trop court, je n'ai pas d'autre date qui matche. Contacte-moi en privé sur Telegram pour qu'on trouve."
-                    : "Ex: j'ai proposé la semaine d'après car celle-ci est déjà complète."
+                    ? 'Ex: créneau trop court, je n\'ai pas de date qui matche.'
+                    : dialog.type === 'force_cancel'
+                    ? 'Ex: demande de remboursement par le client suite à changement de plan.'
+                    : dialog.type === 'propose'
+                    ? "Ex: j'ai proposé la semaine d'après car celle-ci est déjà complète."
+                    : 'Note interne ou message au user.'
                 }
               />
             </div>
@@ -311,7 +402,15 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
           <Button variant="ghost" onClick={onClose}>
             Annuler
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button
+            onClick={submit}
+            disabled={pending}
+            variant={
+              dialog.type === 'force_cancel' || dialog.type === 'refuse'
+                ? 'destructive'
+                : 'default'
+            }
+          >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Valider
           </Button>

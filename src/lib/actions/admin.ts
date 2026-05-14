@@ -18,9 +18,9 @@ import {
   adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
-  adminSetUserRoleSchema,
   adminVipOverrideSchema,
   botFeaturesSchema,
+  communityCountOverrideSchema,
   dailyBriefingSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
@@ -30,6 +30,7 @@ import { setIronFXMode } from '@/lib/ironfx';
 import { setWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { setBotFeatures } from '@/lib/settings/bot-features';
 import { setDailyBriefing } from '@/lib/settings/daily-briefing';
+import { setCommunityCountOverride } from '@/lib/settings/community-count';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -167,6 +168,39 @@ export async function adminBookingAction(
           `Détails : ${APP_URL}/dashboard`,
       })
     );
+  } else if (data.action === 'force_cancel') {
+    if (booking.status === 'completed') {
+      return {
+        success: false,
+        error: 'Impossible d\'annuler une formation déjà terminée',
+      };
+    }
+    await db
+      .update(bookings)
+      .set({
+        status: 'cancelled',
+        adminNotes: data.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, data.bookingId));
+
+    after(() =>
+      notifyUser(booking.user, {
+        telegram:
+          `⚠️ <b>Réservation annulée par l'équipe</b>\n\n` +
+          `<b>${escapeHtml(booking.formation.title)}</b>\n\n` +
+          `<i>«${escapeHtml(data.notes)}»</i>\n\n` +
+          `Si tu as déjà payé, on revient vers toi pour le remboursement.`,
+      })
+    );
+  } else if (data.action === 'update_notes') {
+    await db
+      .update(bookings)
+      .set({
+        adminNotes: data.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, data.bookingId));
   }
 
   // Audit log
@@ -189,6 +223,8 @@ export async function adminBookingAction(
             adminProposedDate: data.proposedDate,
             notes: data.notes,
           }
+        : data.action === 'update_notes'
+        ? { notes: data.notes }
         : { status: 'cancelled', notes: data.notes },
   });
 
@@ -761,57 +797,10 @@ export async function adminSetDailyBriefingAction(
 // USERS
 // ============================================================
 
-/**
- * Change le rôle d'un utilisateur. Empêche un admin de se retirer lui-même
- * ses droits (sinon il pourrait se locker dehors).
- */
-export async function adminSetUserRoleAction(
-  input: unknown
-): Promise<ActionResult> {
-  const session = await requireAdmin();
-  const parsed = adminSetUserRoleSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return { success: false, error: 'Données invalides' };
-  }
-
-  if (parsed.data.userId === session.user.id && parsed.data.role !== 'admin') {
-    return {
-      success: false,
-      error: 'Un admin ne peut pas retirer son propre rôle admin',
-    };
-  }
-
-  const target = await db.query.users.findFirst({
-    where: eq(users.id, parsed.data.userId),
-    columns: { id: true, role: true, name: true, email: true },
-  });
-
-  if (!target) {
-    return { success: false, error: 'Utilisateur introuvable' };
-  }
-
-  if (target.role === parsed.data.role) {
-    return { success: true, data: undefined };
-  }
-
-  await db
-    .update(users)
-    .set({ role: parsed.data.role, updatedAt: new Date() })
-    .where(eq(users.id, parsed.data.userId));
-
-  await logAdminAction({
-    adminId: session.user.id,
-    action: 'user_role_set',
-    targetType: 'user',
-    targetId: parsed.data.userId,
-    before: { role: target.role },
-    after: { role: parsed.data.role },
-  });
-
-  revalidatePath('/admin/users');
-  return { success: true, data: undefined };
-}
+// Note : Les rôles admin sont gérés UNIQUEMENT via la variable d'env
+// ADMIN_TELEGRAM_IDS (cf. /api/auth/telegram qui synchronise le role à
+// chaque login). Pas d'action de promotion via l'UI — c'est volontaire pour
+// éviter qu'un admin compromis ne puisse promouvoir des complices.
 
 /**
  * Ban ou un-ban un utilisateur. Le ban est stocké dans une table dédiée
@@ -888,6 +877,37 @@ export async function adminSetUserBannedAction(
   });
 
   revalidatePath('/admin/users');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Override manuel du compteur de membres du canal Telegram.
+ * Utilisé quand le bot ne peut pas être ajouté au canal (>200 membres,
+ * canal privé sans option admin pour bot).
+ */
+export async function adminSetCommunityCountAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = communityCountOverrideSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  await setCommunityCountOverride(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'community_count_override',
+    targetType: 'settings',
+    targetId: 'community_count_override',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/settings');
+  revalidatePath('/dashboard');
   return { success: true, data: undefined };
 }
 

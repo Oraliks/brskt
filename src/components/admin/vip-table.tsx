@@ -334,7 +334,7 @@ function OverrideDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Actions avancées — {row.user.name}</DialogTitle>
           <DialogDescription>

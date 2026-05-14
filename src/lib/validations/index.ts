@@ -58,6 +58,20 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
     bookingId: z.string().uuid(),
     notes: z.string().optional(),
   }),
+  // Annule un booking quel que soit son status (sauf completed).
+  // Pour les cancellations exceptionnelles : client change d'avis post-paiement,
+  // remboursement à organiser séparément.
+  z.object({
+    action: z.literal('force_cancel'),
+    bookingId: z.string().uuid(),
+    notes: z.string().min(3, 'Raison requise pour audit'),
+  }),
+  // Met à jour uniquement les notes admin (sans changer le status).
+  z.object({
+    action: z.literal('update_notes'),
+    bookingId: z.string().uuid(),
+    notes: z.string().max(2000),
+  }),
 ]);
 
 export type AdminBookingActionInput = z.infer<typeof adminBookingActionSchema>;
@@ -190,6 +204,16 @@ export const adminProgressUpdateSchema = z.object({
 export const dailyBriefingSchema = z.object({
   enabled: z.boolean(),
   template: z.string().min(20, 'Template trop court').max(4000, 'Template trop long'),
+});
+
+/**
+ * Override manuel du compteur de membres du canal. Utilisé quand le bot
+ * ne peut pas être ajouté au canal (canal privé > 200 membres, restriction
+ * Telegram).
+ */
+export const communityCountOverrideSchema = z.object({
+  enabled: z.boolean(),
+  value: z.number().int().min(0).max(10_000_000),
 });
 
 // ============================================================
