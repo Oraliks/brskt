@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
+  Activity,
   ArrowLeftFromLine,
   CalendarCheck,
   LayoutDashboard,
@@ -28,6 +29,7 @@ const links = [
   { href: '/admin/funnel', label: 'Funnel', icon: TrendingDown },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
   { href: '/admin/audit', label: 'Audit log', icon: ShieldCheck },
+  { href: '/admin/diagnostics', label: 'Diagnostics', icon: Activity },
   { href: '/admin/settings', label: 'Paramètres', icon: Settings },
 ];
 

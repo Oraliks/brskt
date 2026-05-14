@@ -96,6 +96,7 @@ export function getBot(): Bot<Context> {
     await ctx.reply(
       `<b>Commandes disponibles</b>\n\n` +
         `/start — Démarrer\n` +
+        `/login — Lien de connexion direct au site (fallback si le widget bug)\n` +
         `/status — Ma progression VIP & CPA\n` +
         `/qualify — Mini-questionnaire pour personnaliser ton suivi\n` +
         `/dashboard — Mon espace\n` +
@@ -119,6 +120,33 @@ export function getBot(): Bot<Context> {
         `Funnel : ${appUrl}/vip`,
       { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
     );
+  });
+
+  // /login — fallback magic-link quand le Telegram Login Widget bugue
+  // (BotFather domain pas configuré, popup bloquée, etc.)
+  bot.command('login', async (ctx) => {
+    const tgId = ctx.from?.id;
+    if (!tgId) return;
+
+    try {
+      const { signMagicToken } = await import('@/lib/auth/magic-link');
+      const token = signMagicToken(tgId);
+      const url = `${appUrl}/login/magic?token=${encodeURIComponent(token)}`;
+      await ctx.reply(
+        `🔑 <b>Lien de connexion</b>\n\n` +
+          `Clique ici pour te connecter sur Boursikotons :\n` +
+          `<a href="${url}">Se connecter maintenant</a>\n\n` +
+          `Le lien expire dans <b>10 minutes</b>. Pas de partage : il te ` +
+          `connecte directement à ton compte.`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+    } catch (err) {
+      console.error('[bot] /login error', err);
+      await ctx.reply(
+        `❌ Impossible de générer le lien de connexion pour le moment. ` +
+          `Réessaye dans quelques secondes ou utilise ${appUrl}/login`
+      );
+    }
   });
 
   // /status — où en suis-je dans le funnel + progression CPA si in_group
