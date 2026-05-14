@@ -71,11 +71,18 @@ interface VipWizardProps {
   application: VipApplication | null;
   /** Progression de trading 0-100 — pertinente quand step = in_group */
   tradingProgressPct?: number;
+  /**
+   * Mode IronFX courant. En mode 'api', les webhooks detectent
+   * automatiquement le dépôt — on adapte l'UI pour ne pas demander
+   * la saisie manuelle au user.
+   */
+  ironfxMode?: 'manual' | 'api';
 }
 
 export function VipWizard({
   application,
   tradingProgressPct = 0,
+  ironfxMode = 'manual',
 }: VipWizardProps) {
   const currentStep = application?.step ?? null;
 
@@ -89,6 +96,7 @@ export function VipWizard({
       <StepRenderer
         application={application}
         tradingProgressPct={tradingProgressPct}
+        ironfxMode={ironfxMode}
       />
     </div>
   );
@@ -116,9 +124,11 @@ function ProgressHeader({ currentStep }: { currentStep: Step | null }) {
 function StepRenderer({
   application,
   tradingProgressPct,
+  ironfxMode,
 }: {
   application: VipApplication | null;
   tradingProgressPct: number;
+  ironfxMode: 'manual' | 'api';
 }) {
   const step = application?.step ?? null;
 
@@ -133,7 +143,13 @@ function StepRenderer({
     case 'signup_pending':
       return <WaitingStep title="On valide ton inscription broker" />;
     case 'signup_validated':
-      return <DepositStep application={application!} />;
+      // En mode API, le dépôt sera détecté auto par le webhook — on indique
+      // au user qu'il n'a rien à saisir, juste à déposer chez le broker.
+      return ironfxMode === 'api' ? (
+        <DepositApiWaitStep />
+      ) : (
+        <DepositStep application={application!} />
+      );
     case 'deposit_pending':
       return <WaitingStep title="On valide ton dépôt" />;
     case 'deposit_validated':
@@ -181,6 +197,10 @@ function StartStep() {
   );
 }
 
+// Validation broker ID côté client : IronFX = généralement 6-10 chiffres.
+// On accepte aussi alphanum pour autres formats possibles, min 3 chars.
+const BROKER_ID_REGEX = /^[A-Za-z0-9_-]{3,50}$/;
+
 function BrokerAccountStep({
   application,
 }: {
@@ -189,12 +209,28 @@ function BrokerAccountStep({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [accountId, setAccountId] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  const trimmed = accountId.trim();
+  const isValid = BROKER_ID_REGEX.test(trimmed);
+  const showError = touched && trimmed.length > 0 && !isValid;
+  const isDigitsOnly = /^\d+$/.test(trimmed);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched(true);
+    if (!isValid) {
+      toast({
+        title: 'Numéro de compte invalide',
+        description:
+          'Format attendu : chiffres ou alphanumériques (3-50 caractères).',
+        variant: 'destructive',
+      });
+      return;
+    }
     start(async () => {
       const result = await submitBrokerAccountAction({
-        brokerAccountId: accountId,
+        brokerAccountId: trimmed,
       });
       if (result.success) {
         toast({ title: '✓ Inscription envoyée', description: 'On valide sous 24h.' });
@@ -216,7 +252,7 @@ function BrokerAccountStep({
         title="1. Ouvre ton compte broker"
         description="Clique sur ton lien partenaire et inscris-toi chez le broker."
       >
-        <div className="rounded-[var(--radius-md)] bg-white/[0.03] border border-[var(--color-border)] p-4">
+        <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-tint)] border border-[var(--color-border)] p-4">
           <Label className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
             Ton lien partenaire
           </Label>
@@ -250,6 +286,10 @@ function BrokerAccountStep({
               </Button>
             </div>
           </div>
+
+          {/* Slot vidéo IronFX — discret, collapsible. Sera rempli plus tard
+              quand on aura enregistré le walkthrough. */}
+          <IronFxSignupVideoSlot />
         </div>
       </StepCard>
 
@@ -267,10 +307,32 @@ function BrokerAccountStep({
               placeholder="Ex: 1234567"
               value={accountId}
               onChange={(e) => setAccountId(e.target.value)}
+              onBlur={() => setTouched(true)}
+              aria-invalid={showError}
               required
             />
+            {showError ? (
+              <p className="mt-1.5 text-xs text-rose-400 light:text-rose-600">
+                Format invalide. Le numéro doit faire 3 à 50 caractères
+                alphanumériques (chiffres, lettres, _, -).
+              </p>
+            ) : trimmed.length > 0 && isDigitsOnly ? (
+              <p className="mt-1.5 text-xs text-emerald-400 light:text-emerald-700">
+                ✓ Format chiffres ({trimmed.length} caractères) — typique IronFX.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs text-[var(--color-text-faint)]">
+                Tu trouves ton ID dans ton espace IronFX (rubrique
+                &laquo; Mes comptes &raquo; ou &laquo; Trading Account &raquo;).
+                C&apos;est généralement un nombre à 6-10 chiffres.
+              </p>
+            )}
           </div>
-          <Button type="submit" size="lg" disabled={pending}>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={pending || (touched && !isValid)}
+          >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Envoyer pour validation
           </Button>
@@ -374,6 +436,83 @@ function WaitingStep({ title }: { title: string }) {
       description="Notre équipe valide manuellement chaque étape. Tu recevras un email dès que c'est OK — généralement sous 24h ouvrées."
     >
       <Badge variant="warning">En cours de traitement</Badge>
+    </StepCard>
+  );
+}
+
+/**
+ * Slot pour une vidéo "comment s'inscrire IronFX en 30s".
+ *
+ * Aujourd'hui : juste un mini collapsible "Voir comment faire" avec un
+ * texte placeholder. Le jour où la vidéo sera enregistrée, on remplace
+ * le contenu par un <video src=... /> ou un embed YouTube/Vimeo.
+ *
+ * Volontairement discret (mt-3, text-xs) pour ne pas dominer l'UI.
+ */
+function IronFxSignupVideoSlot() {
+  const videoUrl = process.env.NEXT_PUBLIC_IRONFX_SIGNUP_VIDEO_URL;
+  return (
+    <details className="mt-3 group">
+      <summary className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] cursor-pointer inline-flex items-center gap-1 select-none">
+        <span className="group-open:hidden">▸</span>
+        <span className="hidden group-open:inline">▾</span>
+        Comment s&apos;inscrire chez IronFX en 30 secondes
+      </summary>
+      <div className="mt-2 text-xs text-[var(--color-text-dim)] leading-relaxed">
+        {videoUrl ? (
+          <video
+            controls
+            src={videoUrl}
+            className="w-full rounded-md aspect-video"
+          />
+        ) : (
+          <div className="rounded-md bg-[var(--color-surface-tint)] p-3 italic text-[var(--color-text-faint)]">
+            Vidéo bientôt disponible. En attendant : clique sur ton lien,
+            remplis le formulaire (nom, email, pays), valide ton email,
+            puis viens copier ton ID de compte ici.
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/**
+ * Step "dépôt" en mode API : le webhook IronFX nous remontera
+ * automatiquement le dépôt. On ne demande aucune saisie au user — juste
+ * un message "fais ton dépôt chez le broker, on le détecte direct".
+ */
+function DepositApiWaitStep() {
+  return (
+    <StepCard
+      badge="04"
+      title="Fais ton dépôt chez le broker"
+      description="Aucune saisie ici — notre système détecte automatiquement ton dépôt via notre intégration broker. Tu seras notifié dès qu'on l'a vu."
+    >
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/25 p-4 text-sm">
+          <Clock className="h-5 w-5 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-blue-200 light:text-blue-800">
+              Détection automatique active
+            </strong>
+            <p className="mt-1 text-[var(--color-text-dim)]">
+              Dépose au moins 250€ sur ton compte broker via leur interface.
+              Dès que la transaction est confirmée côté broker, on la voit
+              et on te débloque l&apos;étape suivante.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/30 p-4 text-sm">
+          <AlertTriangle className="h-5 w-5 text-amber-400 light:text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <strong>Conseil débutant :</strong> ne dépasse pas 1 500€ tant
+            que tu n&apos;as pas pris confiance avec ta méthode. Tu peux
+            toujours redéposer plus tard.
+          </div>
+        </div>
+      </div>
     </StepCard>
   );
 }

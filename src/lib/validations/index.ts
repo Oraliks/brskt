@@ -87,6 +87,16 @@ export const vipDepositSchema = z.object({
  * forcer un statut, reset le funnel, etc. À utiliser uniquement pour
  * debug ou cas exceptionnels.
  */
+export const welcomeBonusSchema = z.object({
+  enabled: z.boolean(),
+  title: z.string().min(3, 'Titre trop court').max(80, 'Titre trop long'),
+  description: z
+    .string()
+    .min(10, 'Description trop courte')
+    .max(400, 'Description trop longue'),
+  fineprint: z.string().max(200, 'Trop long').optional(),
+});
+
 export const adminVipOverrideSchema = z.object({
   applicationId: z.string().uuid(),
   action: z.enum([

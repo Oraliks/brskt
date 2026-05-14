@@ -1,11 +1,16 @@
 import { AdminContainer, AdminPageHeader } from '@/components/admin/page-header';
 import { IronFxModeForm } from '@/components/admin/ironfx-mode-form';
+import { WelcomeBonusForm } from '@/components/admin/welcome-bonus-form';
 import { getIronFXMode } from '@/lib/ironfx';
+import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  const mode = await getIronFXMode();
+  const [mode, welcomeBonus] = await Promise.all([
+    getIronFXMode(),
+    getWelcomeBonus(),
+  ]);
 
   return (
     <AdminContainer>
@@ -23,6 +28,17 @@ export default async function AdminSettingsPage() {
             </p>
           </div>
           <IronFxModeForm currentMode={mode} />
+        </section>
+
+        <section className="glass rounded-[var(--radius-lg)] p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Welcome bonus IronFX</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-dim)]">
+              Quand activé, un bandeau est affiché sur la page <code>/vip</code>{' '}
+              pour mettre en avant une offre de bienvenue négociée avec le broker.
+            </p>
+          </div>
+          <WelcomeBonusForm initial={welcomeBonus} />
         </section>
 
         <section className="glass rounded-[var(--radius-lg)] p-6">

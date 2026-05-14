@@ -5,6 +5,9 @@ import { getSession } from '@/lib/auth/server';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { VipLanding } from '@/components/vip/vip-landing';
 import { VipWizard } from '@/components/vip/vip-wizard';
+import { WelcomeBonusBanner } from '@/components/vip/welcome-bonus-banner';
+import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
+import { getIronFXMode } from '@/lib/ironfx';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +38,13 @@ export default async function VipPage() {
     );
   }
 
-  const application = await db.query.vipApplications.findFirst({
-    where: eq(vipApplications.userId, session.user.id),
-  });
+  const [application, welcomeBonus, ironfxMode] = await Promise.all([
+    db.query.vipApplications.findFirst({
+      where: eq(vipApplications.userId, session.user.id),
+    }),
+    getWelcomeBonus(),
+    getIronFXMode(),
+  ]);
 
   // Fetch progression de trading si l'user est in_group avec un compte broker
   let tradingProgressPct = 0;
@@ -66,9 +73,15 @@ export default async function VipPage() {
 
       <Section className="pt-0 pb-32">
         <div className="max-w-3xl mx-auto">
+          {welcomeBonus.enabled && (
+            <div className="mb-6">
+              <WelcomeBonusBanner bonus={welcomeBonus} />
+            </div>
+          )}
           <VipWizard
             application={application ?? null}
             tradingProgressPct={tradingProgressPct}
+            ironfxMode={ironfxMode}
           />
         </div>
       </Section>

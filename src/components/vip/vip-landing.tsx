@@ -1,5 +1,12 @@
 import Link from 'next/link';
-import { Check, MessageCircle, ShieldCheck, Wallet } from 'lucide-react';
+import {
+  Check,
+  Eye,
+  MessageCircle,
+  ShieldCheck,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,6 +110,30 @@ export function VipLanding() {
         </div>
       </Section>
 
+      {/* Aperçu visuel du groupe : faux messages stylisés Telegram pour
+          donner une idée de l'ambiance sans révéler de vraies analyses */}
+      <Section className="py-12">
+        <div className="max-w-3xl mx-auto">
+          <SectionHeader
+            eyebrow="Aperçu"
+            title={
+              <>
+                À quoi ça <span className="font-serif italic">ressemble.</span>
+              </>
+            }
+            description="Un échantillon de l'activité quotidienne dans le groupe VIP."
+          />
+          <div className="mt-8 relative">
+            <GroupPreview />
+            {/* Overlay subtil "preview" pour signaler que ce sont des exemples */}
+            <div className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-bg-elevated)]/80 backdrop-blur border border-[var(--color-border)] px-2.5 py-1 text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+              <Eye className="h-3 w-3" />
+              Aperçu illustratif
+            </div>
+          </div>
+        </div>
+      </Section>
+
       <Section className="py-12">
         <div className="max-w-3xl mx-auto glass-strong rounded-[var(--radius-2xl)] p-10 text-center space-y-8">
           <div>
@@ -123,7 +154,7 @@ export function VipLanding() {
           <div className="h-px bg-[var(--color-border)]" />
 
           <div>
-            <p className="text-sm font-medium text-amber-300 mb-2">
+            <p className="text-sm font-medium text-amber-300 light:text-amber-700 mb-2">
               ⚠ Règle importante
             </p>
             <h3 className="font-serif text-2xl md:text-3xl">
@@ -139,5 +170,94 @@ export function VipLanding() {
         </div>
       </Section>
     </>
+  );
+}
+
+/**
+ * Composant de preview : 3 "messages" stylisés à la Telegram avec contenu
+ * floutté/expurgé. Donne le ton sans révéler de vraies analyses.
+ */
+function GroupPreview() {
+  return (
+    <div className="glass rounded-[var(--radius-lg)] p-4 md:p-6 space-y-3 relative overflow-hidden">
+      <PreviewMessage
+        author="Setup du jour · EUR/USD"
+        time="08:42"
+        badge="Signal"
+        badgeVariant="success"
+        icon={TrendingUp}
+        lines={[
+          'Cassure de range identifiée sur H1.',
+          'Entry : ████████ · TP1 : ██████ · TP2 : ██████',
+          'Risk : 1% max · SL serré sous le low',
+        ]}
+      />
+      <PreviewMessage
+        author="Calendrier macro · 14h30"
+        time="13:17"
+        badge="Heads-up"
+        badgeVariant="warning"
+        icon={MessageCircle}
+        lines={[
+          'CPI US sortie dans 1h15.',
+          'Attendu : ███% · Précédent : ███%',
+          'Préférer ne pas tenir de position avant la news.',
+        ]}
+      />
+      <PreviewMessage
+        author="Debrief de la semaine"
+        time="Vendredi 18h"
+        badge="Bilan"
+        badgeVariant="default"
+        icon={MessageCircle}
+        lines={[
+          '4 setups validés sur 5, +██% sur le compte témoin.',
+          'Le setup XAU/USD a été annulé jeudi (volatilité news).',
+          'Module replay disponible dans le canal vidéo.',
+        ]}
+      />
+    </div>
+  );
+}
+
+function PreviewMessage({
+  author,
+  time,
+  badge,
+  badgeVariant,
+  icon: Icon,
+  lines,
+}: {
+  author: string;
+  time: string;
+  badge: string;
+  badgeVariant: 'success' | 'warning' | 'default';
+  icon: React.ComponentType<{ className?: string }>;
+  lines: string[];
+}) {
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-tint)] border border-[var(--color-border)] p-4">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex-shrink-0">
+          <Icon className="h-4 w-4 text-white" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium">{author}</span>
+              <Badge variant={badgeVariant}>{badge}</Badge>
+            </div>
+            <span className="text-[10px] text-[var(--color-text-faint)] font-mono">
+              {time}
+            </span>
+          </div>
+          <div className="mt-2 space-y-1 text-sm text-[var(--color-text-dim)]">
+            {lines.map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -16,8 +16,10 @@ import {
   adminVipOverrideSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
+  welcomeBonusSchema,
 } from '@/lib/validations';
 import { setIronFXMode } from '@/lib/ironfx';
+import { setWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -643,6 +645,40 @@ export async function adminSetIronfxModeAction(
   });
 
   revalidatePath('/admin/settings');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Configure le welcome bonus IronFX (toggle + contenu).
+ * Quand enabled=true, affiché sur la page /vip et la landing.
+ */
+export async function adminSetWelcomeBonusAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = welcomeBonusSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  await setWelcomeBonus(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'welcome_bonus_update',
+    targetType: 'settings',
+    targetId: 'welcome_bonus',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/vip');
+  revalidatePath('/');
   return { success: true, data: undefined };
 }
 
