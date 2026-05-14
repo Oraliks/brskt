@@ -1,69 +1,107 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import type { MarketQuote } from '@/lib/market-quotes';
+
 /**
- * Ticker horizontal de prix qui défile en boucle continue (CSS marquee).
+ * Ticker horizontal de prix live qui défile en boucle continue.
  *
- * Tout SVG/CSS, pas de JS, Server Component compatible. Donne une vraie
- * impression de "salle de trading live" au-dessus / en dessous d'un chart.
+ * Stratégie :
+ *  1. Au mount : utilise `initial` (Server Component fetch fait à la SSR)
+ *  2. Polling toutes les 60s vers /api/market-quotes (cache CDN 60s)
+ *  3. Polling pausé si l'onglet est hidden (économise les requêtes)
+ *  4. Hover : le marquee CSS s'arrête (gérée en CSS, pas en JS)
  *
- * Les prix sont actuellement statiques (placeholder visuel). À terme on
- * pourra les brancher sur un feed live via un client component séparé.
+ * Source des données : Yahoo Finance via /api/market-quotes (gratuit,
+ * pas d'API key). Si un symbol n'a pas pu être fetché, on affiche '—' pour
+ * le prix mais le ticker continue de tourner avec les autres.
  */
 
-interface Tick {
-  sym: string;
-  price: string;
-  delta: string;
-  up: boolean;
+interface Props {
+  initial: MarketQuote[];
 }
 
-const TICKERS: Tick[] = [
-  { sym: 'EUR/USD', price: '1.0942', delta: '+0.12%', up: true },
-  { sym: 'GBP/USD', price: '1.2734', delta: '+0.31%', up: true },
-  { sym: 'USD/JPY', price: '149.84', delta: '-0.08%', up: false },
-  { sym: 'XAU/USD', price: '2 387', delta: '-0.18%', up: false },
-  { sym: 'WTI', price: '78.42', delta: '+0.94%', up: true },
-  { sym: 'BTC', price: '67 240', delta: '+2.4%', up: true },
-  { sym: 'ETH', price: '3 412', delta: '+1.1%', up: true },
-  { sym: 'SOL', price: '162.5', delta: '-0.6%', up: false },
-  { sym: 'BNB', price: '598', delta: '+0.4%', up: true },
-  { sym: 'NAS100', price: '20 412', delta: '+0.7%', up: true },
-  { sym: 'SPX500', price: '5 842', delta: '+0.3%', up: true },
-  { sym: 'DAX', price: '19 224', delta: '-0.2%', up: false },
-];
+const REFRESH_INTERVAL_MS = 60_000;
 
-// Duplique pour le défilement infini sans cut-off
-const LOOP = [...TICKERS, ...TICKERS];
+export function LiveTicker({ initial }: Props) {
+  const [quotes, setQuotes] = useState<MarketQuote[]>(initial);
 
-export function LiveTicker() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refresh() {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      try {
+        const res = await fetch('/api/market-quotes', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          quotes: MarketQuote[];
+          fetchedAt: string;
+        };
+        if (!cancelled && Array.isArray(data.quotes) && data.quotes.length > 0) {
+          setQuotes(data.quotes);
+        }
+      } catch {
+        // Garde les anciennes données — silencieux.
+      }
+    }
+
+    const interval = setInterval(refresh, REFRESH_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  // Dupliqué pour le défilement infini sans cut-off visible
+  const loop = [...quotes, ...quotes];
+
   return (
     <div className="live-ticker relative w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-tint)] py-2.5">
       <div className="live-ticker__track flex gap-8 whitespace-nowrap">
-        {LOOP.map((t, i) => (
-          <TickerItem key={i} t={t} />
+        {loop.map((q, i) => (
+          <TickerItem key={i} q={q} />
         ))}
       </div>
-      {/* Fade gauche & droite pour estomper les bords */}
       <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[var(--color-surface-tint)] to-transparent pointer-events-none" />
       <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[var(--color-surface-tint)] to-transparent pointer-events-none" />
     </div>
   );
 }
 
-function TickerItem({ t }: { t: Tick }) {
+function TickerItem({ q }: { q: MarketQuote }) {
+  const isUp = q.up === true;
+  const isDown = q.up === false;
   return (
-    <div className="inline-flex items-center gap-2 text-xs font-mono tabular-nums">
+    <div
+      title={q.name}
+      className="inline-flex items-center gap-2 text-xs font-mono tabular-nums"
+    >
       <span className="text-[var(--color-text-dim)] uppercase tracking-wider">
-        {t.sym}
+        {q.symbol}
       </span>
-      <span className="text-[var(--color-text)] font-medium">{t.price}</span>
-      <span
-        className={
-          t.up
-            ? 'text-emerald-400 light:text-emerald-600'
-            : 'text-rose-400 light:text-rose-600'
-        }
-      >
-        {t.up ? '▲' : '▼'} {t.delta}
-      </span>
+      <span className="text-[var(--color-text)] font-medium">{q.price}</span>
+      {q.deltaPct && (
+        <span
+          className={
+            isUp
+              ? 'text-emerald-400 light:text-emerald-600'
+              : isDown
+              ? 'text-rose-400 light:text-rose-600'
+              : 'text-[var(--color-text-faint)]'
+          }
+        >
+          {isUp ? '▲' : isDown ? '▼' : '·'} {q.deltaPct}
+        </span>
+      )}
     </div>
   );
 }

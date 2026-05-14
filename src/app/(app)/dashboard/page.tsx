@@ -31,6 +31,7 @@ import { TradingHero } from '@/components/shared/trading-hero';
 import { LiveTicker } from '@/components/shared/live-ticker';
 import { ReferralLinkCopy } from '@/components/dashboard/referral-link-copy';
 import { buildReferralLink, ensureReferralCode } from '@/lib/referrals';
+import { fetchMarketQuotes } from '@/lib/market-quotes';
 import { getChannelMemberCount } from '@/lib/telegram/community-stats';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
 
   const referralCode = await ensureReferralCode(session.user.id);
 
-  const [userBookings, vipApp, myReferrals, topReferrer, channelCount] = await Promise.all([
+  const [userBookings, vipApp, myReferrals, topReferrer, channelCount, marketQuotes] = await Promise.all([
     db.query.bookings.findMany({
       where: eq(bookings.userId, session.user.id),
       orderBy: [desc(bookings.createdAt)],
@@ -76,6 +77,15 @@ export default async function DashboardPage() {
       .limit(3),
     // Count membres du canal Telegram (best-effort, cache 10min)
     getChannelMemberCount(),
+    // Prix live des marchés (Yahoo Finance, cache 60s côté CDN).
+    // Best-effort : si Yahoo répond pas en 3s, on rend la page sans quotes
+    // initiales et le client component les fetch au mount.
+    Promise.race([
+      fetchMarketQuotes(),
+      new Promise<never[]>((resolve) =>
+        setTimeout(() => resolve([]), 3000)
+      ),
+    ]),
   ]);
 
   // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
@@ -163,7 +173,7 @@ export default async function DashboardPage() {
             <TradingHero />
           </div>
           <div className="border-t border-[var(--color-border)] px-2 py-2">
-            <LiveTicker />
+            <LiveTicker initial={marketQuotes} />
           </div>
         </div>
       </Section>
