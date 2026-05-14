@@ -30,6 +30,11 @@ export default async function AdminDiagnosticsPage() {
   const expectedUsername =
     botInfo.ok && 'username' in botInfo.data ? botInfo.data.username : null;
 
+  // Test live de la config /setdomain : appelle oauth.telegram.org/embed
+  // avec notre origin. Si BotFather n'a pas le domaine, Telegram répond
+  // avec une page d'erreur (origin mismatch).
+  const widgetOrigin = await checkWidgetOrigin(botUsername, appUrl);
+
   const checks: Check[] = [
     {
       label: 'TELEGRAM_BOT_TOKEN configuré et valide',
@@ -72,13 +77,10 @@ export default async function AdminDiagnosticsPage() {
         : undefined,
     },
     {
-      label: 'BotFather /setdomain (action externe, à vérifier manuellement)',
-      status: 'manual',
-      detail: appUrl
-        ? `Doit être set à : ${new URL(appUrl).hostname}`
-        : 'NEXT_PUBLIC_APP_URL manquant.',
-      action:
-        "Ouvre @BotFather → /setdomain → choisis le bot → entre le hostname (sans https:// ni path). Sans ça, le widget ne fonctionnera pas.",
+      label: 'BotFather /setdomain (origin du Telegram Login Widget)',
+      status: widgetOrigin.status,
+      detail: widgetOrigin.detail,
+      action: widgetOrigin.action,
     },
     {
       label: 'Webhook Telegram configuré',
@@ -264,6 +266,101 @@ interface TgWebhookOk {
 interface TgWebhookErr {
   ok: false;
   error: string;
+}
+
+/**
+ * Test live de la config @BotFather /setdomain.
+ *
+ * Telegram expose un endpoint embed que le widget appelle :
+ *   https://oauth.telegram.org/embed/<bot>?origin=<our-domain>&...
+ *
+ * Si le domaine est dans la whitelist BotFather → 200 avec page d'auth.
+ * Si pas dans la whitelist → 200 mais la page contient un message d'erreur
+ * "Bot domain invalid" ou similaire.
+ *
+ * On parse le HTML pour détecter l'état. C'est best-effort — si Telegram
+ * change leur format, on tombe en "manual check".
+ */
+async function checkWidgetOrigin(
+  botUsername: string | undefined,
+  appUrl: string | undefined
+): Promise<{ status: Check['status']; detail: string; action?: string }> {
+  if (!botUsername || !appUrl) {
+    return {
+      status: 'error',
+      detail:
+        'Impossible de tester : TELEGRAM_BOT_USERNAME ou NEXT_PUBLIC_APP_URL manquant.',
+    };
+  }
+
+  const hostname = (() => {
+    try {
+      return new URL(appUrl).hostname;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!hostname) {
+    return {
+      status: 'error',
+      detail: `NEXT_PUBLIC_APP_URL invalide : "${appUrl}"`,
+    };
+  }
+
+  try {
+    const url = `https://oauth.telegram.org/embed/${encodeURIComponent(
+      botUsername
+    )}?origin=${encodeURIComponent(appUrl)}&size=large&request_access=write`;
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: { 'user-agent': 'Mozilla/5.0 (Boursikotons-Diagnostic)' },
+    });
+
+    if (!res.ok) {
+      return {
+        status: 'warn',
+        detail: `Telegram a répondu ${res.status} — impossible de tester l'origin.`,
+        action:
+          'Vérifie manuellement chez @BotFather avec /setdomain → choisis le bot → ' +
+          `colle "${hostname}" (sans https:// ni path).`,
+      };
+    }
+
+    const body = await res.text();
+    // Telegram renvoie un HTML qui contient "Bot domain invalid" si pas
+    // dans la whitelist BotFather, sinon le widget se charge normalement
+    // avec une iframe d'authentification.
+    const lower = body.toLowerCase();
+    const invalid =
+      lower.includes('bot domain invalid') ||
+      lower.includes('domain invalid') ||
+      lower.includes('origin mismatch');
+
+    if (invalid) {
+      return {
+        status: 'error',
+        detail: `Telegram REFUSE l'origin "${hostname}". Le /setdomain n'est PAS configuré.`,
+        action:
+          `IMMÉDIAT : ouvre @BotFather sur Telegram → /setdomain → choisis @${botUsername} → ` +
+          `envoie exactement "${hostname}" (sans https:// ni path). Sans ça, le widget desktop ne ` +
+          `fonctionnera JAMAIS — les users reçoivent le code par DM mais le retour échoue.`,
+      };
+    }
+
+    return {
+      status: 'ok',
+      detail: `Telegram accepte "${hostname}" comme origin (widget chargeable).`,
+    };
+  } catch (err) {
+    return {
+      status: 'warn',
+      detail: `Erreur réseau au test : ${err instanceof Error ? err.message : String(err)}`,
+      action:
+        `Test manuel : ouvre dans un onglet privé https://oauth.telegram.org/embed/${botUsername}?origin=${appUrl}&size=large — ` +
+        `si tu vois "Bot domain invalid", configure /setdomain chez @BotFather.`,
+    };
+  }
 }
 
 async function fetchWebhookInfo(): Promise<TgWebhookOk | TgWebhookErr> {
