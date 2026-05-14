@@ -70,22 +70,21 @@ export default async function FormationPage() {
 
   return (
     <>
-      <Section className="pt-32 pb-12">
+      {/* HERO + 2 cards formats — fusionnés dans 1 section compacte */}
+      <Section className="pt-16 pb-6">
         <SectionHeader
           eyebrow="Formation"
           title={
             <>
-              7 jours pour devenir
-              <br />
+              7 jours pour devenir{' '}
               <span className="font-serif italic">trader.</span>
             </>
           }
-          description="5 modules à acquérir. La formation dure 7 jours, mais on reste avec toi jusqu'à ce que tout soit assimilé."
+          description="5 modules à acquérir. Si on déborde sur les 7 jours, on continue — l'objectif c'est que tu maîtrises."
+          align="left"
         />
-      </Section>
 
-      <Section className="py-12">
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
           <FormationCard
             icon={Wifi}
             badge="Distance"
@@ -124,106 +123,109 @@ export default async function FormationPage() {
         </div>
       </Section>
 
-      <Section className="py-12" id="programme">
-        <SectionHeader
-          eyebrow="Programme"
-          title={
-            <>
-              5 modules, <span className="font-serif italic">7 jours minimum.</span>
-            </>
-          }
-          description="On valide chaque module avant de passer au suivant. Si on déborde sur les 7 jours, on continue — l'objectif c'est que tu maîtrises, pas qu'on coche une case."
-        />
+      {/* PROGRAMME — 5 modules en grid compact (3 + 2) */}
+      <Section className="py-6" id="programme">
+        <div className="flex items-baseline justify-between gap-4 flex-wrap mb-4">
+          <div>
+            <div className="inline-flex items-center gap-2 mb-1">
+              <span className="h-px w-6 bg-[var(--color-accent)]" />
+              <span className="text-xs uppercase tracking-[0.2em] text-[var(--color-accent-hover)] font-medium">
+                Programme
+              </span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-gradient">
+              5 modules, 7 jours minimum.
+            </h2>
+          </div>
+          <p className="text-sm text-[var(--color-text-dim)] max-w-md">
+            On valide chaque module avant de passer au suivant.
+          </p>
+        </div>
 
-        <div className="mt-12 max-w-4xl mx-auto space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {curriculum.map((mod) => (
             <div
               key={mod.label}
-              className="glass rounded-[var(--radius-lg)] p-6 md:p-8 grid md:grid-cols-[180px_1fr] gap-6"
+              className="glass rounded-[var(--radius-lg)] p-4"
             >
-              <div>
-                <div className="font-mono text-xs text-[var(--color-text-faint)] tracking-wider uppercase">
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="font-mono text-[10px] text-[var(--color-text-faint)] tracking-wider uppercase">
                   {mod.label}
-                </div>
-                <div className="mt-1 font-serif text-xl">{mod.title}</div>
+                </span>
+                <span className="font-serif text-lg">{mod.title}</span>
               </div>
-              <div>
-                <ul className="space-y-2">
-                  {mod.points.map((p) => (
-                    <li
-                      key={p}
-                      className="flex items-start gap-3 text-sm text-[var(--color-text-dim)]"
-                    >
-                      <Check className="h-4 w-4 text-[var(--color-accent-hover)] flex-shrink-0 mt-0.5" />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <ul className="space-y-1.5">
+                {mod.points.map((p) => (
+                  <li
+                    key={p}
+                    className="flex items-start gap-2 text-xs text-[var(--color-text-dim)] leading-snug"
+                  >
+                    <Check className="h-3 w-3 text-[var(--color-accent-hover)] flex-shrink-0 mt-0.5" />
+                    {p}
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
       </Section>
 
-      <Section className="py-12">
-        <div className="glass-strong rounded-[var(--radius-2xl)] p-10 md:p-16 text-center">
-          <h2 className="font-serif text-3xl md:text-5xl text-gradient">
-            Tu choisis tes dates.
-          </h2>
-          <p className="mt-4 text-[var(--color-text-dim)] max-w-xl mx-auto">
-            Tu proposes jusqu'à 3 créneaux préférés. On revient vers toi sous 24h
-            pour valider ou te proposer une alternative.{' '}
-            <strong className="text-[var(--color-text)]">
-              Paiement en 1 fois ou en 3 fois sans frais.
-            </strong>
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Button asChild size="xl" variant="glow">
-              <Link href="/formation/reserver">
-                Réserver maintenant
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+      {/* CTA Réserver + Waitlist — fusionnés en 2 colonnes */}
+      <Section className="py-6" id="waitlist">
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          {/* Gauche : CTA principal Réserver */}
+          <div className="glass-strong rounded-[var(--radius-lg)] p-6 md:p-8 flex flex-col justify-center">
+            <h2 className="font-serif text-2xl md:text-3xl text-gradient">
+              Tu choisis tes dates.
+            </h2>
+            <p className="mt-2 text-sm text-[var(--color-text-dim)] max-w-md">
+              Tu proposes jusqu'à 3 créneaux préférés. On valide sous 24h.{' '}
+              <strong className="text-[var(--color-text)]">
+                Paiement en 1 fois ou en 3 fois sans frais.
+              </strong>
+            </p>
+            <div className="mt-5 flex flex-col sm:flex-row gap-2">
+              <Button asChild size="lg" variant="glow">
+                <Link href="/formation/reserver">
+                  Réserver maintenant
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </div>
+
+          {/* Droite : Waitlist en accordéon (toggle natif) */}
+          <details className="glass rounded-[var(--radius-lg)] p-5 group">
+            <summary className="cursor-pointer flex items-center justify-between gap-3 list-none">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+                  Aucun créneau disponible ?
+                </div>
+                <div className="text-sm font-semibold mt-0.5">
+                  S'inscrire à la liste d'attente
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
+                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] mb-1">
+                  Distance · 1500€
+                </div>
+                <WaitlistForm mode="remote" />
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-amber-500/25 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">
+                  Dubaï · 3500€
+                </div>
+                <WaitlistForm mode="onsite" />
+              </div>
+            </div>
+          </details>
         </div>
       </Section>
 
-      <Section className="py-12" id="waitlist">
-        <div className="max-w-3xl mx-auto">
-          <SectionHeader
-            eyebrow="Liste d'attente"
-            title={
-              <>
-                Aucun créneau qui te convient ?{' '}
-                <span className="font-serif italic">On te prévient.</span>
-              </>
-            }
-            description="Inscris-toi à la liste d'attente du format qui t'intéresse. On t'écrit dès qu'un créneau s'ouvre."
-          />
-          <div className="mt-8 grid md:grid-cols-2 gap-5">
-            <div className="glass rounded-[var(--radius-lg)] p-6">
-              <div className="text-xs uppercase tracking-wider text-[var(--color-text-dim)] mb-1">
-                Distance
-              </div>
-              <h3 className="text-lg font-semibold mb-4">
-                Formation à distance · 1500€
-              </h3>
-              <WaitlistForm mode="remote" />
-            </div>
-            <div className="glass rounded-[var(--radius-lg)] p-6">
-              <div className="text-xs uppercase tracking-wider text-amber-300 mb-1">
-                Dubaï
-              </div>
-              <h3 className="text-lg font-semibold mb-4">
-                Formation présentiel · 3500€
-              </h3>
-              <WaitlistForm mode="onsite" />
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section className="pt-0 pb-24">
+      <Section className="pt-2 pb-12">
         <div className="max-w-3xl mx-auto">
           <PaymentDisclaimer variant="full" tone="neutral" />
         </div>
