@@ -12,7 +12,7 @@ export function Section({
   ...props
 }: SectionProps) {
   return (
-    <section className={cn('py-20 md:py-28', className)} {...props}>
+    <section className={cn('py-10 md:py-14', className)} {...props}>
       <div
         className={cn(
           'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8',
@@ -43,7 +43,7 @@ export function SectionHeader({
   return (
     <div
       className={cn(
-        'space-y-4 max-w-2xl',
+        'space-y-2 max-w-2xl',
         align === 'center' && 'mx-auto text-center',
         className
       )}
@@ -56,11 +56,11 @@ export function SectionHeader({
           </span>
         </div>
       )}
-      <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-gradient">
+      <h2 className="text-2xl md:text-4xl font-semibold tracking-tight text-gradient">
         {title}
       </h2>
       {description && (
-        <p className="text-[var(--color-text-dim)] text-base md:text-lg">
+        <p className="text-[var(--color-text-dim)] text-sm md:text-base">
           {description}
         </p>
       )}

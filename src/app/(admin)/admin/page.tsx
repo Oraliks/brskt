@@ -1,10 +1,12 @@
 import Link from 'next/link';
-import { count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import {
   ArrowRight,
   CalendarCheck,
   CreditCard,
+  Percent,
   Sparkles,
+  TrendingUp,
   Users,
 } from 'lucide-react';
 import { db } from '@/lib/db';
@@ -14,8 +16,13 @@ import {
   users,
   vipApplications,
 } from '@/lib/db/schema';
-import { AdminContainer, AdminPageHeader } from '@/components/admin/page-header';
+import {
+  AdminContainer,
+  AdminPageHeader,
+} from '@/components/admin/page-header';
+import { StatCard, StatCardGrid } from '@/components/admin/stat-card';
 import { Badge } from '@/components/ui/badge';
+import { getChannelMemberCount } from '@/lib/telegram/community-stats';
 import { formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +32,10 @@ export default async function AdminOverview() {
     [usersCount],
     [bookingsCount],
     [vipInGroup],
+    [vipQualified],
     [paidPayments],
     recentBookings,
+    channelCount,
   ] = await Promise.all([
     db.select({ c: count() }).from(users),
     db.select({ c: count() }).from(bookings),
@@ -36,6 +45,15 @@ export default async function AdminOverview() {
       .where(eq(vipApplications.step, 'in_group')),
     db
       .select({ c: count() })
+      .from(vipApplications)
+      .where(
+        and(
+          eq(vipApplications.step, 'in_group'),
+          eq(vipApplications.cpaQualified, true)
+        )
+      ),
+    db
+      .select({ c: count() })
       .from(payments)
       .where(eq(payments.status, 'completed')),
     db.query.bookings.findMany({
@@ -43,18 +61,12 @@ export default async function AdminOverview() {
       limit: 5,
       with: { formation: true, user: true },
     }),
+    getChannelMemberCount(),
   ]);
 
-  const metrics = [
-    { label: 'Utilisateurs', value: usersCount?.c ?? 0, icon: Users },
-    { label: 'Réservations', value: bookingsCount?.c ?? 0, icon: CalendarCheck },
-    { label: 'VIP actifs', value: vipInGroup?.c ?? 0, icon: Sparkles },
-    {
-      label: 'Paiements OK',
-      value: paidPayments?.c ?? 0,
-      icon: CreditCard,
-    },
-  ];
+  const inGroup = vipInGroup?.c ?? 0;
+  const qualified = vipQualified?.c ?? 0;
+  const conversionPct = inGroup > 0 ? Math.round((qualified / inGroup) * 100) : 0;
 
   return (
     <AdminContainer>
@@ -63,27 +75,58 @@ export default async function AdminOverview() {
         description="Vue globale de la plateforme."
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((m) => (
-          <div key={m.label} className="glass rounded-[var(--radius-lg)] p-5">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-surface-tint)] border border-[var(--color-border)]">
-                <m.icon className="h-4 w-4 text-[var(--color-text-dim)]" />
-              </span>
-              <span className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
-                {m.label}
-              </span>
-            </div>
-            <div className="mt-4 font-serif text-4xl text-gradient">
-              {m.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <StatCardGrid cols={4} className="mb-4">
+        <StatCard
+          label="Utilisateurs"
+          value={usersCount?.c ?? 0}
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Réservations"
+          value={bookingsCount?.c ?? 0}
+          icon={<CalendarCheck className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Paiements OK"
+          value={paidPayments?.c ?? 0}
+          icon={<CreditCard className="h-4 w-4" />}
+        />
+        {channelCount !== null && (
+          <StatCard
+            label="Canal Telegram"
+            value={channelCount.toLocaleString('fr-FR')}
+            tone="info"
+            hint="membres (live)"
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
+        )}
+      </StatCardGrid>
 
-      <div className="mt-10">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Dernières réservations</h2>
+      <StatCardGrid cols={3}>
+        <StatCard
+          label="VIP in_group"
+          value={inGroup}
+          tone="default"
+          icon={<Sparkles className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Qualifiés CPA"
+          value={qualified}
+          hint={`${conversionPct}% du in_group`}
+          tone={qualified > 0 ? 'success' : 'default'}
+        />
+        <StatCard
+          label="Conversion CPA"
+          value={`${conversionPct}%`}
+          hint="ratio qualified / in_group"
+          tone="info"
+          icon={<Percent className="h-4 w-4" />}
+        />
+      </StatCardGrid>
+
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold">Dernières réservations</h2>
           <Link
             href="/admin/bookings"
             className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] inline-flex items-center gap-1"
@@ -94,15 +137,15 @@ export default async function AdminOverview() {
         </div>
         <div className="glass rounded-[var(--radius-lg)] divide-y divide-[var(--color-border)]">
           {recentBookings.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[var(--color-text-dim)]">
-              Aucune réservation pour le moment. 
+            <div className="p-6 text-center text-sm text-[var(--color-text-dim)]">
+              Aucune réservation pour le moment.
             </div>
           ) : (
             recentBookings.map((b) => (
               <Link
                 key={b.id}
                 href={`/admin/bookings#${b.id}`}
-                className="flex items-center gap-4 p-4 hover:bg-[var(--color-surface-tint)]"
+                className="flex items-center gap-4 p-3 hover:bg-[var(--color-surface-tint)]"
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">

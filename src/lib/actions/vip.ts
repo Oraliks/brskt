@@ -220,6 +220,110 @@ export async function submitDepositAction(
 }
 
 /**
+ * Auto-confirme l'appartenance au groupe VIP — appelé quand le user clique
+ * "J'ai rejoint, vérifier" après avoir utilisé son lien Telegram.
+ *
+ * Robuste vis-à-vis de l'event chat_member (qui requiert que le bot soit
+ * admin du groupe). Ici on interroge directement `getChatMember`, qui marche
+ * dès que le bot est *membre* du groupe.
+ *
+ * Idempotent : si l'user est déjà 'in_group' on renvoie success sans rien
+ * faire. Si l'user n'est pas (encore) dans le groupe, on renvoie une erreur
+ * lisible pour qu'il puisse cliquer à nouveau dans quelques secondes.
+ */
+export async function confirmVipMembershipAction(): Promise<
+  ActionResult<{ inGroup: boolean }>
+> {
+  const session = await requireOnboarded();
+
+  if (!session.user.telegramId) {
+    return {
+      success: false,
+      error: 'Aucun compte Telegram lié. Reconnecte-toi via le widget.',
+    };
+  }
+
+  const app = await db.query.vipApplications.findFirst({
+    where: eq(vipApplications.userId, session.user.id),
+  });
+
+  if (!app) {
+    return { success: false, error: 'Application VIP introuvable' };
+  }
+
+  if (app.step === 'in_group') {
+    return { success: true, data: { inGroup: true } };
+  }
+
+  if (app.step !== 'telegram_invited') {
+    return {
+      success: false,
+      error: "Tu dois d'abord recevoir ton invitation Telegram.",
+    };
+  }
+
+  const groupId = Number(process.env.VIP_GROUP_CHAT_ID);
+  if (!groupId) {
+    return {
+      success: false,
+      error: 'Configuration serveur incomplète (VIP_GROUP_CHAT_ID).',
+    };
+  }
+
+  const { getBot } = await import('@/lib/telegram/bot');
+  const bot = getBot();
+
+  let isMember = false;
+  try {
+    const member = await bot.api.getChatMember(
+      groupId,
+      Number(session.user.telegramId)
+    );
+    // 'member' | 'administrator' | 'creator' = OK. 'restricted' = OK aussi
+    // (peut écrire/lire selon perms). 'left' | 'kicked' = pas membre.
+    isMember = ['member', 'administrator', 'creator', 'restricted'].includes(
+      member.status
+    );
+  } catch (err) {
+    console.error('[VIP] getChatMember failed', err);
+    return {
+      success: false,
+      error:
+        "On n'arrive pas à vérifier ton appartenance pour l'instant. Réessaye dans 30 secondes.",
+    };
+  }
+
+  if (!isMember) {
+    return {
+      success: false,
+      error:
+        "On ne te voit pas encore dans le groupe. Ouvre le lien Telegram et clique 'Rejoindre', puis réessaye.",
+    };
+  }
+
+  await db
+    .update(vipApplications)
+    .set({
+      step: 'in_group',
+      telegramInviteUsed: true,
+      currentStepEnteredAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(vipApplications.id, app.id));
+
+  await emitFunnelEvent({
+    userId: session.user.id,
+    sessionId: session.user.id,
+    eventName: 'vip_joined_group',
+    metadata: { applicationId: app.id, source: 'manual_confirm' },
+  });
+
+  revalidatePath('/vip');
+  revalidatePath('/dashboard');
+  return { success: true, data: { inGroup: true } };
+}
+
+/**
  * Étape finale : génère le lien d'invitation Telegram une fois deposit_validated.
  */
 export async function requestTelegramInviteAction(): Promise<

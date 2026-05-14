@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import {
   bookings,
   manualIronfxStatus,
+  testimonials,
   userBans,
   users,
   vipApplications,
@@ -14,6 +15,7 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
   adminSetUserRoleSchema,
@@ -886,6 +888,76 @@ export async function adminSetUserBannedAction(
   });
 
   revalidatePath('/admin/users');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// TESTIMONIALS
+// ============================================================
+
+/**
+ * Publie ou rejette un témoignage soumis par un user via /temoignage.
+ * Status transitionnel : pending → published / rejected.
+ */
+export async function adminModerateTestimonialAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminModerateTestimonialSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  const target = await db.query.testimonials.findFirst({
+    where: eq(testimonials.id, parsed.data.testimonialId),
+    columns: { id: true, status: true, userId: true },
+  });
+
+  if (!target) {
+    return { success: false, error: 'Témoignage introuvable' };
+  }
+
+  const newStatus = parsed.data.action === 'publish' ? 'published' : 'rejected';
+
+  await db
+    .update(testimonials)
+    .set({
+      status: newStatus,
+      moderatedBy: session.user.id,
+      moderatedAt: new Date(),
+      moderationNotes: parsed.data.notes ?? null,
+    })
+    .where(eq(testimonials.id, target.id));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: `testimonial_${parsed.data.action}`,
+    targetType: 'testimonial',
+    targetId: target.id,
+    before: { status: target.status },
+    after: { status: newStatus, notes: parsed.data.notes ?? null },
+  });
+
+  // DM le user (best-effort) pour le tenir au courant
+  after(async () => {
+    const u = await db.query.users.findFirst({
+      where: eq(users.id, target.userId),
+      columns: { telegramId: true, telegramFirstName: true },
+    });
+    if (!u?.telegramId) return;
+    const { sendDirectMessage } = await import('@/lib/telegram/helpers');
+    const msg =
+      newStatus === 'published'
+        ? `🎉 Ton témoignage est publié ! Merci.\n\n${APP_URL}/temoignages`
+        : `Ton témoignage n'a pas été retenu cette fois.${
+            parsed.data.notes ? `\n\nRaison : ${parsed.data.notes}` : ''
+          }\n\nTu peux en soumettre un autre avec /temoignage <ton avis>.`;
+    await sendDirectMessage(Number(u.telegramId), msg).catch(() => {});
+  });
+
+  revalidatePath('/admin/testimonials');
+  revalidatePath('/temoignages');
   return { success: true, data: undefined };
 }
 

@@ -509,6 +509,55 @@ export const adminAuditLogs = pgTable(
 );
 
 // ============================================================
+// TESTIMONIALS — soumis via bot, validés par admin
+// ============================================================
+
+export const testimonialStatusEnum = pgEnum('testimonial_status', [
+  'pending',
+  'published',
+  'rejected',
+]);
+
+/**
+ * Témoignages clients. Soumis via la commande /temoignage du bot Telegram.
+ *
+ * Flow :
+ *  1. User envoie `/temoignage <texte>` ou clique "Laisser un avis" depuis
+ *     /dashboard (deeplink bot)
+ *  2. Bot insère un row avec status='pending'
+ *  3. Admin reçoit notif dans `/admin/testimonials`
+ *  4. Admin publie ou rejette
+ *  5. Le rendu sur /temoignages affiche uniquement les `published`
+ *
+ * On garde le rejet pour ne pas que l'user re-soumette en boucle un témoignage
+ * déjà refusé (l'UI bot peut détecter et lui dire qu'il a déjà soumis).
+ */
+export const testimonials = pgTable(
+  'testimonials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    rating: integer('rating'), // 1-5, optionnel
+    tag: text('tag'), // 'formation' | 'vip' — futur tagging admin
+    status: testimonialStatusEnum('status').notNull().default('pending'),
+    moderatedBy: uuid('moderated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    moderatedAt: timestamp('moderated_at'),
+    moderationNotes: text('moderation_notes'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index('testimonials_status_idx').on(t.status),
+    userIdIdx: index('testimonials_user_id_idx').on(t.userId),
+    createdAtIdx: index('testimonials_created_at_idx').on(t.createdAt),
+  })
+);
+
+// ============================================================
 // USER BANS — historique de modération
 // ============================================================
 

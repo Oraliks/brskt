@@ -25,9 +25,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
+import { DeleteCancelledBooking } from '@/components/formation/delete-cancelled-booking';
 import { TradingHero } from '@/components/shared/trading-hero';
 import { ReferralLinkCopy } from '@/components/dashboard/referral-link-copy';
 import { buildReferralLink, ensureReferralCode } from '@/lib/referrals';
+import { getChannelMemberCount } from '@/lib/telegram/community-stats';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +43,7 @@ export default async function DashboardPage() {
 
   const referralCode = await ensureReferralCode(session.user.id);
 
-  const [userBookings, vipApp, myReferrals, topReferrer, vipStats] = await Promise.all([
+  const [userBookings, vipApp, myReferrals, topReferrer, channelCount] = await Promise.all([
     db.query.bookings.findMany({
       where: eq(bookings.userId, session.user.id),
       orderBy: [desc(bookings.createdAt)],
@@ -70,15 +72,8 @@ export default async function DashboardPage() {
       .groupBy(users.referredBy)
       .orderBy(desc(count()))
       .limit(3),
-    // Stats VIP communauté (public, anonymisé)
-    db
-      .select({
-        inGroup: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group')`,
-        qualified: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group' and ${vipApplications.cpaQualified} = true)`,
-        recent30d: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group' and ${vipApplications.createdAt} > now() - interval '30 days')`,
-      })
-      .from(vipApplications)
-      .then((r) => r[0] ?? { inGroup: 0, qualified: 0, recent30d: 0 }),
+    // Count membres du canal Telegram (best-effort, cache 10min)
+    getChannelMemberCount(),
   ]);
 
   // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
@@ -190,10 +185,12 @@ export default async function DashboardPage() {
         </div>
       </Section>
 
-      {/* Stats VIP communauté */}
-      <Section className="py-8">
-        <CommunityStats stats={vipStats} />
-      </Section>
+      {/* Communauté (si dispo) */}
+      {channelCount !== null && channelCount > 0 && (
+        <Section className="py-4">
+          <CommunityBanner count={channelCount} channelUrl={channelUrl} />
+        </Section>
+      )}
 
       {/* Parrainage */}
       <Section className="py-8">
@@ -356,14 +353,24 @@ function BookingRow({ booking }: BookingRowProps) {
           />
         )}
 
-      {status === 'cancelled' && booking.adminNotes && (
-        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-4">
-          <div className="text-xs font-medium text-rose-200 uppercase tracking-wider mb-1">
-            Message de l'équipe
+      {status === 'cancelled' && (
+        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-4 space-y-3">
+          {booking.adminNotes && (
+            <div>
+              <div className="text-xs font-medium text-rose-200 uppercase tracking-wider mb-1">
+                Message de l&apos;équipe
+              </div>
+              <p className="text-sm text-[var(--color-text)]">
+                {booking.adminNotes}
+              </p>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs text-[var(--color-text-dim)]">
+              Tu peux supprimer cette réservation et en créer une nouvelle.
+            </p>
+            <DeleteCancelledBooking bookingId={booking.id} />
           </div>
-          <p className="text-sm text-[var(--color-text)]">
-            {booking.adminNotes}
-          </p>
         </div>
       )}
     </div>
@@ -685,79 +692,39 @@ function ReferralSection({
   );
 }
 
-function CommunityStats({
-  stats,
+function CommunityBanner({
+  count,
+  channelUrl,
 }: {
-  stats: { inGroup: number; qualified: number; recent30d: number };
+  count: number;
+  channelUrl: string | undefined;
 }) {
-  const inGroup = Number(stats.inGroup) || 0;
-  const qualified = Number(stats.qualified) || 0;
-  const recent30d = Number(stats.recent30d) || 0;
-  const qualifiedPct =
-    inGroup > 0 ? Math.round((qualified / inGroup) * 100) : 0;
-
-  // Anonymisé : pas de noms, juste des chiffres communauté
+  const display = count.toLocaleString('fr-FR');
   return (
-    <div className="glass rounded-[var(--radius-lg)] p-6 md:p-8">
-      <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-text-dim)]">
-        <Trophy className="h-3 w-3" />
-        La communauté VIP en chiffres
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-4">
-        <StatItem
-          label="Membres actifs"
-          value={inGroup}
-          hint={`${recent30d} sur 30 derniers jours`}
-        />
-        <StatItem
-          label="Qualifiés CPA"
-          value={qualified}
-          hint={`${qualifiedPct}% du groupe`}
-          tone="success"
-        />
-        <StatItem
-          label="Conversion"
-          value={`${qualifiedPct}%`}
-          hint="ratio qualified / membres"
-          tone="info"
-        />
-      </div>
-      <p className="mt-4 text-xs text-[var(--color-text-faint)]">
-        Données mises à jour en temps réel · 100% anonymes.
-      </p>
-    </div>
-  );
-}
-
-function StatItem({
-  label,
-  value,
-  hint,
-  tone = 'default',
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-  tone?: 'default' | 'success' | 'info';
-}) {
-  const toneClass =
-    tone === 'success'
-      ? 'text-emerald-300 light:text-emerald-700'
-      : tone === 'info'
-      ? 'text-sky-300 light:text-sky-700'
-      : 'text-[var(--color-text)]';
-  return (
-    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-tint)] border border-[var(--color-border)] p-4">
-      <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
-        {label}
-      </div>
-      <div className={cn('mt-1 text-2xl font-semibold tabular-nums', toneClass)}>
-        {value}
-      </div>
-      {hint && (
-        <div className="mt-0.5 text-[10px] text-[var(--color-text-faint)]">
-          {hint}
+    <div className="glass rounded-[var(--radius-lg)] px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-3">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-500/15 border border-blue-500/30">
+          <MessageCircle className="h-4 w-4 text-blue-300" />
+        </span>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+            Communauté Telegram
+          </div>
+          <div className="text-lg font-semibold tabular-nums">
+            {display} membres sur le canal
+          </div>
         </div>
+      </div>
+      {channelUrl && (
+        <Link
+          href={channelUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium text-[var(--color-accent-hover)] hover:underline inline-flex items-center gap-1"
+        >
+          Ouvrir le canal
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       )}
     </div>
   );

@@ -58,8 +58,8 @@ export default async function VipPage() {
   }
 
   return (
-    <>
-      <Section className="pt-32 pb-12">
+    <Section className="pt-24 pb-16">
+      <div className="max-w-3xl mx-auto">
         <SectionHeader
           eyebrow="Funnel VIP Telegram"
           title={
@@ -68,23 +68,18 @@ export default async function VipPage() {
             </>
           }
           description="Suis les étapes — on te guide jusqu'au groupe Telegram privé."
+          align="left"
         />
-      </Section>
 
-      <Section className="pt-0 pb-32">
-        <div className="max-w-3xl mx-auto">
-          {welcomeBonus.enabled && (
-            <div className="mb-6">
-              <WelcomeBonusBanner bonus={welcomeBonus} />
-            </div>
-          )}
+        <div className="mt-8 space-y-4">
+          {welcomeBonus.enabled && <WelcomeBonusBanner bonus={welcomeBonus} />}
           <VipWizard
             application={application ?? null}
             tradingProgressPct={tradingProgressPct}
             ironfxMode={ironfxMode}
           />
         </div>
-      </Section>
-    </>
+      </div>
+    </Section>
   );
 }

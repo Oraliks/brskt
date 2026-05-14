@@ -977,6 +977,97 @@ export function getBot(): Bot<Context> {
     );
   });
 
+  // /temoignage — l'utilisateur soumet un avis (en attente de modération)
+  bot.command('temoignage', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { eq, and } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, testimonials, adminNotifications } = await import(
+      '@/lib/db/schema'
+    );
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(
+        `Tu dois d'abord te connecter : ${appUrl}/login`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    // Le texte du témoignage = tout ce qui suit la commande
+    const body = (ctx.match ?? '').toString().trim();
+    if (body.length < 20) {
+      await ctx.reply(
+        `📝 <b>Laisse-nous un témoignage</b>\n\n` +
+          `Format : <code>/temoignage Ton avis ici</code>\n\n` +
+          `Minimum 20 caractères. Une fois validé par l'équipe, ` +
+          `il apparaîtra sur ${appUrl}/temoignages avec ton @ Telegram cliquable.\n\n` +
+          `Tu peux écrire ce que tu veux : ton expérience formation, le groupe VIP, le bot, etc.`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+    if (body.length > 600) {
+      await ctx.reply(
+        `Trop long (max 600 caractères). Là tu en as ${body.length}.`
+      );
+      return;
+    }
+
+    // Anti-doublon : si l'user a déjà un témoignage pending, on update
+    const existing = await db.query.testimonials.findFirst({
+      where: and(
+        eq(testimonials.userId, user.id),
+        eq(testimonials.status, 'pending')
+      ),
+    });
+
+    if (existing) {
+      await db
+        .update(testimonials)
+        .set({ body, createdAt: new Date() })
+        .where(eq(testimonials.id, existing.id));
+      await ctx.reply(
+        `✓ Ton témoignage en attente a été mis à jour.\n\n` +
+          `On le relit et on te répond rapidement par message.`
+      );
+      return;
+    }
+
+    const [inserted] = await db
+      .insert(testimonials)
+      .values({
+        userId: user.id,
+        body,
+        status: 'pending',
+      })
+      .returning({ id: testimonials.id });
+
+    if (inserted) {
+      // Notif admin (visible dans /admin/testimonials)
+      await db.insert(adminNotifications).values({
+        type: 'testimonial_pending',
+        payload: {
+          testimonialId: inserted.id,
+          userId: user.id,
+          preview: body.slice(0, 120),
+        },
+      });
+    }
+
+    await ctx.reply(
+      `🙏 <b>Merci pour ton témoignage</b>\n\n` +
+        `On le valide rapidement et il apparaîtra sur ${appUrl}/temoignages avec ton ${
+          user.telegramUsername ? `@${user.telegramUsername}` : 'prénom'
+        } cliquable.\n\n` +
+        `<i>Si on le rejette (rare), on t'enverra un message pour expliquer.</i>`,
+      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+    );
+  });
+
   // /streak — affiche le streak d'interaction quotidien
   bot.command('streak', async (ctx) => {
     const { requireFeature } = await import('@/lib/bot/require-feature');

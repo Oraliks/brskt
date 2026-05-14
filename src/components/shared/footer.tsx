@@ -3,127 +3,43 @@ import { Logo } from './logo';
 
 const SUPPORT_TELEGRAM = 'https://t.me/boursi_support';
 
-interface FooterProps {
-  /**
-   * Variante "compact" pour les pages connectées (dashboard, checkout) :
-   *  affiche uniquement logo + contact support + copyright. Pas de liens
-   *  produits/compte (déjà accessibles via la nav et le dashboard).
-   */
-  compact?: boolean;
-}
+/**
+ * Footer minimaliste — une seule ligne, identique sur toutes les pages.
+ * Logo + lien CGV + lien support + copyright.
+ *
+ * Volontairement compact : la majorité des liens "produits" sont déjà dans
+ * la navbar, dupliquer en bas crée du bruit.
+ */
+export function Footer() {
+  return (
+    <footer className="mt-12 border-t border-[var(--color-border)]">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Logo />
+          <span className="text-xs text-[var(--color-text-faint)]">
+            © {new Date().getFullYear()} · Dubai, UAE
+          </span>
+        </div>
 
-export function Footer({ compact = false }: FooterProps) {
-  if (compact) {
-    return (
-      <footer className="mt-24 border-t border-[var(--color-border)]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <Logo />
-            <span className="text-xs text-[var(--color-text-faint)]">
-              © {new Date().getFullYear()} · Dubai, UAE
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+          <Link
+            href="/legal/cgv"
+            className="text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors"
+          >
+            CGV
+          </Link>
           <Link
             href={SUPPORT_TELEGRAM}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors inline-flex items-center gap-1.5"
+            className="text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors inline-flex items-center gap-1.5"
           >
-            <TelegramIcon className="h-4 w-4" />
-            Support : @boursi_support
+            <TelegramIcon className="h-3 w-3" />
+            Support
           </Link>
-        </div>
-      </footer>
-    );
-  }
-
-  return (
-    <footer className="mt-32 border-t border-[var(--color-border)]">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid gap-8 md:grid-cols-3">
-          <div className="space-y-4">
-            <Logo />
-            <p className="text-sm text-[var(--color-text-dim)] max-w-xs">
-              Formation trading et accès groupe VIP Telegram.
-              <br />
-              Basé à Dubaï.
-            </p>
-          </div>
-
-          <FooterColumn
-            title="Produits"
-            links={[
-              { href: '/formation', label: 'Formation distance' },
-              { href: '/formation', label: 'Formation Dubaï' },
-              { href: '/vip', label: 'Groupe VIP Telegram' },
-            ]}
-          />
-
-          <FooterColumn
-            title="Contact"
-            links={[
-              {
-                href: SUPPORT_TELEGRAM,
-                label: 'Support : @boursi_support',
-                external: true,
-              },
-              {
-                href:
-                  process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL ??
-                  'https://t.me/',
-                label: 'Canal Telegram',
-                external: true,
-              },
-            ]}
-          />
-        </div>
-
-        <div className="mt-12 flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-t border-[var(--color-border)] pt-6">
-          <p className="text-xs text-[var(--color-text-faint)]">
-            © {new Date().getFullYear()} Boursikotons. Tous droits réservés.
-          </p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-faint)]">
-            <Link
-              href="/legal/cgv"
-              className="hover:text-[var(--color-text-dim)] transition-colors"
-            >
-              CGV
-            </Link>
-            <span>·</span>
-            <span>Dubai, UAE</span>
-          </div>
         </div>
       </div>
     </footer>
-  );
-}
-
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: Array<{ href: string; label: string; external?: boolean }>;
-}) {
-  return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-[var(--color-text)]">{title}</h4>
-      <ul className="space-y-2">
-        {links.map((link) => (
-          <li key={link.href + link.label}>
-            <Link
-              href={link.href}
-              {...(link.external
-                ? { target: '_blank', rel: 'noopener noreferrer' }
-                : {})}
-              className="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors"
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

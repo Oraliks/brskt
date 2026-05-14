@@ -208,6 +208,16 @@ export const adminSetUserBannedSchema = z.object({
 });
 
 // ============================================================
+// TESTIMONIALS
+// ============================================================
+
+export const adminModerateTestimonialSchema = z.object({
+  testimonialId: z.string().uuid(),
+  action: z.enum(['publish', 'reject']),
+  notes: z.string().max(500).optional(),
+});
+
+// ============================================================
 // WAITLIST
 // ============================================================
 

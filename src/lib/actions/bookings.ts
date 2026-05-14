@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, not } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
@@ -74,6 +74,25 @@ export async function createBookingAction(
 
   if (!formation || !formation.active) {
     return { success: false, error: 'Formation introuvable' };
+  }
+
+  // Règle métier : un user a au plus 1 booking actif par mode (remote/onsite).
+  // Si un booking existant est annulé/abandonné, il doit d'abord le supprimer
+  // via deleteAbandonedBookingAction avant d'en créer un autre.
+  const existingActive = await db.query.bookings.findFirst({
+    where: and(
+      eq(bookings.userId, session.user.id),
+      eq(bookings.formationId, formation.id),
+      not(inArray(bookings.status, ['cancelled', 'completed']))
+    ),
+    columns: { id: true, status: true },
+  });
+
+  if (existingActive) {
+    return {
+      success: false,
+      error: `Tu as déjà une réservation active pour cette formation (${existingActive.status}). Termine-la ou annule-la avant d'en créer une nouvelle.`,
+    };
   }
 
   // 1. Booking — payment plan détermine installmentTotal
@@ -434,4 +453,60 @@ export async function requestNextInstallmentAction(input: {
       installmentIndex: nextIndex,
     },
   };
+}
+
+/**
+ * Supprime un booking annulé ou abandonné — permet à l'user d'en créer
+ * un nouveau pour la même formation.
+ *
+ * Restrictions :
+ *  - Status doit être 'cancelled' (admin a refusé OU user a payé 0 échéance
+ *    et le booking a expiré).
+ *  - On garde les paiements en DB pour traçabilité comptable (ils sont
+ *    décorrélés via SET NULL sur bookingId).
+ *
+ * Pour les bookings dans tout autre status (paid, confirmed, etc.), l'user
+ * ne peut PAS supprimer — il doit contacter le support.
+ */
+export async function deleteAbandonedBookingAction(
+  bookingId: string
+): Promise<ActionResult> {
+  const session = await requireOnboarded();
+
+  const booking = await db.query.bookings.findFirst({
+    where: and(eq(bookings.id, bookingId), eq(bookings.userId, session.user.id)),
+    columns: { id: true, status: true, installmentsPaid: true },
+  });
+
+  if (!booking) {
+    return { success: false, error: 'Réservation introuvable' };
+  }
+
+  if (booking.status !== 'cancelled') {
+    return {
+      success: false,
+      error:
+        "Seules les réservations annulées peuvent être supprimées. Contacte le support pour les autres cas.",
+    };
+  }
+
+  if (booking.installmentsPaid > 0) {
+    return {
+      success: false,
+      error:
+        'Cette réservation contient des paiements déjà versés. Contacte le support.',
+    };
+  }
+
+  // Détache les payments (si présents) avant le delete pour préserver l'audit
+  await db
+    .update(payments)
+    .set({ bookingId: null })
+    .where(eq(payments.bookingId, booking.id));
+
+  await db.delete(bookings).where(eq(bookings.id, booking.id));
+
+  revalidatePath('/dashboard');
+  revalidatePath('/formation');
+  return { success: true, data: undefined };
 }

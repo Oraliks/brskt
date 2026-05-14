@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import {
+  confirmVipMembershipAction,
   requestTelegramInviteAction,
   startVipFunnelAction,
   submitBrokerAccountAction,
@@ -91,7 +92,7 @@ export function VipWizard({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <ProgressHeader currentStep={currentStep} />
       <StepRenderer
         application={application}
@@ -553,20 +554,61 @@ function GenerateInviteStep() {
 }
 
 function InviteStep({ inviteLink }: { inviteLink: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [opened, setOpened] = useState(false);
+
+  function confirm() {
+    start(async () => {
+      const result = await confirmVipMembershipAction();
+      if (result.success) {
+        toast({ title: '🎉 Bienvenue dans le VIP !' });
+        router.refresh();
+      } else {
+        toast({
+          title: 'Pas encore détecté',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    });
+  }
+
   return (
     <StepCard
       badge={<Sparkles className="h-3 w-3" />}
       title="Bienvenue dans le VIP."
-      description="Clique sur le lien ci-dessous pour rejoindre le groupe Telegram privé. Le lien est à usage unique."
+      description="Clique pour rejoindre le groupe Telegram privé. Une fois à l'intérieur, reviens ici et clique 'J'ai rejoint'."
     >
-      <Button asChild size="lg" variant="glow" className="w-full sm:w-auto">
-        <a href={inviteLink} target="_blank" rel="noopener noreferrer">
-          Rejoindre le groupe VIP
-          <ExternalLink className="h-4 w-4" />
-        </a>
-      </Button>
-      <p className="mt-4 text-xs text-[var(--color-text-faint)]">
-        Une fois dans le groupe, lis le message épinglé et le règlement.
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button asChild size="lg" variant="glow" className="w-full sm:w-auto">
+          <a
+            href={inviteLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpened(true)}
+          >
+            Rejoindre le groupe VIP
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </Button>
+        <Button
+          size="lg"
+          variant={opened ? 'default' : 'secondary'}
+          onClick={confirm}
+          disabled={pending}
+          className="w-full sm:w-auto"
+        >
+          {pending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+          J&apos;ai rejoint, vérifier
+        </Button>
+      </div>
+      <p className="mt-3 text-xs text-[var(--color-text-faint)]">
+        Le lien est à usage unique. Si ça ne marche pas, attends 30s puis retente.
       </p>
     </StepCard>
   );

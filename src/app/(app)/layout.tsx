@@ -18,7 +18,7 @@ export default async function AppLayout({
         isAdmin={isAdminUser(session.user)}
       />
       <main className="relative">{children}</main>
-      <Footer compact />
+      <Footer />
     </>
   );
 }
