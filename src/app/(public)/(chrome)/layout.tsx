@@ -17,11 +17,11 @@ export default async function PublicLayout({
       }
     : null;
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <BackgroundFX />
       <Navbar user={user} isAdmin={isAdminUser(session?.user)} />
-      <main className="relative">{children}</main>
+      <main className="relative flex-1">{children}</main>
       <Footer />
-    </>
+    </div>
   );
 }

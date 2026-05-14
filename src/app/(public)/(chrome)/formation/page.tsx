@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
-import { WaitlistForm } from '@/components/formation/waitlist-form';
 import { formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -170,58 +169,28 @@ export default async function FormationPage() {
         </div>
       </Section>
 
-      {/* CTA Réserver + Waitlist — fusionnés en 2 colonnes */}
-      <Section className="py-6" id="waitlist">
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          {/* Gauche : CTA principal Réserver */}
-          <div className="glass-strong rounded-[var(--radius-lg)] p-6 md:p-8 flex flex-col justify-center">
-            <h2 className="font-serif text-2xl md:text-3xl text-gradient">
-              Tu choisis tes dates.
-            </h2>
-            <p className="mt-2 text-sm text-[var(--color-text-dim)] max-w-md">
-              Tu proposes jusqu'à 3 créneaux préférés. On valide sous 24h.{' '}
-              <strong className="text-[var(--color-text)]">
-                Paiement en 1 fois ou en 3 fois sans frais.
-              </strong>
-            </p>
-            <div className="mt-5 flex flex-col sm:flex-row gap-2">
-              <Button asChild size="lg" variant="glow">
-                <Link href="/formation/reserver">
-                  Réserver maintenant
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+      {/* CTA Réserver — la waitlist est désormais dans /formation/reserver */}
+      <Section className="py-6">
+        <div className="glass-strong rounded-[var(--radius-lg)] p-6 md:p-8 text-center">
+          <h2 className="font-serif text-2xl md:text-3xl text-gradient">
+            Tu choisis tes dates.
+          </h2>
+          <p className="mt-2 text-sm text-[var(--color-text-dim)] max-w-xl mx-auto">
+            Tu proposes jusqu&apos;à 3 créneaux préférés. On valide sous 24h.{' '}
+            <strong className="text-[var(--color-text)]">
+              Paiement en 1 fois ou en 3 fois sans frais.
+            </strong>{' '}
+            Aucun créneau qui te convient ? Tu peux t&apos;inscrire à la liste
+            d&apos;attente depuis la page de réservation.
+          </p>
+          <div className="mt-5 flex justify-center">
+            <Button asChild size="lg" variant="glow">
+              <Link href="/formation/reserver">
+                Réserver maintenant
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
-
-          {/* Droite : Waitlist en accordéon (toggle natif) */}
-          <details className="glass rounded-[var(--radius-lg)] p-5 group">
-            <summary className="cursor-pointer flex items-center justify-between gap-3 list-none">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
-                  Aucun créneau disponible ?
-                </div>
-                <div className="text-sm font-semibold mt-0.5">
-                  S'inscrire à la liste d'attente
-                </div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] transition-transform group-open:rotate-90" />
-            </summary>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
-                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] mb-1">
-                  Distance · 1500€
-                </div>
-                <WaitlistForm mode="remote" />
-              </div>
-              <div className="rounded-[var(--radius-md)] border border-amber-500/25 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">
-                  Dubaï · 3500€
-                </div>
-                <WaitlistForm mode="onsite" />
-              </div>
-            </div>
-          </details>
         </div>
       </Section>
 

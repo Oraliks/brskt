@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
+import { Clock } from 'lucide-react';
 import { db } from '@/lib/db';
 import { formations } from '@/lib/db/schema';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { BookingForm } from '@/components/formation/booking-form';
+import { WaitlistFormAuth } from '@/components/formation/waitlist-form-auth';
 import { getSession } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
@@ -29,8 +31,8 @@ export default async function ReserverPage({ searchParams }: PageProps) {
   });
 
   return (
-    <>
-      <Section className="pt-32 pb-12">
+    <Section className="pt-16 pb-12">
+      <div className="max-w-3xl mx-auto space-y-6">
         <SectionHeader
           eyebrow="Réservation"
           title={
@@ -39,14 +41,34 @@ export default async function ReserverPage({ searchParams }: PageProps) {
             </>
           }
           description="Choisis ton format, propose tes créneaux. On confirme sous 24h, puis tu paies."
+          align="left"
         />
-      </Section>
 
-      <Section className="pt-0 pb-32">
-        <div className="max-w-3xl mx-auto">
-          <BookingForm formations={list} defaultMode={mode} />
-        </div>
-      </Section>
-    </>
+        <BookingForm formations={list} defaultMode={mode} />
+
+        <details className="glass rounded-[var(--radius-lg)] p-4 group">
+          <summary className="cursor-pointer flex items-center justify-between gap-3 list-none">
+            <div className="flex items-center gap-2.5">
+              <Clock className="h-4 w-4 text-amber-300 light:text-amber-700 flex-shrink-0" />
+              <div>
+                <div className="text-sm font-semibold">
+                  Aucun créneau ne te convient ?
+                </div>
+                <div className="text-xs text-[var(--color-text-dim)]">
+                  Inscris-toi à la liste d&apos;attente — on te prévient sur
+                  Telegram dès qu&apos;une place se libère.
+                </div>
+              </div>
+            </div>
+            <span className="text-xs text-[var(--color-text-dim)] group-open:rotate-180 transition-transform flex-shrink-0">
+              ▼
+            </span>
+          </summary>
+          <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+            <WaitlistFormAuth />
+          </div>
+        </details>
+      </div>
+    </Section>
   );
 }

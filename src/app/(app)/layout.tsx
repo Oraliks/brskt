@@ -11,7 +11,7 @@ export default async function AppLayout({
 }) {
   const session = await requireAuth();
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <BackgroundFX />
       <Navbar
         user={{
@@ -22,8 +22,8 @@ export default async function AppLayout({
         isAdmin={isAdminUser(session.user)}
       />
       <LiveTickerBar />
-      <main className="relative">{children}</main>
+      <main className="relative flex-1">{children}</main>
       <Footer />
-    </>
+    </div>
   );
 }

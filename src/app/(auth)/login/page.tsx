@@ -19,8 +19,8 @@ export default async function LoginPage({ searchParams }: PageProps) {
   const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? '';
 
   return (
-    <div className="space-y-8">
-      <div className="text-center space-y-3">
+    <div className="space-y-6">
+      <div className="text-center space-y-2">
         <h1 className="font-serif text-4xl md:text-5xl text-gradient">
           Connexion
         </h1>
@@ -29,7 +29,30 @@ export default async function LoginPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <div className="glass-strong rounded-[var(--radius-lg)] p-8 space-y-6">
+      {/* Astuce mobile bien visible (le widget Telegram bug souvent sur mobile) */}
+      {botUsername && (
+        <div className="rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/30 px-4 py-3 text-xs text-[var(--color-text-dim)] flex items-start gap-2.5">
+          <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-[var(--color-text)]">
+              Sur téléphone ?
+            </strong>{' '}
+            Le widget ci-dessous peut buguer (notification jamais reçue). Si
+            ça t&apos;arrive, utilise le{' '}
+            <a
+              href={`https://t.me/${botUsername}?start=login`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-blue-300 light:text-blue-700 underline underline-offset-2 hover:text-blue-200"
+            >
+              lien direct via le bot →
+            </a>{' '}
+            (instantané).
+          </div>
+        </div>
+      )}
+
+      <div className="glass-strong rounded-[var(--radius-lg)] p-6 md:p-8 space-y-5">
         <Suspense fallback={<div className="h-12 animate-pulse bg-[var(--color-surface-tint)] rounded-md" />}>
           {botUsername ? (
             <TelegramLoginButton
@@ -58,32 +81,30 @@ export default async function LoginPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      {/* Fallback : connexion via bot DM si le widget bug */}
+      {/* Fallback : magic link via bot DM */}
       {botUsername && (
-        <div className="glass rounded-[var(--radius-lg)] p-5 space-y-3">
+        <div className="glass rounded-[var(--radius-lg)] p-5">
           <div className="flex items-start gap-3">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/15 border border-blue-500/30 flex-shrink-0">
               <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700" />
             </span>
             <div className="flex-1">
               <div className="text-sm font-medium">
-                Le bouton bleu ne marche pas ?
+                Méthode garantie : magic link via bot
               </div>
               <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                Ouvre le bot Telegram et envoie{' '}
-                <code className="font-mono bg-[var(--color-surface-tint)] px-1.5 py-0.5 rounded">
-                  /login
-                </code>{' '}
-                — il te renverra un lien de connexion instantané (valable 10
-                min).
+                Ouvre le bot Telegram → tu reçois immédiatement un lien de
+                connexion en DM (valable 10 min). Marche dans tous les cas, y
+                compris quand le widget ci-dessus échoue.
               </p>
               <a
-                href={`https://t.me/${botUsername}?start=hello`}
+                href={`https://t.me/${botUsername}?start=login`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 light:text-blue-700 hover:underline"
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
               >
-                Ouvrir @{botUsername} →
+                <MessageCircle className="h-4 w-4" />
+                Recevoir mon lien via @{botUsername}
               </a>
             </div>
           </div>

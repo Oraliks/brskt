@@ -83,6 +83,61 @@ export function getBot(): Bot<Context> {
       return;
     }
 
+    // === Deeplink /start login : auto-envoie un magic link ===
+    // Utilisé par le bouton "Recevoir mon lien" sur /login (fallback mobile).
+    if (startParam === 'login' && ctx.from?.id) {
+      const hasSecret =
+        !!process.env.MAGIC_LINK_SECRET?.trim() ||
+        !!process.env.BETTER_AUTH_SECRET?.trim();
+      if (!hasSecret) {
+        await ctx.reply(
+          `⚠️ Magic-link non configuré. Utilise le widget : ${appUrl}/login`,
+          { link_preview_options: { is_disabled: true } }
+        );
+        return;
+      }
+      try {
+        const { eq } = await import('drizzle-orm');
+        const { db } = await import('@/lib/db');
+        const { users } = await import('@/lib/db/schema');
+        const { signMagicToken } = await import('@/lib/auth/magic-link');
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.telegramId, ctx.from.id),
+          columns: { id: true },
+        });
+
+        if (!user) {
+          // 1re connexion : compte pas encore en DB, le widget reste obligatoire
+          await ctx.reply(
+            `${greeting}\n\n` +
+              `Pour ta toute première connexion, utilise le widget Telegram sur ` +
+              `${appUrl}/login (il crée ton compte automatiquement).\n\n` +
+              `Une fois ton compte créé, ${appUrl}/login te renverra un lien direct ici via /login.`,
+            { link_preview_options: { is_disabled: true } }
+          );
+          return;
+        }
+
+        const token = signMagicToken(ctx.from.id);
+        const link = `${appUrl}/login/magic?token=${encodeURIComponent(token)}`;
+        await ctx.reply(
+          `🔑 <b>Lien de connexion instantané</b>\n\n` +
+            `<a href="${link}">Clique ici pour te connecter</a>\n\n` +
+            `<i>Valable 10 min. Ne partage pas ce lien.</i>`,
+          { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+        );
+        return;
+      } catch (err) {
+        console.error('[bot] /start login deeplink failed', err);
+        await ctx.reply(
+          `Désolé, génération du lien échouée. Utilise le widget : ${appUrl}/login`,
+          { link_preview_options: { is_disabled: true } }
+        );
+        return;
+      }
+    }
+
     if (startParam.startsWith('vip_') && ctx.from?.id) {
       const source = startParam.slice(4); // 'landing', 'ads', 'instagram', etc.
       try {
