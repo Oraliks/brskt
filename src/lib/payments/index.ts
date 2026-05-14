@@ -5,7 +5,7 @@ import type { PaymentMethodType, PaymentProvider } from './types';
 
 // Lazy init pour éviter de crash si une variable d'env manque
 // au moment de l'import (utile pour les tests / build)
-let cache: Partial<Record<PaymentMethodType, PaymentProvider>> = {};
+const cache: Partial<Record<PaymentMethodType, PaymentProvider>> = {};
 
 export function getPaymentProvider(
   method: PaymentMethodType

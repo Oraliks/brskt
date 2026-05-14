@@ -7,7 +7,8 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
@@ -18,7 +19,14 @@
     "telegram:setup": "tsx scripts/setup-telegram-webhook.ts",
     "test:ironfx": "tsx scripts/test-ironfx-webhook.ts",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=20"
+    ],
+    "*.{json,md,css}": []
   },
   "dependencies": {
     "@paddle/paddle-js": "^1.4.0",
@@ -58,6 +66,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@next/eslint-plugin-next": "^16.2.6",
     "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4.0.0-beta.7",
     "@types/node": "^22.10.0",
@@ -67,10 +77,13 @@
     "drizzle-kit": "^0.28.0",
     "eslint": "^9.15.0",
     "eslint-config-next": "^16.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0-beta.7",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.3",
     "vitest": "^2.1.5"
   },
   "engines": {

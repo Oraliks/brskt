@@ -100,6 +100,9 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             >
               Réessayer
             </button>
+            {/* global-error remplace tout le tree React, on ne peut pas
+                utiliser next/link ici. Disable la règle Next pour ce cas. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{
