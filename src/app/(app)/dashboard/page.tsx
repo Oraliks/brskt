@@ -1,13 +1,15 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { desc, eq } from 'drizzle-orm';
+import { count, desc, eq, sql } from 'drizzle-orm';
 import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
   Clock,
   CreditCard,
+  Gift,
   MessageCircle,
+  Trophy,
   XCircle,
 } from 'lucide-react';
 import { db } from '@/lib/db';
@@ -15,6 +17,7 @@ import {
   bookings,
   formations,
   manualIronfxStatus,
+  users,
   vipApplications,
 } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/server';
@@ -34,7 +37,7 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
-  const [userBookings, vipApp] = await Promise.all([
+  const [userBookings, vipApp, myReferrals, topReferrer] = await Promise.all([
     db.query.bookings.findMany({
       where: eq(bookings.userId, session.user.id),
       orderBy: [desc(bookings.createdAt)],
@@ -43,6 +46,26 @@ export default async function DashboardPage() {
     db.query.vipApplications.findFirst({
       where: eq(vipApplications.userId, session.user.id),
     }),
+    // Combien j'ai parrainé
+    db
+      .select({ c: count() })
+      .from(users)
+      .where(eq(users.referredBy, session.user.id))
+      .then((r) => r[0]?.c ?? 0),
+    // Top parrain global (utilisé pour la mini-section "podium")
+    db
+      .select({
+        userId: users.referredBy,
+        firstName: sql<string>`max(referrer.telegram_first_name)`,
+        username: sql<string>`max(referrer.telegram_username)`,
+        c: count(),
+      })
+      .from(users)
+      .leftJoin(sql`users as referrer`, sql`referrer.id = ${users.referredBy}`)
+      .where(sql`${users.referredBy} IS NOT NULL`)
+      .groupBy(users.referredBy)
+      .orderBy(desc(count()))
+      .limit(3),
   ]);
 
   // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
@@ -152,6 +175,19 @@ export default async function DashboardPage() {
             </a>
           ) : null}
         </div>
+      </Section>
+
+      {/* Parrainage */}
+      <Section className="py-8">
+        <ReferralSection
+          myReferrals={myReferrals}
+          topReferrer={topReferrer.map((r) => ({
+            firstName: r.firstName,
+            username: r.username,
+            count: r.c,
+          }))}
+          botUsername={botUsername}
+        />
       </Section>
 
       {/* Bookings */}
@@ -530,5 +566,95 @@ function VipCard({
         )}
       </div>
     </Link>
+  );
+}
+
+interface ReferralEntry {
+  firstName: string | null;
+  username: string | null;
+  count: number;
+}
+
+function ReferralSection({
+  myReferrals,
+  topReferrer,
+  botUsername,
+}: {
+  myReferrals: number;
+  topReferrer: ReferralEntry[];
+  botUsername: string | undefined;
+}) {
+  const inviteUrl = botUsername
+    ? `https://t.me/${botUsername}?start=ref_via_bot`
+    : null;
+  return (
+    <div className="glass rounded-[var(--radius-lg)] p-6 md:p-8 grid md:grid-cols-2 gap-6">
+      {/* Bloc 1 : mes parrainages */}
+      <div>
+        <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-text-dim)]">
+          <Gift className="h-3 w-3" />
+          Parrainage
+        </div>
+        <h3 className="mt-2 text-2xl font-semibold">
+          Tu as parrainé{' '}
+          <span className="text-gradient">
+            {myReferrals} personne{myReferrals > 1 ? 's' : ''}
+          </span>
+        </h3>
+        <p className="mt-2 text-sm text-[var(--color-text-dim)]">
+          {myReferrals === 0
+            ? `Pas encore de filleul. Récupère ton lien d'invitation via le bot Telegram (commande /invite).`
+            : `Continue à inviter — pas de récompense matérielle pour l'instant, juste la fierté d'être dans le top.`}
+        </p>
+        {botUsername && (
+          <Link
+            href={`https://t.me/${botUsername}?start=hello`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--color-accent-hover)] hover:underline"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Récupérer mon lien dans le bot
+          </Link>
+        )}
+        {/* Suppress unused var warning si pas utilisé ci-dessous */}
+        {!inviteUrl && null}
+      </div>
+
+      {/* Bloc 2 : podium top parrains */}
+      <div className="border-t md:border-t-0 md:border-l border-[var(--color-border)] pt-6 md:pt-0 md:pl-6">
+        <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-text-dim)]">
+          <Trophy className="h-3 w-3" />
+          Top parrains (all-time)
+        </div>
+        {topReferrer.length === 0 ? (
+          <p className="mt-2 text-sm text-[var(--color-text-dim)]">
+            Personne n&apos;a encore parrainé. Sois le premier !
+          </p>
+        ) : (
+          <ol className="mt-3 space-y-2">
+            {topReferrer.map((r, i) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+              const name = r.username
+                ? `@${r.username}`
+                : r.firstName ?? 'Anonyme';
+              return (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded-md bg-[var(--color-surface-tint)] px-3 py-2"
+                >
+                  <span className="text-sm font-medium">
+                    {medal} {name}
+                  </span>
+                  <span className="font-mono tabular-nums text-sm">
+                    {r.count} filleul{r.count > 1 ? 's' : ''}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </div>
   );
 }

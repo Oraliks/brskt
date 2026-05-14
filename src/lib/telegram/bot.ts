@@ -17,10 +17,72 @@ export function getBot(): Bot<Context> {
     const firstName = ctx.from?.first_name ?? '';
     const greeting = firstName ? `👋 Salut ${firstName} !` : '👋 Bienvenue !';
 
-    // Deeplink param : `/start vip_<source>` ou `/start hello` (default).
-    // Format utilisé : t.me/BoursikotonsBot?start=vip_landing|vip_ads|...
-    // On track le source pour mesurer quel canal convertit le mieux.
+    // Deeplink param : `/start vip_<source>`, `/start ref_<code>`, ou `/start hello` (default).
     const startParam = ctx.match?.trim() ?? '';
+
+    // === Parrainage : /start ref_<code> ===
+    if (startParam.startsWith('ref_') && ctx.from?.id) {
+      const referralCode = startParam.slice(4);
+      try {
+        const { eq } = await import('drizzle-orm');
+        const { db } = await import('@/lib/db');
+        const { users } = await import('@/lib/db/schema');
+
+        const referrer = await db.query.users.findFirst({
+          where: eq(users.referralCode, referralCode),
+        });
+        const newUser = await db.query.users.findFirst({
+          where: eq(users.telegramId, ctx.from.id),
+        });
+
+        // Cas 1 : referrer trouvé + newUser existe et n'a pas encore de parrain
+        //         + ce n'est pas auto-parrainage
+        if (
+          referrer &&
+          newUser &&
+          !newUser.referredBy &&
+          newUser.id !== referrer.id
+        ) {
+          await db
+            .update(users)
+            .set({ referredBy: referrer.id, updatedAt: new Date() })
+            .where(eq(users.id, newUser.id));
+        }
+        // Cas 2 : referrer trouvé mais newUser n'existe pas encore (jamais
+        //         connecté au site). On ne peut pas créer le user complet
+        //         (pas de email etc), mais on note dans funnel_events pour
+        //         créditer le parrain quand l'user s'inscrira.
+        else if (referrer && !newUser) {
+          const { emitFunnelEvent } = await import('@/lib/analytics/funnel');
+          await emitFunnelEvent({
+            userId: null,
+            sessionId: `tg:${ctx.from.id}`,
+            eventName: 'bot_deeplink',
+            metadata: {
+              type: 'referral_pending',
+              referrerId: referrer.id,
+              referralCode,
+              telegramId: ctx.from.id,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('[bot] referral tracking failed', err);
+      }
+
+      // Message de bienvenue pour le filleul
+      await ctx.reply(
+        `${firstName ? `Salut ${firstName} ! ` : 'Bienvenue ! '}` +
+          `Tu viens d'un lien d'invitation 🎁\n\n` +
+          `Boursikotons : formation trading + groupe VIP Telegram gratuit ` +
+          `(rémunération via broker partenaire, pas par toi).\n\n` +
+          `▶️ Démarre ici : ${appUrl}/login\n` +
+          `💎 Funnel VIP : ${appUrl}/vip`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
     if (startParam.startsWith('vip_') && ctx.from?.id) {
       const source = startParam.slice(4); // 'landing', 'ads', 'instagram', etc.
       try {
@@ -121,6 +183,8 @@ export function getBot(): Bot<Context> {
         `/leaderboard — Classement hebdo\n\n` +
         `<b>🔄 Inline</b>\n` +
         `Tape <code>@boursikotonsbot EURUSD</code> dans n'importe quel chat\n\n` +
+        `<b>🎁 Parrainage</b>\n` +
+        `/invite — Mon lien d'invitation perso\n\n` +
         `<b>Aide</b>\n` +
         `/help — Cette aide\n\n` +
         `Site : ${appUrl}`,
@@ -829,6 +893,65 @@ export function getBot(): Bot<Context> {
     await ctx.reply(
       `🏆 <b>Classement quiz</b> · 7 derniers jours\n\n${lines.join('\n')}`,
       { parse_mode: 'HTML' }
+    );
+  });
+
+  // ============================================================
+  // Parrainage
+  // ============================================================
+
+  // /invite — génère/retourne le lien d'invitation perso
+  bot.command('invite', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users } = await import('@/lib/db/schema');
+    const { nanoid } = await import('nanoid');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(
+        `Tu dois d'abord te connecter : ${appUrl}/login`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    // Génère le code s'il n'existe pas encore (idempotent)
+    let code = user.referralCode;
+    if (!code) {
+      code = nanoid(8);
+      await db
+        .update(users)
+        .set({ referralCode: code, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
+
+    const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? 'BoursikotonsBot';
+    const inviteUrl = `https://t.me/${botUsername}?start=ref_${code}`;
+
+    // Compte combien il a parrainé jusqu'ici
+    const { count } = await import('drizzle-orm');
+    const [stats] = await db
+      .select({ c: count() })
+      .from(users)
+      .where(eq(users.referredBy, user.id));
+    const referrals = stats?.c ?? 0;
+
+    await ctx.reply(
+      `🎁 <b>Ton lien d'invitation</b>\n\n` +
+        `Partage ce lien — quand quelqu'un démarre le bot via ce lien, ` +
+        `tu es enregistré comme parrain :\n\n` +
+        `<a href="${inviteUrl}">${inviteUrl}</a>\n\n` +
+        `<b>Tu as parrainé : ${referrals}</b> personne${referrals > 1 ? 's' : ''}\n\n` +
+        `<i>Top parrain visible sur ${appUrl}/dashboard. Pas de récompense ` +
+        `matérielle pour l'instant — juste la fierté.</i>`,
+      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
     );
   });
 
