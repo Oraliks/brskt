@@ -117,7 +117,7 @@ export function TradingHero() {
           d={PRICE_PATH_2}
           fill="none"
           stroke="url(#th-stroke-2)"
-          strokeWidth="1"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
           className="trading-hero__line-bg"
@@ -129,7 +129,7 @@ export function TradingHero() {
           d={PRICE_PATH}
           fill="none"
           stroke="url(#th-stroke)"
-          strokeWidth="1.5"
+          strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
           className="trading-hero__line"
@@ -154,16 +154,20 @@ export function TradingHero() {
         {TICKERS.slice(0, 4).map((t, i) => (
           <div
             key={t.sym}
-            className="trading-hero__ticker flex items-center justify-end gap-1.5 px-1.5 py-0.5 rounded bg-black/30 backdrop-blur-sm"
+            className="trading-hero__ticker flex items-center justify-end gap-1.5 px-1.5 py-0.5 rounded bg-black/30 light:bg-white/80 backdrop-blur-sm border border-white/5 light:border-black/10"
             style={{ animationDelay: `${i * 0.6}s` }}
           >
-            <span className="text-[var(--color-text-faint)]">{t.sym}</span>
-            <span className="text-[var(--color-text-dim)]">{t.value}</span>
+            <span className="text-[var(--color-text-faint)] light:text-[var(--color-text-dim)]">
+              {t.sym}
+            </span>
+            <span className="text-[var(--color-text-dim)] light:text-[var(--color-text)]">
+              {t.value}
+            </span>
             <span
               className={
                 t.up
-                  ? 'text-emerald-400 light:text-emerald-600'
-                  : 'text-rose-400 light:text-rose-600'
+                  ? 'text-emerald-400 light:text-emerald-700'
+                  : 'text-rose-400 light:text-rose-700'
               }
             >
               {t.up ? '▲' : '▼'} {t.delta}

@@ -103,7 +103,7 @@ export default async function DashboardPage() {
       <Section className="pt-10 pb-4">
         {/* Zone titre + bot CTA avec chart en arriere-plan */}
         <div className="relative isolate mb-3">
-          <div className="absolute inset-0 -z-10 opacity-30 pointer-events-none overflow-hidden rounded-[var(--radius-lg)]">
+          <div className="absolute inset-0 -z-10 opacity-30 light:opacity-70 pointer-events-none overflow-hidden rounded-[var(--radius-lg)]">
             <TradingHero />
           </div>
 
