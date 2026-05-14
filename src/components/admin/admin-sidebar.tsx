@@ -82,8 +82,10 @@ export function AdminSidebar() {
       <aside
         className={cn(
           'flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 md:bg-[var(--color-bg-elevated)]/40 backdrop-blur-md',
-          // Desktop
-          'md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:flex',
+          // Desktop : sticky + self-start pour empêcher le flex-stretch de
+          // pousser la hauteur au-delà du viewport (sinon sticky casse).
+          // h-[100dvh] = dynamic viewport height (gère mieux mobile)
+          'md:sticky md:top-0 md:self-start md:h-[100dvh] md:max-h-screen md:w-64 md:translate-x-0 md:flex',
           // Mobile drawer
           'fixed md:relative inset-y-0 left-0 z-50 w-72 transition-transform duration-300',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
@@ -106,7 +108,7 @@ export function AdminSidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-3 py-4 space-y-1 overflow-y-auto">
           {links.map((link) => {
             const active =
               link.href === '/admin'

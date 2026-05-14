@@ -13,6 +13,7 @@ import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
   adminProgressUpdateSchema,
+  adminVipOverrideSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
 } from '@/lib/validations';
@@ -497,6 +498,123 @@ export async function adminUpdateManualIronfxAction(
   });
 
   revalidatePath('/admin/vip');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// VIP OVERRIDES (manual admin controls — bugs, exceptions)
+// ============================================================
+
+/**
+ * Action admin manuelle sur une application VIP.
+ *
+ * Permet de :
+ *  - Forcer une étape arbitraire (skip / debug)
+ *  - Reset le funnel complet
+ *  - Clear un warning pré-éjection
+ *  - Forcer cpaQualified (true ou false) sans passer par le %
+ *
+ * Toutes ces actions sont loggées dans admin_audit_logs avec la raison
+ * pour traçabilité. À utiliser parcimonieusement — l'usage normal passe
+ * par les validations standard.
+ */
+export async function adminVipOverrideAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminVipOverrideSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const { applicationId, action, targetStep, reason } = parsed.data;
+
+  const app = await db.query.vipApplications.findFirst({
+    where: eq(vipApplications.id, applicationId),
+    with: { user: true },
+  });
+  if (!app) return { success: false, error: 'Application introuvable' };
+
+  const before = {
+    step: app.step,
+    cpaQualified: app.cpaQualified,
+    ejectionWarnedAt: app.ejectionWarnedAt,
+  };
+  const updates: Partial<typeof vipApplications.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  switch (action) {
+    case 'set_step':
+      if (!targetStep) {
+        return {
+          success: false,
+          error: 'targetStep requis pour action set_step',
+        };
+      }
+      updates.step = targetStep;
+      updates.currentStepEnteredAt = new Date();
+      // Si on passe à ejected, set ejectedAt + reason
+      if (targetStep === 'ejected') {
+        updates.ejectedAt = new Date();
+        updates.ejectionReason = `[Override admin] ${reason}`;
+      } else {
+        // Si on sort de ejected vers autre chose, reset les champs
+        updates.ejectedAt = null;
+        updates.ejectionReason = null;
+      }
+      break;
+    case 'reset_funnel':
+      updates.step = 'link_generated';
+      updates.currentStepEnteredAt = new Date();
+      updates.brokerAccountId = null;
+      updates.depositAmount = null;
+      updates.telegramInviteLink = null;
+      updates.telegramInviteUsed = false;
+      updates.cpaQualified = false;
+      updates.cpaQualifiedAt = null;
+      updates.ejectedAt = null;
+      updates.ejectionReason = null;
+      updates.ejectionWarnedAt = null;
+      updates.reminderCount = 0;
+      updates.reminderSentAt = null;
+      break;
+    case 'clear_warning':
+      updates.ejectionWarnedAt = null;
+      break;
+    case 'force_qualified':
+      updates.cpaQualified = true;
+      updates.cpaQualifiedAt = new Date();
+      updateTag('vip-qualified-count');
+      break;
+    case 'unqualify':
+      updates.cpaQualified = false;
+      updates.cpaQualifiedAt = null;
+      updateTag('vip-qualified-count');
+      break;
+  }
+
+  await db
+    .update(vipApplications)
+    .set(updates)
+    .where(eq(vipApplications.id, applicationId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: `vip_override_${action}`,
+    targetType: 'vip_application',
+    targetId: app.id,
+    before,
+    after: { ...updates, reason },
+  });
+
+  revalidatePath('/admin/vip');
+  revalidatePath('/vip');
+  revalidatePath('/dashboard');
   return { success: true, data: undefined };
 }
 

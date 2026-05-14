@@ -2,7 +2,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, TrendingUp, UserX, Wallet } from 'lucide-react';
+import {
+  Check,
+  Loader2,
+  MoreVertical,
+  TrendingUp,
+  UserX,
+  Wallet,
+  Wrench,
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -30,6 +38,7 @@ import {
   adminSetTradingProgressAction,
   adminValidateDepositAction,
   adminValidateSignupAction,
+  adminVipOverrideAction,
 } from '@/lib/actions/admin';
 import type {
   ManualIronfxStatus,
@@ -69,6 +78,7 @@ export function VipTable({ applications, ironfxMode }: Props) {
   const [pending, start] = useTransition();
   const [ejectTarget, setEjectTarget] = useState<Row | null>(null);
   const [progressTarget, setProgressTarget] = useState<Row | null>(null);
+  const [overrideTarget, setOverrideTarget] = useState<Row | null>(null);
 
   function quickAction(
     label: string,
@@ -202,12 +212,22 @@ export function VipTable({ applications, ironfxMode }: Props) {
                       size="sm"
                       variant="ghost"
                       onClick={() => setEjectTarget(a)}
-                      className="text-rose-300 hover:bg-rose-500/10"
+                      className="text-rose-400 light:text-rose-600 hover:bg-rose-500/10"
                     >
                       <UserX className="h-3 w-3" />
                       Éjecter
                     </Button>
                   )}
+                  {/* Overrides admin manuels — toujours disponibles */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setOverrideTarget(a)}
+                    title="Actions avancées (skip étape, reset, etc.)"
+                    className="text-[var(--color-text-dim)]"
+                  >
+                    <MoreVertical className="h-3 w-3" />
+                  </Button>
                 </div>
               </TableCell>
             </TableRow>
@@ -230,7 +250,248 @@ export function VipTable({ applications, ironfxMode }: Props) {
           onDone={() => router.refresh()}
         />
       )}
+
+      {overrideTarget && (
+        <OverrideDialog
+          row={overrideTarget}
+          onClose={() => setOverrideTarget(null)}
+          onDone={() => router.refresh()}
+        />
+      )}
     </div>
+  );
+}
+
+// ============================================================
+// Override Dialog — actions admin manuelles (skip étape, reset, etc.)
+// ============================================================
+
+type OverrideAction =
+  | 'set_step'
+  | 'reset_funnel'
+  | 'clear_warning'
+  | 'force_qualified'
+  | 'unqualify';
+
+const STEP_OPTIONS = [
+  { value: 'link_generated', label: '1. Lien généré' },
+  { value: 'clicked', label: '2. Lien cliqué' },
+  { value: 'signup_pending', label: '3. Inscription en attente' },
+  { value: 'signup_validated', label: '4. Inscription validée' },
+  { value: 'deposit_pending', label: '5. Dépôt en attente' },
+  { value: 'deposit_validated', label: '6. Dépôt validé' },
+  { value: 'telegram_invited', label: '7. Telegram invité' },
+  { value: 'in_group', label: '8. Dans le groupe' },
+  { value: 'ejected', label: '9. Éjecté' },
+] as const;
+
+function OverrideDialog({
+  row,
+  onClose,
+  onDone,
+}: {
+  row: Row;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [action, setAction] = useState<OverrideAction>('set_step');
+  const [targetStep, setTargetStep] = useState<string>(row.step);
+  const [reason, setReason] = useState('');
+  const [pending, start] = useTransition();
+
+  function submit() {
+    if (reason.trim().length < 3) {
+      toast({
+        title: 'Raison obligatoire',
+        description: 'Indique pourquoi tu fais cette override (audit log).',
+        variant: 'destructive',
+      });
+      return;
+    }
+    start(async () => {
+      const result = await adminVipOverrideAction({
+        applicationId: row.id,
+        action,
+        targetStep: action === 'set_step' ? targetStep : undefined,
+        reason,
+      });
+      if (result.success) {
+        toast({ title: '✓ Override appliqué' });
+        onClose();
+        onDone();
+      } else {
+        toast({
+          title: 'Erreur',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    });
+  }
+
+  const isDestructive =
+    action === 'reset_funnel' || action === 'unqualify' || action === 'set_step';
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Actions avancées — {row.user.name}</DialogTitle>
+          <DialogDescription>
+            Override manuel d&apos;une application VIP. À utiliser pour
+            debugger ou rattraper un cas exceptionnel. Tout est loggé dans
+            l&apos;audit.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm">Action</Label>
+            <div className="mt-2 grid gap-2">
+              <OverrideOption
+                checked={action === 'set_step'}
+                onSelect={() => setAction('set_step')}
+                title="Forcer une étape"
+                description="Skip ou rollback vers une étape précise du funnel."
+              />
+              <OverrideOption
+                checked={action === 'clear_warning'}
+                onSelect={() => setAction('clear_warning')}
+                title="Clear le warning pré-éjection"
+                description="Si un warning J-1 a été envoyé par erreur."
+                disabled={!row.ejectionWarnedAt}
+              />
+              <OverrideOption
+                checked={action === 'force_qualified'}
+                onSelect={() => setAction('force_qualified')}
+                title="Forcer cpaQualified = true"
+                description="Place protégée de l'éjection auto sans passer par le %."
+                disabled={row.cpaQualified}
+              />
+              <OverrideOption
+                checked={action === 'unqualify'}
+                onSelect={() => setAction('unqualify')}
+                title="Annuler la qualification"
+                description="cpaQualified = false (rare, ex. fraude détectée)."
+                disabled={!row.cpaQualified}
+              />
+              <OverrideOption
+                checked={action === 'reset_funnel'}
+                onSelect={() => setAction('reset_funnel')}
+                title="Reset complet du funnel"
+                description="Reset l'application à 'link_generated'. Efface broker ID, dépôt, qualif. Le user repart de zéro."
+              />
+            </div>
+          </div>
+
+          {action === 'set_step' && (
+            <div>
+              <Label htmlFor="target-step" className="text-sm">
+                Étape cible
+              </Label>
+              <select
+                id="target-step"
+                value={targetStep}
+                onChange={(e) => setTargetStep(e.target.value)}
+                className="mt-2 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-tint)] px-3 py-2 text-sm"
+              >
+                {STEP_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                    {opt.value === row.step ? ' (actuel)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <Label htmlFor="reason" className="text-sm">
+              Raison <span className="text-rose-400">*</span>
+            </Label>
+            <Textarea
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="Ex: bug API IronFX a sauté l'étape signup, on rattrape manuellement"
+              className="mt-2"
+            />
+            <p className="text-xs text-[var(--color-text-faint)] mt-1">
+              Inclus dans l&apos;audit log — visible par tous les admins.
+            </p>
+          </div>
+
+          {isDestructive && (
+            <div className="rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/30 p-3 text-xs">
+              ⚠ Cette action modifie directement le statut du user et peut
+              casser des invariants si mal utilisée.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button onClick={submit} disabled={pending}>
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Appliquer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OverrideOption({
+  checked,
+  onSelect,
+  title,
+  description,
+  disabled,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        'w-full text-left rounded-[var(--radius-md)] border p-3 transition-colors',
+        checked
+          ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
+          : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]',
+        disabled && 'opacity-40 cursor-not-allowed'
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+            checked
+              ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+              : 'border-[var(--color-border-strong)]'
+          )}
+        >
+          {checked && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </span>
+        <div>
+          <div className="text-sm font-medium inline-flex items-center gap-1.5">
+            <Wrench className="h-3 w-3 opacity-60" />
+            {title}
+          </div>
+          <div className="text-xs text-[var(--color-text-dim)] mt-0.5">
+            {description}
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 

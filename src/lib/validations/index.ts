@@ -82,6 +82,38 @@ export const vipDepositSchema = z.object({
   currency: z.enum(['EUR', 'USD']).default('EUR'),
 });
 
+/**
+ * Override admin manuel d'une application VIP — permet de skip une étape,
+ * forcer un statut, reset le funnel, etc. À utiliser uniquement pour
+ * debug ou cas exceptionnels.
+ */
+export const adminVipOverrideSchema = z.object({
+  applicationId: z.string().uuid(),
+  action: z.enum([
+    'set_step',         // Force une étape spécifique
+    'reset_funnel',     // Reset à 'link_generated'
+    'clear_warning',    // Clear ejectionWarnedAt
+    'force_qualified',  // cpaQualified = true (sans passer par le %)
+    'unqualify',        // cpaQualified = false (annule force_qualified)
+  ]),
+  // Pour set_step uniquement : la cible
+  targetStep: z
+    .enum([
+      'link_generated',
+      'clicked',
+      'signup_pending',
+      'signup_validated',
+      'deposit_pending',
+      'deposit_validated',
+      'telegram_invited',
+      'in_group',
+      'ejected',
+    ])
+    .optional(),
+  // Note obligatoire pour traçabilité dans l'audit log
+  reason: z.string().min(3, 'Donne une raison pour le log audit').max(500),
+});
+
 // ============================================================
 // ONBOARDING
 // ============================================================
