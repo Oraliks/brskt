@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { adminNotifications, vipApplications } from '@/lib/db/schema';
 import { requireOnboarded } from '@/lib/auth/server';
 import { generateVipInvite } from '@/lib/telegram/helpers';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   vipBrokerAccountSchema,
   vipDepositSchema,
@@ -71,6 +72,20 @@ export async function submitBrokerAccountAction(
   input: unknown
 ): Promise<ActionResult> {
   const session = await requireOnboarded();
+
+  // Rate limit : 10 soumissions / heure par user. Comme submitDepositAction.
+  const rl = await checkRateLimit({
+    key: `vip_broker:user:${session.user.id}`,
+    limit: 10,
+    windowSec: 3600,
+  });
+  if (!rl.allowed) {
+    return {
+      success: false,
+      error: `Trop de modifications. Réessaye dans ${Math.ceil(rl.resetIn / 60)} min.`,
+    };
+  }
+
   const parsed = vipBrokerAccountSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -111,6 +126,21 @@ export async function submitDepositAction(
   input: unknown
 ): Promise<ActionResult> {
   const session = await requireOnboarded();
+
+  // Rate limit : 10 soumissions / heure par user. Un user normal soumet 1x.
+  // Au-delà = bug/exploration côté UI ou tentative de spam admin notif.
+  const rl = await checkRateLimit({
+    key: `vip_deposit:user:${session.user.id}`,
+    limit: 10,
+    windowSec: 3600,
+  });
+  if (!rl.allowed) {
+    return {
+      success: false,
+      error: `Trop de modifications. Réessaye dans ${Math.ceil(rl.resetIn / 60)} min.`,
+    };
+  }
+
   const parsed = vipDepositSchema.safeParse(input);
 
   if (!parsed.success) {

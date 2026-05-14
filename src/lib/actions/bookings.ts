@@ -16,6 +16,7 @@ import { notifyUser } from '@/lib/notify';
 import BookingReceivedEmail from '@root/emails/booking-received';
 import AdminNotificationEmail from '@root/emails/admin-notification';
 import { getPaymentProvider } from '@/lib/payments';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   bookingFormSchema,
   respondProposedDateSchema,
@@ -42,6 +43,21 @@ export async function createBookingAction(
   input: BookingFormInput
 ): Promise<ActionResult<{ bookingId: string; redirectUrl: string }>> {
   const session = await requireOnboarded();
+
+  // Rate limit : 5 créations / 10 min par user. Évite le spam de bookings
+  // jamais payés (qui polluent la DB et créent des sessions payment chez
+  // les providers).
+  const rl = await checkRateLimit({
+    key: `booking:user:${session.user.id}`,
+    limit: 5,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return {
+      success: false,
+      error: `Trop de tentatives. Réessaye dans ${Math.ceil(rl.resetIn / 60)} min.`,
+    };
+  }
 
   const parsed = bookingFormSchema.safeParse(input);
   if (!parsed.success) {

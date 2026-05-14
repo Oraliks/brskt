@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { sessions, users } from '@/lib/db/schema';
 import { verifyTelegramHash } from '@/lib/auth/telegram-plugin';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,28 @@ export async function POST(request: Request) {
     return Response.json(
       { error: 'TELEGRAM_BOT_TOKEN missing' },
       { status: 500 }
+    );
+  }
+
+  // Rate limit : 10 tentatives / 10 min par IP. Bloque brute-force du hash
+  // Telegram (très improbable mais défense en profondeur). Fail-open si DB down.
+  const ip = getClientIp(request);
+  const rl = await checkRateLimit({
+    key: `auth_tg:ip:${ip}`,
+    limit: 10,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return Response.json(
+      { error: 'rate_limited', resetIn: rl.resetIn },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.resetIn),
+          'X-RateLimit-Limit': String(rl.limit),
+          'X-RateLimit-Remaining': '0',
+        },
+      }
     );
   }
 

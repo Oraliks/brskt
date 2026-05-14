@@ -359,6 +359,41 @@ export const webhookEvents = pgTable(
 );
 
 // ============================================================
+// RATE LIMITING (sliding window per key, stocké en Postgres)
+// ============================================================
+
+/**
+ * Compteur de rate limit par clé arbitraire.
+ *
+ * Clé typique :
+ *  - `auth_tg:ip:<ip>`        — POST /api/auth/telegram
+ *  - `booking:user:<uuid>`    — Server Action createBooking
+ *  - `vip:user:<uuid>`        — Server Action submitVipApplication
+ *  - `vip:ip:<ip>`            — anonymous wizard fingerprint
+ *
+ * Algorithme : sliding window simple — si `windowStartedAt` est plus vieux
+ * que `windowSec`, on reset count à 1 et redémarre la fenêtre, sinon on
+ * incrémente. L'upsert est atomique en SQL (INSERT ... ON CONFLICT).
+ *
+ * Cleanup : le CRON quotidien existant pourra supprimer les entrées où
+ * `windowStartedAt < NOW() - 1 day` pour éviter la croissance infinie.
+ */
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    key: text('key').primaryKey(),
+    count: integer('count').notNull().default(0),
+    windowStartedAt: timestamp('window_started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    windowStartedAtIdx: index('rate_limits_window_idx').on(t.windowStartedAt),
+  })
+);
+
+// ============================================================
 // ADMIN NOTIFICATIONS
 // ============================================================
 

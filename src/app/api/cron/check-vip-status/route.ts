@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { vipApplications } from '@/lib/db/schema';
 import { getIronFXAdapter } from '@/lib/ironfx';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
+import { cleanupRateLimits } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -93,10 +94,19 @@ export async function GET(request: Request) {
     }
   }
 
+  // Cleanup des vieilles entrées rate_limits (best-effort)
+  let rateLimitsDeleted = 0;
+  try {
+    rateLimitsDeleted = await cleanupRateLimits();
+  } catch (err) {
+    console.error('[CRON] cleanupRateLimits failed', err);
+  }
+
   return Response.json({
     success: true,
     timestamp: new Date().toISOString(),
     mode: adapter.mode,
     results,
+    rateLimitsDeleted,
   });
 }
