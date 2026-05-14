@@ -23,6 +23,21 @@ const MAX_AGE_SECONDS = 86_400;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const SESSION_COOKIE = 'better-auth.session_token';
 
+/**
+ * Whitelist d'admins par telegramId.
+ * À chaque login, si le telegramId est dans cette liste, on set role='admin'
+ * automatiquement en DB (sync avec la whitelist Vercel).
+ */
+function isAdminTelegramId(tgId: number): boolean {
+  const raw = process.env.ADMIN_TELEGRAM_IDS;
+  if (!raw || raw.trim() === '') return false;
+  const ids = raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return ids.includes(tgId);
+}
+
 export async function POST(request: Request) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
@@ -55,18 +70,25 @@ export async function POST(request: Request) {
     where: eq(users.telegramId, data.id),
   });
 
+  const shouldBeAdmin = isAdminTelegramId(data.id);
+
   let userId: string;
   let isNewUser = false;
 
   if (existing) {
     userId = existing.id;
-    // Update les champs Telegram (au cas où ils ont changé)
+    // Update les champs Telegram + sync role si whitelist modifiée
+    const newRole =
+      shouldBeAdmin && existing.role !== 'admin'
+        ? ('admin' as const)
+        : existing.role;
     await db
       .update(users)
       .set({
         telegramUsername: data.username ?? existing.telegramUsername,
         telegramFirstName: data.first_name,
         telegramPhotoUrl: data.photo_url ?? existing.telegramPhotoUrl,
+        role: newRole,
         updatedAt: new Date(),
       })
       .where(eq(users.id, existing.id));
@@ -81,6 +103,7 @@ export async function POST(request: Request) {
         telegramFirstName: data.first_name,
         telegramPhotoUrl: data.photo_url,
         emailVerified: false,
+        role: shouldBeAdmin ? 'admin' : 'user',
       })
       .returning();
 

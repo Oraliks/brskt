@@ -66,13 +66,15 @@ export function getBot(): Bot<Context> {
     if (update.chat.id !== groupId) return;
 
     const newStatus = update.new_chat_member.status;
-    const userId = update.new_chat_member.user.id;
+    const telegramUserId = update.new_chat_member.user.id;
+    // L'invite_link utilisé pour rejoindre (si applicable)
+    const inviteLinkName = update.invite_link?.name ?? null;
+    const inviteLinkUrl = update.invite_link?.invite_link ?? null;
 
     if (newStatus === 'member') {
-      // Quelqu'un a rejoint le groupe VIP → on log côté DB
-      await handleUserJoinedVip(userId);
+      await handleUserJoinedVip(telegramUserId, inviteLinkName, inviteLinkUrl);
     } else if (newStatus === 'left' || newStatus === 'kicked') {
-      await handleUserLeftVip(userId);
+      await handleUserLeftVip(telegramUserId);
     }
   });
 
@@ -80,21 +82,100 @@ export function getBot(): Bot<Context> {
   return bot;
 }
 
-async function handleUserJoinedVip(telegramUserId: number) {
-  // Import dynamique pour éviter cycle
+async function handleUserJoinedVip(
+  telegramUserId: number,
+  inviteLinkName: string | null,
+  inviteLinkUrl: string | null
+) {
   const { eq } = await import('drizzle-orm');
   const { db } = await import('@/lib/db');
   const { users, vipApplications } = await import('@/lib/db/schema');
 
-  const user = await db.query.users.findFirst({
+  // 1. Trouver le user qui a rejoint
+  const joiningUser = await db.query.users.findFirst({
     where: eq(users.telegramId, telegramUserId),
   });
-  if (!user) return;
 
-  await db
-    .update(vipApplications)
-    .set({ step: 'in_group', updatedAt: new Date() })
-    .where(eq(vipApplications.userId, user.id));
+  // 2. Identifier à QUEL applicationId le lien d'invite était destiné
+  //    Format du name : `vip-<applicationId>`
+  let intendedAppId: string | null = null;
+  if (inviteLinkName?.startsWith('vip-')) {
+    intendedAppId = inviteLinkName.slice(4);
+  }
+
+  // 3. Cas A : on a un applicationId dans le lien
+  if (intendedAppId) {
+    const intendedApp = await db.query.vipApplications.findFirst({
+      where: eq(vipApplications.id, intendedAppId),
+      with: { user: true },
+    });
+
+    if (!intendedApp) {
+      // Lien valide mais application introuvable (donnée corrompue)
+      console.warn('[chat_member] invite link refers to unknown application', intendedAppId);
+      return;
+    }
+
+    // 3.a. Si l'user qui rejoint EST l'user attendu → OK
+    if (joiningUser && joiningUser.id === intendedApp.userId) {
+      await db
+        .update(vipApplications)
+        .set({
+          step: 'in_group',
+          telegramInviteUsed: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(vipApplications.id, intendedApp.id));
+      return;
+    }
+
+    // 3.b. Squat — quelqu'un d'autre a utilisé le lien
+    //      Auto-kick l'usurpateur et révoque le lien (déjà consommé mais sait-on jamais).
+    console.warn(
+      `[chat_member] SQUATTER detected: tg=${telegramUserId} used invite for app=${intendedAppId} (user=${intendedApp.userId}). Auto-kicking.`
+    );
+    const bot = getBot();
+    try {
+      const groupId = Number(process.env.VIP_GROUP_CHAT_ID);
+      await bot.api.banChatMember(groupId, telegramUserId);
+      await bot.api.unbanChatMember(groupId, telegramUserId, {
+        only_if_banned: true,
+      });
+    } catch (err) {
+      console.error('[chat_member] auto-kick squatter failed', err);
+    }
+    if (inviteLinkUrl) {
+      try {
+        await bot.api.revokeChatInviteLink(
+          Number(process.env.VIP_GROUP_CHAT_ID),
+          inviteLinkUrl
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+    // L'intended user n'a pas pu utiliser son lien → on remet sa step à deposit_validated
+    // pour qu'il puisse en générer un nouveau via le wizard.
+    await db
+      .update(vipApplications)
+      .set({
+        telegramInviteLink: null,
+        telegramInviteUsed: false,
+        step: 'deposit_validated',
+        updatedAt: new Date(),
+      })
+      .where(eq(vipApplications.id, intendedApp.id));
+    return;
+  }
+
+  // 4. Cas B : pas d'applicationId déductible (lien admin manuel ou ajout direct)
+  //    On marque l'user comme in_group si on le trouve en DB avec une app active.
+  if (joiningUser) {
+    await db
+      .update(vipApplications)
+      .set({ step: 'in_group', updatedAt: new Date() })
+      .where(eq(vipApplications.userId, joiningUser.id));
+  }
 }
 
 async function handleUserLeftVip(telegramUserId: number) {

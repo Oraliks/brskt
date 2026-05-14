@@ -9,46 +9,50 @@ export function HeroSection() {
   return (
     <div className="relative w-full max-w-4xl text-center">
       {/* Badge */}
-      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-300 mb-8">
+      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-300 mb-8 opacity-0 animate-[radix-fade-in_0.8s_0.1s_forwards] hover:border-indigo-400/50 hover:bg-indigo-500/15 transition-colors">
         <span className="landing-pulse-dot h-1.5 w-1.5 rounded-full bg-indigo-300" />
         Trading depuis 2018
       </div>
 
       {/* Title */}
       <h1 className="text-[clamp(30px,8vw,88px)] leading-[1.05] tracking-[-0.04em] font-semibold mb-6 break-words">
-        <span className="block">Maîtrise les marchés</span>
+        <span className="block opacity-0 translate-y-6 animate-[hero-slide-up_0.8s_0.25s_forwards]">
+          Maîtrise les marchés
+        </span>
         <span
-          className="block font-serif italic font-normal"
+          className="block font-serif italic font-normal opacity-0 translate-y-6 animate-[hero-slide-up_0.8s_0.4s_forwards] animate-gradient"
           style={{
             background:
               'linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #14b8a6 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
+            backgroundSize: '200% 200%',
           }}
         >
           comme un pro.
         </span>
       </h1>
 
-      <p className="text-[19px] text-[var(--color-text-dim)] leading-[1.5] max-w-[540px] mx-auto mb-10">
+      <p className="text-[19px] text-[var(--color-text-dim)] leading-[1.5] max-w-[540px] mx-auto mb-10 opacity-0 translate-y-4 animate-[hero-slide-up_0.7s_0.55s_forwards]">
         Une semaine de formation intensive, en présentiel à Dubaï ou à
         distance. Méthodologie testée, résultats mesurables.
       </p>
 
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+      <div className="flex flex-col sm:flex-row gap-3 justify-center opacity-0 translate-y-4 animate-[hero-slide-up_0.7s_0.7s_forwards]">
         <button
           onClick={() => goTo(1)}
-          className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white text-[var(--color-bg)] text-sm font-medium hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,255,255,0.2)] transition-all"
+          className="btn-shimmer group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white text-[var(--color-bg)] text-sm font-medium hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_16px_40px_-8px_rgba(255,255,255,0.4)] active:scale-[0.98] transition-all duration-300"
         >
           Rejoindre le VIP
-          <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
         </button>
         <button
           onClick={() => goTo(2)}
-          className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white/5 border border-[var(--color-border)] text-white text-sm font-medium backdrop-blur-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all"
+          className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white/5 border border-[var(--color-border)] text-white text-sm font-medium backdrop-blur-sm hover:bg-white/10 hover:border-white/30 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300"
         >
           Voir les formations
+          <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
         </button>
       </div>
 

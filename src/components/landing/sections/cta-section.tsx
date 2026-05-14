@@ -26,13 +26,19 @@ export function CtaSection() {
 
       <Link
         href="/login"
-        className="inline-flex items-center gap-2 px-9 py-4 rounded-full text-white text-base font-medium transition-all hover:-translate-y-0.5"
+        className="btn-shimmer group inline-flex items-center gap-2 px-9 py-4 rounded-full text-white text-base font-medium transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03] active:scale-[0.97]"
         style={{
           background: 'linear-gradient(135deg, #2AABEE 0%, #229ED9 100%)',
           boxShadow: '0 12px 30px rgba(42, 171, 238, 0.3)',
         }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="white"
+          className="transition-transform group-hover:rotate-[8deg]"
+        >
           <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
         </svg>
         Continuer avec Telegram

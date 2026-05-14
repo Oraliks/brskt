@@ -43,12 +43,13 @@ export function VipSection() {
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-        {steps.map((s) => (
+        {steps.map((s, i) => (
           <div
             key={s.n}
-            className="text-left bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all hover:-translate-y-1 hover:border-indigo-500/30"
+            className="text-left bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40 hover:bg-[rgba(99,102,241,0.05)] hover:shadow-xl group"
+            style={{ animationDelay: `${i * 80}ms` }}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[13px] font-semibold mb-4">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[14px] font-semibold mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[6deg] shadow-lg shadow-indigo-500/30">
               {s.n}
             </div>
             <h4 className="text-[15px] font-medium mb-1.5">{s.title}</h4>
@@ -61,10 +62,10 @@ export function VipSection() {
 
       <button
         onClick={() => goTo(3)}
-        className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white text-[var(--color-bg)] text-sm font-medium hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,255,255,0.2)] transition-all"
+        className="btn-shimmer group inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-white text-[var(--color-bg)] text-sm font-medium hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_16px_40px_-8px_rgba(255,255,255,0.35)] active:scale-[0.98] transition-all duration-300"
       >
         Commencer maintenant
-        <ArrowRight className="h-3.5 w-3.5" />
+        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
       </button>
     </div>
   );

@@ -23,13 +23,13 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
 
   return (
     <header className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 animate-[radix-fade-in_1s_0.3s_forwards]">
-      <nav className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 rounded-full bg-[rgba(20,20,30,0.6)] backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
+      <nav className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 rounded-full bg-[rgba(20,20,30,0.6)] backdrop-blur-xl border border-[var(--color-border)] shadow-2xl transition-colors hover:border-white/20">
         <button
           onClick={() => goTo(0)}
-          className="flex items-center gap-2 px-2 outline-none"
+          className="group flex items-center gap-2 px-2 outline-none"
         >
-          <span className="landing-pulse-dot h-2 w-2 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500" />
-          <span className="text-[15px] font-semibold tracking-tight">
+          <span className="landing-pulse-dot h-2 w-2 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 transition-transform group-hover:scale-125" />
+          <span className="text-[15px] font-semibold tracking-tight transition-colors group-hover:text-white">
             Boursikotons
           </span>
         </button>
@@ -39,7 +39,7 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
             <button
               key={l.label}
               onClick={() => goTo(l.sectionIndex)}
-              className="px-3 py-1 text-[13px] text-[var(--color-text-dim)] hover:text-white transition-colors rounded-full outline-none"
+              className="px-3 py-1 text-[13px] text-[var(--color-text-dim)] hover:text-white hover:bg-white/5 transition-all rounded-full outline-none"
             >
               {l.label}
             </button>
@@ -49,14 +49,14 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
         {authenticated ? (
           <Link
             href="/dashboard"
-            className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-white text-[var(--color-bg)] text-[13px] font-medium hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(255,255,255,0.15)] transition-all"
+            className="btn-shimmer hidden md:inline-flex items-center px-4 py-2 rounded-full bg-white text-[var(--color-bg)] text-[13px] font-medium hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-4px_rgba(255,255,255,0.25)] active:scale-95 transition-all duration-200"
           >
             Dashboard
           </Link>
         ) : (
           <button
             onClick={() => goTo(ctaSectionIndex)}
-            className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-white text-[var(--color-bg)] text-[13px] font-medium hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(255,255,255,0.15)] transition-all outline-none"
+            className="btn-shimmer hidden md:inline-flex items-center px-4 py-2 rounded-full bg-white text-[var(--color-bg)] text-[13px] font-medium hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-4px_rgba(255,255,255,0.25)] active:scale-95 transition-all duration-200 outline-none"
           >
             Commencer
           </button>

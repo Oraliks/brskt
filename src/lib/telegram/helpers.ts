@@ -8,8 +8,14 @@ import { getBot } from './bot';
 const VIP_GROUP_ID = Number(process.env.VIP_GROUP_CHAT_ID);
 
 /**
- * Génère un lien d'invitation Telegram à usage unique, expirant en 24h.
- * Le lien est stocké dans la vipApplication et envoyé à l'utilisateur.
+ * Génère un lien d'invitation Telegram à usage unique pour un user.
+ *
+ * - Si l'user a déjà un lien actif, on le RÉVOQUE d'abord (évite plusieurs
+ *   liens valides simultanément que l'user pourrait partager).
+ * - Le lien est `member_limit: 1` → consommé après 1 join.
+ * - Expire après 24h (Telegram).
+ * - Le `name` du lien embed l'applicationId pour vérifier au join que c'est
+ *   bien le bon user qui consomme le lien (cf. handleUserJoinedVip).
  */
 export async function generateVipInvite(
   applicationId: string
@@ -20,18 +26,35 @@ export async function generateVipInvite(
     throw new Error('VIP_GROUP_CHAT_ID not configured');
   }
 
+  // Révoque l'ancien lien s'il existe (anti-partage)
+  const existing = await db.query.vipApplications.findFirst({
+    where: eq(vipApplications.id, applicationId),
+  });
+  if (existing?.telegramInviteLink) {
+    try {
+      await bot.api.revokeChatInviteLink(
+        VIP_GROUP_ID,
+        existing.telegramInviteLink
+      );
+    } catch (err) {
+      // Lien déjà expiré / révoqué → on ignore
+      console.warn('[Telegram] revoke old invite failed (probably already expired)', err);
+    }
+  }
+
   const expireDate = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
 
   const invite = await bot.api.createChatInviteLink(VIP_GROUP_ID, {
     expire_date: expireDate,
     member_limit: 1, // single-use
-    name: `vip-${applicationId.slice(0, 8)}`,
+    name: `vip-${applicationId}`, // applicationId complet pour traçage exact
   });
 
   await db
     .update(vipApplications)
     .set({
       telegramInviteLink: invite.invite_link,
+      telegramInviteUsed: false,
       step: 'telegram_invited',
       updatedAt: new Date(),
     })

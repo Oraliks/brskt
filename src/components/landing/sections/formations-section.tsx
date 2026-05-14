@@ -45,7 +45,7 @@ const formations: FormationCardData[] = [
       'Setup trading sur place',
       'Vol A/R non inclus',
     ],
-    checkColor: '#ec4899',
+    checkColor: '#f59e0b',
     ctaLabel: 'Réserver à Dubaï',
     href: '/formation/reserver?mode=onsite',
     variant: 'onsite',
@@ -76,16 +76,16 @@ function FormationCard({ data }: { data: FormationCardData }) {
       href={data.href}
       onMouseMove={handleMouseMove}
       className={cn(
-        'spotlight-card group block bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-3xl p-10 transition-all duration-400 hover:-translate-y-1 hover:border-white/15',
-        data.variant === 'onsite' && 'pink'
+        'spotlight-card group block bg-[rgba(20,20,30,0.5)] backdrop-blur-xl border border-[var(--color-border)] rounded-3xl p-10 transition-all duration-300 hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl',
+        data.variant === 'onsite' ? 'spotlight-amber' : 'spotlight-indigo'
       )}
     >
       <span
         className={cn(
           'inline-block px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-[0.05em] mb-4',
           data.variant === 'distance'
-            ? 'bg-indigo-500/15 text-indigo-300'
-            : 'bg-pink-500/15 text-pink-300'
+            ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+            : 'bg-amber-400/15 text-amber-200 border border-amber-400/30'
         )}
       >
         {data.tag}

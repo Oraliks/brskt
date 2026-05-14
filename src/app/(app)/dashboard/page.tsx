@@ -11,13 +11,18 @@ import {
   XCircle,
 } from 'lucide-react';
 import { db } from '@/lib/db';
-import { bookings, formations, vipApplications } from '@/lib/db/schema';
+import {
+  bookings,
+  formations,
+  manualIronfxStatus,
+  vipApplications,
+} from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/server';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
-import { formatDate, formatPrice } from '@/lib/utils';
+import { cn, formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,8 +44,15 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  if (vipApp?.step === 'ejected') {
-    redirect('/dashboard/ejected');
+  // On retire le redirect : on veut afficher "Tu as quitté le groupe" sur le dashboard
+  // (l'user peut toujours aller sur /dashboard/ejected via la card)
+
+  let tradingProgressPct = 0;
+  if (vipApp?.brokerAccountId && vipApp.step === 'in_group') {
+    const st = await db.query.manualIronfxStatus.findFirst({
+      where: eq(manualIronfxStatus.accountId, vipApp.brokerAccountId),
+    });
+    if (st) tradingProgressPct = st.tradingProgressPct;
   }
 
   const firstName = session.user.telegramFirstName ?? session.user.name ?? '';
@@ -82,7 +94,10 @@ export default async function DashboardPage() {
       <Section className="py-0">
         <div className="grid gap-6 lg:grid-cols-3">
           {/* VIP Card */}
-          <VipCard application={vipApp ?? null} />
+          <VipCard
+            application={vipApp ?? null}
+            tradingProgressPct={tradingProgressPct}
+          />
 
           {/* Formation CTA */}
           <Link
@@ -280,35 +295,66 @@ function ProposedDateBlock({
   );
 }
 
+const VIP_STEPS_ORDER = [
+  'link_generated',
+  'signup_pending',
+  'signup_validated',
+  'deposit_pending',
+  'deposit_validated',
+  'telegram_invited',
+  'in_group',
+] as const;
+
 function VipCard({
   application,
+  tradingProgressPct,
 }: {
   application: typeof vipApplications.$inferSelect | null;
+  tradingProgressPct: number;
 }) {
   const step = application?.step;
   const isInGroup = step === 'in_group';
-  const inProgress =
-    step &&
-    step !== 'in_group' &&
-    step !== 'ejected';
+  const isEjected = step === 'ejected';
+  const inProgress = step && !isInGroup && !isEjected;
+
+  const stepNum = step
+    ? VIP_STEPS_ORDER.indexOf(step as (typeof VIP_STEPS_ORDER)[number]) + 1
+    : 0;
+  const isQualified = tradingProgressPct >= 100;
+
+  const href = isEjected ? '/dashboard/ejected' : '/vip';
 
   return (
     <Link
-      href="/vip"
-      className="glass-strong rounded-[var(--radius-lg)] p-6 hover:border-white/20 transition-colors group relative overflow-hidden"
+      href={href}
+      className="glass-strong rounded-[var(--radius-lg)] p-6 hover:border-white/20 transition-colors group relative overflow-hidden block"
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent pointer-events-none" />
+      <div
+        className={cn(
+          'absolute inset-0 pointer-events-none',
+          isEjected
+            ? 'bg-gradient-to-br from-rose-500/10 to-transparent'
+            : isInGroup
+            ? 'bg-gradient-to-br from-emerald-500/10 to-transparent'
+            : 'bg-gradient-to-br from-amber-500/10 to-transparent'
+        )}
+      />
       <div className="relative">
         <div className="flex items-start justify-between">
-          <Badge variant="gold">
+          <Badge
+            variant={isEjected ? 'danger' : isInGroup ? 'success' : 'gold'}
+          >
             <MessageCircle className="h-3 w-3 mr-1" />
             VIP Telegram
           </Badge>
           <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
         </div>
+
         <div className="mt-6 flex items-center gap-2">
           {isInGroup ? (
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+          ) : isEjected ? (
+            <XCircle className="h-5 w-5 text-rose-400" />
           ) : inProgress ? (
             <Clock className="h-5 w-5 text-amber-400" />
           ) : (
@@ -316,19 +362,64 @@ function VipCard({
           )}
           <h3 className="text-lg font-semibold">
             {isInGroup
-              ? 'Membre VIP actif'
+              ? isQualified
+                ? 'Membre VIP ✓ qualifié'
+                : 'Tu es dans le groupe'
+              : isEjected
+              ? 'Tu as quitté le groupe'
               : inProgress
-              ? 'Funnel en cours'
+              ? `Funnel : ${stepNum}/7`
               : 'Pas encore démarré'}
           </h3>
         </div>
+
         <p className="mt-2 text-sm text-[var(--color-text-dim)]">
           {isInGroup
-            ? 'Tu as accès au groupe Telegram privé.'
+            ? isQualified
+              ? 'Ta place est sécurisée — pas de risque de kick.'
+              : `${tradingProgressPct}% de trading depuis ton arrivée`
+            : isEjected
+            ? 'Voir la raison et les conditions de réintégration'
             : inProgress
-            ? `Étape actuelle : ${step?.replace('_', ' ')}`
-            : 'Démarre le funnel pour accéder au groupe.'}
+            ? 'On te tient au courant à chaque étape'
+            : 'Démarre le funnel — 100% gratuit'}
         </p>
+
+        {/* Progress bar : funnel avant in_group, trading après */}
+        {inProgress && (
+          <div className="mt-4 space-y-2">
+            <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all duration-500"
+                style={{ width: `${(stepNum / 7) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {isInGroup && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-baseline justify-between text-xs">
+              <span className="text-[var(--color-text-dim)]">
+                Volume de trading
+              </span>
+              <span className="font-mono tabular-nums font-medium">
+                {tradingProgressPct}%
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all duration-500',
+                  isQualified
+                    ? 'bg-emerald-400'
+                    : 'bg-gradient-to-r from-[var(--color-accent)] to-pink-500'
+                )}
+                style={{ width: `${Math.max(2, tradingProgressPct)}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </Link>
   );
