@@ -11,6 +11,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  TrendingDown,
   Users,
   X,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const links = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/bookings', label: 'Réservations', icon: CalendarCheck },
   { href: '/admin/vip', label: 'VIP', icon: Sparkles },
+  { href: '/admin/funnel', label: 'Funnel', icon: TrendingDown },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
   { href: '/admin/settings', label: 'Paramètres', icon: Settings },
 ];
