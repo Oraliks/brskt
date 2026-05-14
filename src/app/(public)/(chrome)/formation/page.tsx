@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
+import { WaitlistForm } from '@/components/formation/waitlist-form';
 import { formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -183,6 +184,41 @@ export default async function FormationPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
+          </div>
+        </div>
+      </Section>
+
+      <Section className="py-12" id="waitlist">
+        <div className="max-w-3xl mx-auto">
+          <SectionHeader
+            eyebrow="Liste d'attente"
+            title={
+              <>
+                Aucun créneau qui te convient ?{' '}
+                <span className="font-serif italic">On te prévient.</span>
+              </>
+            }
+            description="Inscris-toi à la liste d'attente du format qui t'intéresse. On t'écrit dès qu'un créneau s'ouvre."
+          />
+          <div className="mt-8 grid md:grid-cols-2 gap-5">
+            <div className="glass rounded-[var(--radius-lg)] p-6">
+              <div className="text-xs uppercase tracking-wider text-[var(--color-text-dim)] mb-1">
+                Distance
+              </div>
+              <h3 className="text-lg font-semibold mb-4">
+                Formation à distance · 1500€
+              </h3>
+              <WaitlistForm mode="remote" />
+            </div>
+            <div className="glass rounded-[var(--radius-lg)] p-6">
+              <div className="text-xs uppercase tracking-wider text-amber-300 mb-1">
+                Dubaï
+              </div>
+              <h3 className="text-lg font-semibold mb-4">
+                Formation présentiel · 3500€
+              </h3>
+              <WaitlistForm mode="onsite" />
+            </div>
           </div>
         </div>
       </Section>

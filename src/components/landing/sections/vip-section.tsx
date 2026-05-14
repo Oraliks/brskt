@@ -2,6 +2,7 @@
 
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useLanding } from '../landing-context';
+import { MotionReveal } from '../motion-reveal';
 
 const steps = [
   { n: 1, title: 'Inscription', body: 'Connexion via Telegram en un clic.' },
@@ -64,19 +65,17 @@ export function VipSection({ qualifiedCount = 0 }: Props) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-12">
         {steps.map((s, i) => (
-          <div
-            key={s.n}
-            className="text-left bg-[rgba(20,20,30,0.5)] light:bg-white/90 backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40 hover:bg-[rgba(99,102,241,0.05)] light:hover:bg-indigo-50 hover:shadow-xl group"
-            style={{ animationDelay: `${i * 80}ms` }}
-          >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[14px] font-semibold mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[6deg] shadow-lg shadow-indigo-500/30">
-              {s.n}
+          <MotionReveal key={s.n} delay={i * 0.08}>
+            <div className="text-left bg-[rgba(20,20,30,0.5)] light:bg-white/90 backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-500/40 hover:bg-[rgba(99,102,241,0.05)] light:hover:bg-indigo-50 hover:shadow-xl group h-full">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-[14px] font-semibold mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[6deg] shadow-lg shadow-indigo-500/30">
+                {s.n}
+              </div>
+              <h4 className="text-[15px] font-medium mb-1.5">{s.title}</h4>
+              <p className="text-xs text-[var(--color-text-dim)] leading-[1.5]">
+                {s.body}
+              </p>
             </div>
-            <h4 className="text-[15px] font-medium mb-1.5">{s.title}</h4>
-            <p className="text-xs text-[var(--color-text-dim)] leading-[1.5]">
-              {s.body}
-            </p>
-          </div>
+          </MotionReveal>
         ))}
       </div>
 

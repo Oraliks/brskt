@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { MotionReveal } from '../motion-reveal';
 
 export function CtaSection() {
   return (
-    <div className="text-center max-w-[700px]">
+    <MotionReveal as="div" className="text-center max-w-[700px]">
       <h2 className="text-[clamp(36px,5vw,56px)] font-semibold tracking-[-0.03em] leading-[1.1] mb-4">
         Prêt à{' '}
         <span
@@ -47,6 +48,6 @@ export function CtaSection() {
       <p className="mt-6 text-[13px] text-[var(--color-text-dim)]">
         Pas besoin d'email pour démarrer · Aucun spam
       </p>
-    </div>
+    </MotionReveal>
   );
 }

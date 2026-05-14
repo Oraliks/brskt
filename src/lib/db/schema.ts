@@ -178,6 +178,44 @@ export const accounts = pgTable('accounts', {
 });
 
 // ============================================================
+// FORMATION WAITLIST
+// ============================================================
+
+/**
+ * Liste d'attente pour les formations présentielles (places limitées).
+ * Un user peut s'inscrire sans avoir de compte (email suffit) — quand un
+ * nouveau créneau s'ouvre, l'admin notifie tous les inscrits par email.
+ *
+ * Indices : un user (par email) ne peut être qu'une seule fois sur la
+ * waitlist d'un mode donné.
+ */
+export const formationWaitlist = pgTable(
+  'formation_waitlist',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Mode visé. On garde la flexibilité au cas où la formation distance
+    // serait aussi limitée un jour.
+    mode: formationModeEnum('mode').notNull(),
+    email: text('email').notNull(),
+    firstName: text('first_name'),
+    telegramId: bigint('telegram_id', { mode: 'number' }),
+    // Notes facultatives (motif d'inscription, contraintes calendrier, etc.)
+    notes: text('notes'),
+    // Une fois l'user contacté pour un nouveau créneau, on garde la ligne
+    // mais on marque notified_at — sert d'historique et d'idempotence.
+    notifiedAt: timestamp('notified_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    modeEmailIdx: uniqueIndex('formation_waitlist_mode_email_idx').on(
+      t.mode,
+      t.email
+    ),
+    createdAtIdx: index('formation_waitlist_created_at_idx').on(t.createdAt),
+  })
+);
+
+// ============================================================
 // FORMATIONS
 // ============================================================
 

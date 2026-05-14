@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeScript } from '@/components/theme/theme-script';
+import { PostHogProvider } from '@/components/analytics/posthog-provider';
 
 export const metadata: Metadata = {
   title: {
@@ -13,11 +14,39 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   ),
+  applicationName: 'Boursikotons',
+  authors: [{ name: 'Boursikotons' }],
+  keywords: [
+    'trading',
+    'formation trading',
+    'forex',
+    'crypto',
+    'groupe VIP',
+    'Dubaï',
+    'IronFX',
+  ],
   openGraph: {
-    title: 'Boursikotons',
-    description: 'Formation trading pro · Groupe VIP Telegram',
+    title: 'Boursikotons — Formation trading & VIP Telegram',
+    description:
+      'Formation trading pro à Dubaï et à distance. Accès groupe VIP Telegram via partenariat broker.',
     type: 'website',
     locale: 'fr_FR',
+    siteName: 'Boursikotons',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Boursikotons',
+    description: 'Formation trading pro · Groupe VIP Telegram',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
@@ -48,8 +77,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
-        <Toaster />
+        <PostHogProvider>
+          {children}
+          <Toaster />
+        </PostHogProvider>
       </body>
     </html>
   );

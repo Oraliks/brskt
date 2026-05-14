@@ -26,6 +26,8 @@ import { Button } from '@/components/ui/button';
 import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
 import { TradingHero } from '@/components/shared/trading-hero';
+import { ReferralLinkCopy } from '@/components/dashboard/referral-link-copy';
+import { buildReferralLink, ensureReferralCode } from '@/lib/referrals';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +39,9 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
-  const [userBookings, vipApp, myReferrals, topReferrer] = await Promise.all([
+  const referralCode = await ensureReferralCode(session.user.id);
+
+  const [userBookings, vipApp, myReferrals, topReferrer, vipStats] = await Promise.all([
     db.query.bookings.findMany({
       where: eq(bookings.userId, session.user.id),
       orderBy: [desc(bookings.createdAt)],
@@ -66,6 +70,15 @@ export default async function DashboardPage() {
       .groupBy(users.referredBy)
       .orderBy(desc(count()))
       .limit(3),
+    // Stats VIP communauté (public, anonymisé)
+    db
+      .select({
+        inGroup: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group')`,
+        qualified: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group' and ${vipApplications.cpaQualified} = true)`,
+        recent30d: sql<number>`count(*) filter (where ${vipApplications.step} = 'in_group' and ${vipApplications.createdAt} > now() - interval '30 days')`,
+      })
+      .from(vipApplications)
+      .then((r) => r[0] ?? { inGroup: 0, qualified: 0, recent30d: 0 }),
   ]);
 
   // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
@@ -177,6 +190,11 @@ export default async function DashboardPage() {
         </div>
       </Section>
 
+      {/* Stats VIP communauté */}
+      <Section className="py-8">
+        <CommunityStats stats={vipStats} />
+      </Section>
+
       {/* Parrainage */}
       <Section className="py-8">
         <ReferralSection
@@ -187,6 +205,11 @@ export default async function DashboardPage() {
             count: r.c,
           }))}
           botUsername={botUsername}
+          referralLink={buildReferralLink(
+            botUsername,
+            process.env.NEXT_PUBLIC_APP_URL,
+            referralCode
+          )}
         />
       </Section>
 
@@ -579,17 +602,16 @@ function ReferralSection({
   myReferrals,
   topReferrer,
   botUsername,
+  referralLink,
 }: {
   myReferrals: number;
   topReferrer: ReferralEntry[];
   botUsername: string | undefined;
+  referralLink: string;
 }) {
-  const inviteUrl = botUsername
-    ? `https://t.me/${botUsername}?start=ref_via_bot`
-    : null;
   return (
     <div className="glass rounded-[var(--radius-lg)] p-6 md:p-8 grid md:grid-cols-2 gap-6">
-      {/* Bloc 1 : mes parrainages */}
+      {/* Bloc 1 : mon lien parrain */}
       <div>
         <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-text-dim)]">
           <Gift className="h-3 w-3" />
@@ -603,22 +625,26 @@ function ReferralSection({
         </h3>
         <p className="mt-2 text-sm text-[var(--color-text-dim)]">
           {myReferrals === 0
-            ? `Pas encore de filleul. Récupère ton lien d'invitation via le bot Telegram (commande /invite).`
-            : `Continue à inviter — pas de récompense matérielle pour l'instant, juste la fierté d'être dans le top.`}
+            ? `Partage ton lien : tes filleuls te sont attribués automatiquement.`
+            : `Continue — pas de récompense matérielle pour l'instant, juste la fierté du top.`}
         </p>
+        <div className="mt-4">
+          <ReferralLinkCopy
+            link={referralLink}
+            shareText="Rejoins-moi sur Boursikotons — formation trading + groupe VIP gratuit."
+          />
+        </div>
         {botUsername && (
           <Link
             href={`https://t.me/${botUsername}?start=hello`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--color-accent-hover)] hover:underline"
+            className="mt-3 inline-flex items-center gap-2 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
           >
-            <MessageCircle className="h-4 w-4" />
-            Récupérer mon lien dans le bot
+            <MessageCircle className="h-3 w-3" />
+            Ou via la commande /invite du bot
           </Link>
         )}
-        {/* Suppress unused var warning si pas utilisé ci-dessous */}
-        {!inviteUrl && null}
       </div>
 
       {/* Bloc 2 : podium top parrains */}
@@ -655,6 +681,84 @@ function ReferralSection({
           </ol>
         )}
       </div>
+    </div>
+  );
+}
+
+function CommunityStats({
+  stats,
+}: {
+  stats: { inGroup: number; qualified: number; recent30d: number };
+}) {
+  const inGroup = Number(stats.inGroup) || 0;
+  const qualified = Number(stats.qualified) || 0;
+  const recent30d = Number(stats.recent30d) || 0;
+  const qualifiedPct =
+    inGroup > 0 ? Math.round((qualified / inGroup) * 100) : 0;
+
+  // Anonymisé : pas de noms, juste des chiffres communauté
+  return (
+    <div className="glass rounded-[var(--radius-lg)] p-6 md:p-8">
+      <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-text-dim)]">
+        <Trophy className="h-3 w-3" />
+        La communauté VIP en chiffres
+      </div>
+      <div className="mt-5 grid grid-cols-3 gap-4">
+        <StatItem
+          label="Membres actifs"
+          value={inGroup}
+          hint={`${recent30d} sur 30 derniers jours`}
+        />
+        <StatItem
+          label="Qualifiés CPA"
+          value={qualified}
+          hint={`${qualifiedPct}% du groupe`}
+          tone="success"
+        />
+        <StatItem
+          label="Conversion"
+          value={`${qualifiedPct}%`}
+          hint="ratio qualified / membres"
+          tone="info"
+        />
+      </div>
+      <p className="mt-4 text-xs text-[var(--color-text-faint)]">
+        Données mises à jour en temps réel · 100% anonymes.
+      </p>
+    </div>
+  );
+}
+
+function StatItem({
+  label,
+  value,
+  hint,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  tone?: 'default' | 'success' | 'info';
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'text-emerald-300 light:text-emerald-700'
+      : tone === 'info'
+      ? 'text-sky-300 light:text-sky-700'
+      : 'text-[var(--color-text)]';
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-tint)] border border-[var(--color-border)] p-4">
+      <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+        {label}
+      </div>
+      <div className={cn('mt-1 text-2xl font-semibold tabular-nums', toneClass)}>
+        {value}
+      </div>
+      {hint && (
+        <div className="mt-0.5 text-[10px] text-[var(--color-text-faint)]">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

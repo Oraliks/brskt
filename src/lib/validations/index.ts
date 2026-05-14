@@ -206,3 +206,14 @@ export const adminSetUserBannedSchema = z.object({
   banned: z.boolean(),
   reason: z.string().max(500).optional(),
 });
+
+// ============================================================
+// WAITLIST
+// ============================================================
+
+export const formationWaitlistSchema = z.object({
+  mode: z.enum(['remote', 'onsite']),
+  email: z.string().email('Email invalide'),
+  firstName: z.string().min(1, 'Prénom requis').max(50).optional(),
+  notes: z.string().max(500).optional(),
+});

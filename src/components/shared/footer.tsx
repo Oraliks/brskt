@@ -78,13 +78,20 @@ export function Footer({ compact = false }: FooterProps) {
           />
         </div>
 
-        <div className="mt-12 flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-t border-[var(--color-border)] pt-6">
+        <div className="mt-12 flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-t border-[var(--color-border)] pt-6">
           <p className="text-xs text-[var(--color-text-faint)]">
             © {new Date().getFullYear()} Boursikotons. Tous droits réservés.
           </p>
-          <p className="text-xs text-[var(--color-text-faint)]">
-            Dubai, UAE
-          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-faint)]">
+            <Link
+              href="/legal/cgv"
+              className="hover:text-[var(--color-text-dim)] transition-colors"
+            >
+              CGV
+            </Link>
+            <span>·</span>
+            <span>Dubai, UAE</span>
+          </div>
         </div>
       </div>
     </footer>

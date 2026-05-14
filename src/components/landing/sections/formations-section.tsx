@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MotionReveal } from '../motion-reveal';
 
 interface FormationCardData {
   tag: string;
@@ -55,8 +56,10 @@ const formations: FormationCardData[] = [
 export function FormationsSection() {
   return (
     <div className="grid md:grid-cols-2 gap-6 max-w-[1100px] w-full">
-      {formations.map((f) => (
-        <FormationCard key={f.tag} data={f} />
+      {formations.map((f, i) => (
+        <MotionReveal key={f.tag} delay={i * 0.1}>
+          <FormationCard data={f} />
+        </MotionReveal>
       ))}
     </div>
   );

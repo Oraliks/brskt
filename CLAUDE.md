@@ -15,9 +15,9 @@ Le business model exige que chaque membre VIP génère au moins $1 de commission
 - **Framework** : Next.js 16 (App Router, Server Actions, PPR activé)
 - **Language** : TypeScript strict mode
 - **DB** : Supabase (Postgres) + Drizzle ORM
-- **Auth** : Better Auth + plugin Telegram Login Widget
+- **Auth** : custom session-based — table `sessions`, cookie `better-auth.session_token` (le nom est gardé pour rester migrable), Telegram Login Widget + magic-link via DM bot. Better Auth a été retiré du runtime car sa config était trop opinionnée pour notre flow Telegram-first.
 - **Styling** : Tailwind CSS v4 + shadcn/ui
-- **Animations** : Motion (ex Framer Motion) + GSAP pour timelines complexes
+- **Animations** : Motion (ex Framer Motion) pour landing + interactions, CSS pur ailleurs. GSAP n'est PAS installé — pas de timeline complexe à ce jour.
 - **Emails** : Resend + React Email
 - **Telegram Bot** : grammY (TypeScript)
 - **Payments** :

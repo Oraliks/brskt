@@ -1,18 +1,17 @@
 /**
  * Émission d'événements funnel pour tracking fin du parcours VIP.
  *
- * La table funnel_events existait mais était vide jusqu'ici. On l'alimente
- * maintenant à chaque action clé pour pouvoir mesurer :
- *  - Drop-off entre étapes
- *  - Time-to-conversion par cohorte
- *  - A/B tester des variations (via metadata)
+ * Double-écriture :
+ *  - Table `funnel_events` (Postgres) — source de vérité, exploitable en SQL
+ *  - PostHog server-side — visualisation funnels + cohortes + A/B
  *
- * Best-effort : si l'insert échoue, on log mais ne throw pas (le tracking
+ * Best-effort : si l'un des deux échoue, on log mais ne throw pas (le tracking
  * ne doit jamais casser un flow business).
  */
 
 import { db } from '@/lib/db';
 import { funnelEvents } from '@/lib/db/schema';
+import { captureServerEvent } from './posthog-server';
 
 export type FunnelEventName =
   // Affiliate link
@@ -44,6 +43,7 @@ export async function emitFunnelEvent(opts: {
   eventName: FunnelEventName;
   metadata?: Record<string, unknown> | null;
 }): Promise<void> {
+  // 1) DB (source de vérité)
   try {
     await db.insert(funnelEvents).values({
       userId: opts.userId ?? null,
@@ -52,10 +52,22 @@ export async function emitFunnelEvent(opts: {
       metadata: opts.metadata ?? null,
     });
   } catch (err) {
-    console.error('[funnel] emit failed', {
+    console.error('[funnel] DB emit failed', {
       eventName: opts.eventName,
       userId: opts.userId,
       err,
     });
   }
+
+  // 2) PostHog (no-throw, no-await — fire & forget)
+  captureServerEvent({
+    distinctId: opts.userId ?? opts.sessionId,
+    event: opts.eventName,
+    properties: {
+      ...(opts.metadata ?? {}),
+      $set_once: opts.userId
+        ? { first_seen_user_id: opts.userId }
+        : undefined,
+    },
+  });
 }

@@ -14,6 +14,7 @@ interface NavbarProps {
 const links = [
   { href: '/formation', label: 'Formation' },
   { href: '/vip', label: 'VIP Telegram' },
+  { href: '/temoignages', label: 'Témoignages' },
 ];
 
 export function Navbar({ authenticated = false }: NavbarProps) {
