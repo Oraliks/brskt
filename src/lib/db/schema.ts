@@ -463,6 +463,59 @@ export const adminAuditLogs = pgTable(
 );
 
 // ============================================================
+// QUIZ — questions quotidiennes & réponses utilisateurs
+// ============================================================
+
+export const quizDifficultyEnum = pgEnum('quiz_difficulty', [
+  'easy',
+  'medium',
+  'hard',
+]);
+
+export const quizQuestions = pgTable(
+  'quiz_questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    question: text('question').notNull(),
+    choices: jsonb('choices').$type<string[]>().notNull(),
+    correctIndex: integer('correct_index').notNull(),
+    explanation: text('explanation'),
+    difficulty: quizDifficultyEnum('difficulty').notNull().default('medium'),
+    category: text('category'),
+    sentAt: timestamp('sent_at'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    sentAtIdx: index('quiz_questions_sent_at_idx').on(t.sentAt),
+    activeIdx: index('quiz_questions_active_idx').on(t.active),
+  })
+);
+
+export const quizResponses = pgTable(
+  'quiz_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    questionId: uuid('question_id')
+      .notNull()
+      .references(() => quizQuestions.id, { onDelete: 'cascade' }),
+    chosenIndex: integer('chosen_index').notNull(),
+    correct: boolean('correct').notNull(),
+    answeredAt: timestamp('answered_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdIdx: index('quiz_responses_user_id_idx').on(t.userId),
+    uniqResponse: uniqueIndex('quiz_responses_uniq_idx').on(
+      t.userId,
+      t.questionId
+    ),
+  })
+);
+
+// ============================================================
 // RATE LIMITING (sliding window per key, stocké en Postgres)
 // ============================================================
 

@@ -286,6 +286,224 @@ export function getBot(): Bot<Context> {
     );
   });
 
+  // ============================================================
+  // Quiz quotidien
+  // ============================================================
+
+  // /quiz — propose la dernière question quotidienne ou la prochaine non-répondue
+  bot.command('quiz', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const { eq, and, desc, isNotNull, not, inArray, sql } = await import(
+      'drizzle-orm'
+    );
+    const { db } = await import('@/lib/db');
+    const { users, quizQuestions, quizResponses } = await import(
+      '@/lib/db/schema'
+    );
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(
+        `Tu n'as pas encore de compte. Connecte-toi : ${appUrl}/login`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    // Cherche une question déjà envoyée (sent_at non null) et non répondue
+    // par cet user. À défaut, prend la dernière question envoyée.
+    const answered = await db
+      .select({ qid: quizResponses.questionId })
+      .from(quizResponses)
+      .where(eq(quizResponses.userId, user.id));
+    const answeredIds = answered.map((r) => r.qid);
+
+    const candidates = await db.query.quizQuestions.findMany({
+      where: and(
+        eq(quizQuestions.active, true),
+        isNotNull(quizQuestions.sentAt),
+        answeredIds.length > 0
+          ? not(inArray(quizQuestions.id, answeredIds))
+          : undefined
+      ),
+      orderBy: [desc(quizQuestions.sentAt)],
+      limit: 1,
+    });
+
+    if (candidates.length === 0) {
+      // Toutes les questions déjà répondues → stats perso
+      const stats = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          correct: sql<number>`sum(case when ${quizResponses.correct} then 1 else 0 end)::int`,
+        })
+        .from(quizResponses)
+        .where(eq(quizResponses.userId, user.id));
+      const s = stats[0];
+      const total = s?.total ?? 0;
+      const correct = s?.correct ?? 0;
+      const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+      await ctx.reply(
+        `🎓 <b>Bravo, tu as répondu à toutes les questions !</b>\n\n` +
+          `Tes stats : <b>${correct}/${total}</b> (${pct}%)\n\n` +
+          `Reviens demain : une nouvelle question chaque jour à 18h CET.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const q = candidates[0]!;
+    const kb = new InlineKeyboard();
+    q.choices.forEach((choice, i) => {
+      kb.text(
+        `${String.fromCharCode(65 + i)}. ${choice}`.slice(0, 60),
+        `quiz:${q.id}:${i}`
+      );
+      if (i < q.choices.length - 1) kb.row();
+    });
+    await ctx.reply(
+      `📝 <b>Question du jour</b>${
+        q.category ? ` · <i>${escapeUserText(q.category)}</i>` : ''
+      }\n\n${escapeUserText(q.question)}`,
+      { parse_mode: 'HTML', reply_markup: kb }
+    );
+  });
+
+  // Callback pour les réponses au quiz
+  bot.callbackQuery(/^quiz:([0-9a-f-]+):(\d+)$/, async (ctx) => {
+    const [, qid, idxStr] = ctx.match ?? [];
+    if (!qid || !idxStr || !ctx.from?.id) return;
+    const chosenIndex = Number(idxStr);
+
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, quizQuestions, quizResponses } = await import(
+      '@/lib/db/schema'
+    );
+
+    const [user, question] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.telegramId, ctx.from.id) }),
+      db.query.quizQuestions.findFirst({ where: eq(quizQuestions.id, qid) }),
+    ]);
+    if (!user || !question) {
+      await ctx.answerCallbackQuery({
+        text: 'Question introuvable',
+        show_alert: true,
+      });
+      return;
+    }
+
+    // A déjà répondu ?
+    const existing = await db.query.quizResponses.findFirst({
+      where: eq(quizResponses.questionId, question.id),
+    });
+    if (existing && existing.userId === user.id) {
+      await ctx.answerCallbackQuery({
+        text: 'Tu as déjà répondu à celle-ci',
+        show_alert: true,
+      });
+      return;
+    }
+
+    const correct = chosenIndex === question.correctIndex;
+    try {
+      await db.insert(quizResponses).values({
+        userId: user.id,
+        questionId: question.id,
+        chosenIndex,
+        correct,
+      });
+    } catch {
+      // Race condition : insert simultané — on traite comme déjà répondu
+      await ctx.answerCallbackQuery({
+        text: 'Réponse déjà enregistrée',
+        show_alert: true,
+      });
+      return;
+    }
+
+    await ctx.answerCallbackQuery({
+      text: correct ? '✓ Bonne réponse !' : '✗ Mauvaise réponse',
+    });
+
+    const correctLetter = String.fromCharCode(65 + question.correctIndex);
+    const correctText = question.choices[question.correctIndex] ?? '';
+    const result = correct
+      ? `✅ <b>Bravo !</b>`
+      : `❌ <b>Raté.</b> La bonne réponse était <b>${correctLetter}. ${escapeUserText(correctText)}</b>`;
+    await ctx.editMessageText(
+      `📝 <b>Question du jour</b>\n\n` +
+        `${escapeUserText(question.question)}\n\n` +
+        `${result}` +
+        (question.explanation
+          ? `\n\n<i>${escapeUserText(question.explanation)}</i>`
+          : '') +
+        `\n\nTape /leaderboard pour le classement de la semaine.`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /leaderboard — top 10 répondeurs (7 derniers jours)
+  bot.command('leaderboard', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const { sql, gte } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, quizResponses } = await import('@/lib/db/schema');
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const top = await db
+      .select({
+        userId: quizResponses.userId,
+        name: users.telegramFirstName,
+        username: users.telegramUsername,
+        correct: sql<number>`sum(case when ${quizResponses.correct} then 1 else 0 end)::int`,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(quizResponses)
+      .innerJoin(users, sql`${users.id} = ${quizResponses.userId}`)
+      .where(gte(quizResponses.answeredAt, weekAgo))
+      .groupBy(
+        quizResponses.userId,
+        users.telegramFirstName,
+        users.telegramUsername
+      )
+      .orderBy(
+        sql`sum(case when ${quizResponses.correct} then 1 else 0 end) desc`
+      )
+      .limit(10);
+
+    if (top.length === 0) {
+      await ctx.reply(
+        `🏆 <b>Classement quiz</b>\n\n` +
+          `Personne n'a encore répondu cette semaine. ` +
+          `Tape /quiz pour démarrer.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const lines = top.map((r, i) => {
+      const medal =
+        i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+      const handle = r.username ? `@${r.username}` : r.name ?? 'Anon';
+      return `${medal} <b>${escapeUserText(handle)}</b> — ${r.correct}/${r.total}`;
+    });
+
+    await ctx.reply(
+      `🏆 <b>Classement quiz</b> · 7 derniers jours\n\n${lines.join('\n')}`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
   // /streak — affiche le streak d'interaction quotidien
   bot.command('streak', async (ctx) => {
     if (!ctx.from?.id) return;
