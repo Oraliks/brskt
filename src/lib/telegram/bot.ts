@@ -606,6 +606,103 @@ export function getBot(): Bot<Context> {
     }
   });
 
+  // ============================================================
+  // Inline mode : @boursikotonsbot <query> dans n'importe quel chat
+  // ============================================================
+  // Nécessite que /setinline soit fait chez @BotFather pour activer l'inline.
+  bot.on('inline_query', async (ctx) => {
+    const query = ctx.inlineQuery.query.trim();
+    const { lookupQuote, formatQuote } = await import(
+      '@/lib/bot/inline-quotes'
+    );
+
+    // Empty query : carte "Découvre Boursikotons" + suggestions
+    if (!query) {
+      await ctx.answerInlineQuery(
+        [
+          {
+            type: 'article',
+            id: 'discover',
+            title: '💎 Boursikotons VIP — gratuit',
+            description: 'Groupe Telegram de signaux + formation trading',
+            thumbnail_url: `${appUrl}/og.png`,
+            input_message_content: {
+              message_text:
+                `💎 <b>Boursikotons VIP Telegram</b>\n\n` +
+                `Signaux quotidiens, analyses, communauté de traders.\n` +
+                `100% gratuit (rémunération via broker partenaire).\n\n` +
+                `→ ${appUrl}/vip`,
+              parse_mode: 'HTML',
+              link_preview_options: { is_disabled: true },
+            },
+          },
+          {
+            type: 'article',
+            id: 'tips',
+            title: '🛠 Astuce : tape une paire FX ou crypto',
+            description: 'Ex : @boursikotonsbot EURUSD · ou BTC, ETH, SOL...',
+            input_message_content: {
+              message_text:
+                `<i>Astuce : @boursikotonsbot &lt;symbol&gt;</i>\n` +
+                `Ex : <code>@boursikotonsbot EURUSD</code> ou <code>BTC</code>\n\n` +
+                `Renvoie le prix live, partageable dans n'importe quel chat.`,
+              parse_mode: 'HTML',
+            },
+          },
+        ],
+        { cache_time: 60 }
+      );
+      return;
+    }
+
+    // Cherche un quote correspondant à la query
+    const quote = await lookupQuote(query);
+    if (quote) {
+      const f = formatQuote(quote);
+      await ctx.answerInlineQuery(
+        [
+          {
+            type: 'article',
+            id: `quote_${quote.type}_${
+              quote.type === 'fx' ? quote.pair : quote.symbol
+            }`,
+            title: f.title,
+            description: f.description,
+            input_message_content: {
+              message_text: f.message,
+              parse_mode: 'HTML',
+              link_preview_options: { is_disabled: true },
+            },
+          },
+        ],
+        // cache 30s pour limiter le hit sur les APIs gratuites
+        { cache_time: 30 }
+      );
+      return;
+    }
+
+    // Pas de match → carte "non trouvé" avec hint
+    await ctx.answerInlineQuery(
+      [
+        {
+          type: 'article',
+          id: 'not_found',
+          title: `❌ "${query.slice(0, 30)}" non reconnu`,
+          description: 'Essaye une paire FX (EURUSD) ou un symbol crypto (BTC, ETH...)',
+          input_message_content: {
+            message_text:
+              `Le bot n'a pas reconnu "${query.slice(0, 50)}".\n\n` +
+              `<b>Formats supportés :</b>\n` +
+              `• Paires FX : <code>EURUSD</code>, <code>GBPJPY</code>, <code>USDCHF</code>...\n` +
+              `• Cryptos top : <code>BTC</code>, <code>ETH</code>, <code>SOL</code>, <code>BNB</code>...`,
+            parse_mode: 'HTML',
+          },
+        },
+      ],
+      { cache_time: 5 }
+    );
+  });
+
   // === Listener chat_member (quand quelqu'un rejoint ou quitte le groupe VIP) ===
   bot.on('chat_member', async (ctx) => {
     const update = ctx.chatMember;
