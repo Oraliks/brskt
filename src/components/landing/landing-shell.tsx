@@ -198,7 +198,7 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
                         ? 'opacity-100 translate-y-0 pointer-events-auto'
                         : 'opacity-0 translate-y-5 pointer-events-none'
                     )
-                  : 'min-h-[100dvh] py-20'
+                  : 'min-h-[100dvh] pt-32 pb-16'
               )}
             >
               {child}

@@ -63,11 +63,12 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
         )}
 
         <button
-          className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/5"
+          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/15 transition-colors"
           onClick={() => setOpen((v) => !v)}
           aria-label="Menu"
+          aria-expanded={open}
         >
-          {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </nav>
 

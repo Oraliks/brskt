@@ -15,7 +15,7 @@ export function HeroSection() {
       </div>
 
       {/* Title */}
-      <h1 className="text-[clamp(48px,7vw,88px)] leading-[1] tracking-[-0.04em] font-semibold mb-6">
+      <h1 className="text-[clamp(30px,8vw,88px)] leading-[1.05] tracking-[-0.04em] font-semibold mb-6 break-words">
         <span className="block">Maîtrise les marchés</span>
         <span
           className="block font-serif italic font-normal"
