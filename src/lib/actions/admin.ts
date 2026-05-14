@@ -1,12 +1,13 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath, updateTag } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
 import {
   bookings,
   manualIronfxStatus,
+  userBans,
   users,
   vipApplications,
 } from '@/lib/db/schema';
@@ -811,8 +812,12 @@ export async function adminSetUserRoleAction(
 }
 
 /**
- * Ban ou un-ban un utilisateur. Quand banné :
- *  - Sessions actives doivent être révoquées (Better Auth check à la requête)
+ * Ban ou un-ban un utilisateur. Le ban est stocké dans une table dédiée
+ * `user_bans` (history-friendly) plutôt que dans `users`. Un user a au plus
+ * un ban actif (`revoked_at IS NULL`) — index unique partiel le garantit.
+ *
+ * Quand banné :
+ *  - Sessions actives doivent être révoquées (check à la requête)
  *  - Le bot Telegram refuse les interactions
  *  - L'utilisateur ne peut plus se reconnecter
  */
@@ -832,7 +837,7 @@ export async function adminSetUserBannedAction(
 
   const target = await db.query.users.findFirst({
     where: eq(users.id, parsed.data.userId),
-    columns: { id: true, role: true, bannedAt: true, name: true },
+    columns: { id: true, role: true, name: true },
   });
 
   if (!target) {
@@ -842,25 +847,41 @@ export async function adminSetUserBannedAction(
   if (target.role === 'admin' && parsed.data.banned) {
     return {
       success: false,
-      error: 'Impossible de bannir un autre admin. Retire son rôle d\'abord.',
+      error: "Impossible de bannir un autre admin. Retire son rôle d'abord.",
     };
   }
 
-  await db
-    .update(users)
-    .set({
-      bannedAt: parsed.data.banned ? new Date() : null,
-      bannedReason: parsed.data.banned ? parsed.data.reason ?? null : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, parsed.data.userId));
+  const activeBan = await db.query.userBans.findFirst({
+    where: and(eq(userBans.userId, target.id), isNull(userBans.revokedAt)),
+    columns: { id: true },
+  });
+
+  if (parsed.data.banned) {
+    if (activeBan) {
+      // Déjà banni — no-op idempotent
+      return { success: true, data: undefined };
+    }
+    await db.insert(userBans).values({
+      userId: target.id,
+      bannedBy: session.user.id,
+      reason: parsed.data.reason ?? null,
+    });
+  } else {
+    if (!activeBan) {
+      return { success: true, data: undefined };
+    }
+    await db
+      .update(userBans)
+      .set({ revokedAt: new Date(), revokedBy: session.user.id })
+      .where(eq(userBans.id, activeBan.id));
+  }
 
   await logAdminAction({
     adminId: session.user.id,
     action: parsed.data.banned ? 'user_banned' : 'user_unbanned',
     targetType: 'user',
     targetId: parsed.data.userId,
-    before: { wasBanned: !!target.bannedAt },
+    before: { wasBanned: !!activeBan },
     after: { reason: parsed.data.reason ?? null },
   });
 

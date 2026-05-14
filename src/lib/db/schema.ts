@@ -14,7 +14,7 @@ import {
   date,
   primaryKey,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ============================================================
 // ENUMS
@@ -135,11 +135,6 @@ export const users = pgTable(
     botSubscribedEvents: boolean('bot_subscribed_events')
       .notNull()
       .default(true),
-
-    // Modération : ban admin. Quand bannedAt est set, le user ne peut plus
-    // se connecter ni interagir avec le bot. Reason affichée dans l'audit log.
-    bannedAt: timestamp('banned_at'),
-    bannedReason: text('banned_reason'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -510,6 +505,48 @@ export const adminAuditLogs = pgTable(
     actionIdx: index('audit_log_action_idx').on(t.action),
     targetIdx: index('audit_log_target_idx').on(t.targetType, t.targetId),
     createdAtIdx: index('audit_log_created_at_idx').on(t.createdAt),
+  })
+);
+
+// ============================================================
+// USER BANS — historique de modération
+// ============================================================
+
+/**
+ * Historique des bans utilisateurs. Un user a au plus UN ban actif à la fois
+ * (revokedAt IS NULL). Le `getActiveBan(userId)` lit cette table — pas besoin
+ * de toucher la table users.
+ *
+ * Conception en log/event-sourcing :
+ *  - Un ban inscrit un row avec revokedAt = NULL
+ *  - Un unban set revokedAt = NOW() — on garde l'historique
+ *  - Re-ban = nouveau row
+ *
+ * Index unique partiel sur (userId) WHERE revokedAt IS NULL pour empêcher
+ * deux bans actifs concurrents.
+ */
+export const userBans = pgTable(
+  'user_bans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    bannedBy: uuid('banned_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    reason: text('reason'),
+    revokedAt: timestamp('revoked_at'),
+    revokedBy: uuid('revoked_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdIdx: index('user_bans_user_id_idx').on(t.userId),
+    activeIdx: uniqueIndex('user_bans_active_unique_idx')
+      .on(t.userId)
+      .where(sql`revoked_at IS NULL`),
   })
 );
 
