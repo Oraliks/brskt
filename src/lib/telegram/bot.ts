@@ -213,6 +213,8 @@ export function getBot(): Bot<Context> {
 
   // /size <capital> <risk%> <sl_pips>
   bot.command('size', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'calculators'))) return;
     if (ctx.from?.id) {
       const { bumpBotStreak } = await import('@/lib/bot/streak');
       void bumpBotStreak(ctx.from.id);
@@ -252,6 +254,8 @@ export function getBot(): Bot<Context> {
 
   // /rr <entry> <sl> <tp>
   bot.command('rr', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'calculators'))) return;
     if (ctx.from?.id) {
       const { bumpBotStreak } = await import('@/lib/bot/streak');
       void bumpBotStreak(ctx.from.id);
@@ -297,6 +301,8 @@ export function getBot(): Bot<Context> {
 
   // /pip <pair> <lots>
   bot.command('pip', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'calculators'))) return;
     if (ctx.from?.id) {
       const { bumpBotStreak } = await import('@/lib/bot/streak');
       void bumpBotStreak(ctx.from.id);
@@ -329,6 +335,8 @@ export function getBot(): Bot<Context> {
 
   // /convert <amount> <from> <to>
   bot.command('convert', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'calculators'))) return;
     if (ctx.from?.id) {
       const { bumpBotStreak } = await import('@/lib/bot/streak');
       void bumpBotStreak(ctx.from.id);
@@ -444,6 +452,8 @@ export function getBot(): Bot<Context> {
 
   // /events — affiche le calendrier des prochains événements macro
   bot.command('events', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'economicAlerts'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -496,6 +506,8 @@ export function getBot(): Bot<Context> {
 
   // /alert <symbol> <threshold> <above|below>
   bot.command('alert', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'priceAlerts'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -587,6 +599,8 @@ export function getBot(): Bot<Context> {
 
   // /alerts — liste les alertes actives
   bot.command('alerts', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'priceAlerts'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -635,6 +649,8 @@ export function getBot(): Bot<Context> {
 
   // /unalert <num> — supprime une alerte
   bot.command('unalert', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'priceAlerts'))) return;
     if (!ctx.from?.id) return;
     const arg = (ctx.match ?? '').trim();
     const num = Number(arg);
@@ -684,6 +700,8 @@ export function getBot(): Bot<Context> {
 
   // /quiz — propose la dernière question quotidienne ou la prochaine non-répondue
   bot.command('quiz', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'quiz'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -842,6 +860,8 @@ export function getBot(): Bot<Context> {
 
   // /leaderboard — top 10 répondeurs (7 derniers jours)
   bot.command('leaderboard', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'quiz'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -902,6 +922,8 @@ export function getBot(): Bot<Context> {
 
   // /invite — génère/retourne le lien d'invitation perso
   bot.command('invite', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'referral'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     void bumpBotStreak(ctx.from.id);
@@ -957,6 +979,8 @@ export function getBot(): Bot<Context> {
 
   // /streak — affiche le streak d'interaction quotidien
   bot.command('streak', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'streak'))) return;
     if (!ctx.from?.id) return;
     const { bumpBotStreak } = await import('@/lib/bot/streak');
     const newStreak = await bumpBotStreak(ctx.from.id);
@@ -1164,6 +1188,8 @@ export function getBot(): Bot<Context> {
 
   // /qualify — questions de qualification (3 quick questions via inline keyboard)
   bot.command('qualify', async (ctx) => {
+    const { requireFeature } = await import('@/lib/bot/require-feature');
+    if (!(await requireFeature(ctx, 'qualify'))) return;
     await ctx.reply(
       `🎯 <b>Quelques questions rapides</b>\n\n` +
         `Pour mieux te suivre et personnaliser les analyses, dis-moi ` +
@@ -1280,6 +1306,14 @@ export function getBot(): Bot<Context> {
   // ============================================================
   // Nécessite que /setinline soit fait chez @BotFather pour activer l'inline.
   bot.on('inline_query', async (ctx) => {
+    // Check feature toggle (admin peut désactiver l'inline)
+    const { getBotFeatures } = await import('@/lib/settings/bot-features');
+    const features = await getBotFeatures();
+    if (!features.inline) {
+      await ctx.answerInlineQuery([], { cache_time: 5 });
+      return;
+    }
+
     const query = ctx.inlineQuery.query.trim();
     const { lookupQuote, formatQuote } = await import(
       '@/lib/bot/inline-quotes'

@@ -14,12 +14,14 @@ import {
   adminBookingActionSchema,
   adminProgressUpdateSchema,
   adminVipOverrideSchema,
+  botFeaturesSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
   welcomeBonusSchema,
 } from '@/lib/validations';
 import { setIronFXMode } from '@/lib/ironfx';
 import { setWelcomeBonus } from '@/lib/settings/welcome-bonus';
+import { setBotFeatures } from '@/lib/settings/bot-features';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -645,6 +647,38 @@ export async function adminSetIronfxModeAction(
   });
 
   revalidatePath('/admin/settings');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Update partiel des toggles features bot (depuis /admin/bot).
+ * Update une ou plusieurs features à la fois — merge côté server.
+ */
+export async function adminSetBotFeaturesAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = botFeaturesSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  await setBotFeatures(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'bot_features_update',
+    targetType: 'settings',
+    targetId: 'bot_features',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/bot');
   return { success: true, data: undefined };
 }
 

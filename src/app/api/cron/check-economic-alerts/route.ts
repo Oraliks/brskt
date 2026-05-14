@@ -25,6 +25,16 @@ export async function GET(request: Request) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const { getBotFeatures } = await import('@/lib/settings/bot-features');
+  const features = await getBotFeatures();
+  if (!features.economicAlerts) {
+    return Response.json({
+      success: true,
+      message: 'Economic alerts désactivées par admin (toggle off)',
+      notifiedEvents: 0,
+    });
+  }
+
   const now = new Date();
   const in30min = new Date(now.getTime() + 30 * 60 * 1000);
   const in60min = new Date(now.getTime() + 60 * 60 * 1000);

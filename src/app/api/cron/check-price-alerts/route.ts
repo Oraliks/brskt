@@ -31,6 +31,16 @@ export async function GET(request: Request) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const { getBotFeatures } = await import('@/lib/settings/bot-features');
+  const features = await getBotFeatures();
+  if (!features.priceAlerts) {
+    return Response.json({
+      success: true,
+      message: 'Price alerts désactivées par admin (toggle off)',
+      checked: 0,
+    });
+  }
+
   // 1. Liste alertes actives
   const active = await db
     .select({

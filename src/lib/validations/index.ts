@@ -97,6 +97,25 @@ export const welcomeBonusSchema = z.object({
   fineprint: z.string().max(200, 'Trop long').optional(),
 });
 
+/**
+ * Update partiel des toggles features bot. Toutes les clés sont optionnelles,
+ * on merge avec l'état actuel côté server.
+ */
+export const botFeaturesSchema = z
+  .object({
+    quiz: z.boolean().optional(),
+    economicAlerts: z.boolean().optional(),
+    priceAlerts: z.boolean().optional(),
+    referral: z.boolean().optional(),
+    inline: z.boolean().optional(),
+    calculators: z.boolean().optional(),
+    streak: z.boolean().optional(),
+    qualify: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: 'Au moins un champ doit être fourni',
+  });
+
 export const adminVipOverrideSchema = z.object({
   applicationId: z.string().uuid(),
   action: z.enum([

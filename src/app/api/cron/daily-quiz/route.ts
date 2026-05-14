@@ -29,6 +29,17 @@ export async function GET(request: Request) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  // Check feature toggle admin
+  const { getBotFeatures } = await import('@/lib/settings/bot-features');
+  const features = await getBotFeatures();
+  if (!features.quiz) {
+    return Response.json({
+      success: true,
+      message: 'Quiz feature désactivée par admin (toggle off)',
+      sent: 0,
+    });
+  }
+
   // 1. Pioche la prochaine question non envoyée
   const next = await db.query.quizQuestions.findFirst({
     where: and(eq(quizQuestions.active, true), isNull(quizQuestions.sentAt)),
