@@ -144,7 +144,7 @@ export function getBot(): Bot<Context> {
     const botUser = process.env.TELEGRAM_BOT_USERNAME ?? 'boursikotonsbot';
     await ctx.reply(
       `${greeting}\n\n` +
-        `<b>Bienvenue sur Boursikotons</b> — formation trading + groupe VIP Telegram gratuit (rémunération via broker partenaire, pas par toi).\n\n` +
+        `<b>Bienvenue sur Boursikotons</b> — formation trading + groupe VIP Telegram gratuit.\n\n` +
         `━━━━━━━━━━━━━━━\n\n` +
         `<b>🚀 Démarrer</b>\n` +
         `• <a href="${appUrl}/login">Se connecter au site</a> (1 clic Telegram)\n` +
@@ -160,17 +160,9 @@ export function getBot(): Bot<Context> {
         `/alert /alerts /unalert — Alertes prix FX/crypto\n` +
         `/events — Calendrier économique\n` +
         `/subscribe /unsubscribe — Briefing matinal & events\n\n` +
-        `<b>🎓 Apprendre & jouer</b>\n` +
-        `/quiz — Question du jour\n` +
-        `/leaderboard — Classement hebdo\n` +
-        `/streak — Mon streak quotidien\n\n` +
-        `<b>👤 Compte</b>\n` +
-        `/status — Ma progression VIP & CPA\n` +
-        `/login — Magic link de connexion direct\n` +
-        `/qualify — Personnaliser mon suivi\n\n` +
         `<b>🎁 Parrainage & témoignages</b>\n` +
         `/invite — Mon lien d'invitation perso\n` +
-        `/temoignage <i>&lt;ton avis&gt;</i> — Laisser un avis (validé par l'équipe puis publié sur le site)\n\n` +
+        `/temoignage <i>&lt;ton avis&gt;</i> — Laisser un avis (publié sur le site après validation)\n\n` +
         `<b>💬 Mode inline</b>\n` +
         `Tape <code>@${botUser} EURUSD</code> dans n'importe quel chat pour partager un prix live.\n\n` +
         `━━━━━━━━━━━━━━━\n` +

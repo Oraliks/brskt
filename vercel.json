@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/check-economic-alerts",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-economic-events",
+      "schedule": "0 1 * * *"
     }
   ],
   "functions": {
