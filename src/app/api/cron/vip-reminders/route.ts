@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { vipApplications } from '@/lib/db/schema';
 import { sendEmail } from '@/lib/email';
+import { sendDirectMessage } from '@/lib/telegram/helpers';
 import VipReminderEmail from '@root/emails/vip-reminder';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,14 @@ const ELIGIBLE_STEPS = [
 ] as const;
 
 type EligibleStep = (typeof ELIGIBLE_STEPS)[number];
+
+const STEP_LABELS: Record<EligibleStep, string> = {
+  link_generated: 'Lien affilié généré',
+  signup_validated: 'Inscription validée — il manque le dépôt',
+  deposit_pending: 'Dépôt en attente de validation',
+  deposit_validated: 'Dépôt validé — récupère ton lien Telegram',
+  telegram_invited: 'Lien Telegram envoyé — rejoins le groupe',
+};
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -63,11 +72,15 @@ export async function GET(request: Request) {
 
   const results = {
     candidates: candidates.length,
-    sent: 0,
-    skippedNoEmail: 0,
+    emailSent: 0,
+    telegramSent: 0,
+    skippedNoChannel: 0,
     skippedTooRecent: 0,
     errors: 0,
   };
+
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? 'https://boursikotons.com';
 
   for (const app of candidates) {
     // Filtrage temporel par étape : 1ère relance à J+2, 2ème à J+7
@@ -78,52 +91,88 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (!app.user.email) {
-      results.skippedNoEmail++;
+    const hasEmail = !!app.user.email;
+    const hasTelegram = !!app.user.telegramId;
+    if (!hasEmail && !hasTelegram) {
+      results.skippedNoChannel++;
       continue;
     }
 
     const reminderNumber = app.reminderCount === 0 ? 0 : 1;
+    const firstName = app.user.telegramFirstName ?? app.user.name ?? 'là';
+    const stepLabel = STEP_LABELS[app.step as EligibleStep] ?? app.step;
 
-    try {
-      const result = await sendEmail({
-        to: app.user.email,
-        subject:
-          reminderNumber === 0
-            ? `Ton funnel VIP t'attend, ${app.user.telegramFirstName ?? app.user.name}`
-            : '💎 Dernier rappel — VIP Boursikotons',
-        react: VipReminderEmail({
-          firstName:
-            app.user.telegramFirstName ?? app.user.name ?? 'là',
-          reminderNumber,
-          step: app.step as EligibleStep,
-        }),
-      });
+    let anyChannelSucceeded = false;
 
-      if (!result.success) {
-        console.error(
-          `[vip-reminders] send failed for app ${app.id}`,
-          result.error
-        );
-        results.errors++;
-        continue;
+    // === Canal 1 : Email ===
+    if (hasEmail && app.user.email) {
+      try {
+        const result = await sendEmail({
+          to: app.user.email,
+          subject:
+            reminderNumber === 0
+              ? `Ton funnel VIP t'attend, ${firstName}`
+              : '💎 Dernier rappel — VIP Boursikotons',
+          react: VipReminderEmail({
+            firstName,
+            reminderNumber,
+            step: app.step as EligibleStep,
+          }),
+        });
+        if (result.success) {
+          results.emailSent++;
+          anyChannelSucceeded = true;
+        } else {
+          console.error(
+            `[vip-reminders] email failed for app ${app.id}`,
+            result.error
+          );
+        }
+      } catch (err) {
+        console.error(`[vip-reminders] email exception for ${app.id}`, err);
       }
-
-      // Marque le reminder comme envoyé
-      await db
-        .update(vipApplications)
-        .set({
-          reminderCount: app.reminderCount + 1,
-          reminderSentAt: new Date(),
-          // NB : on ne touche pas à updatedAt sinon on perd la signal "inactif"
-        })
-        .where(eq(vipApplications.id, app.id));
-
-      results.sent++;
-    } catch (err) {
-      console.error(`[vip-reminders] exception for app ${app.id}`, err);
-      results.errors++;
     }
+
+    // === Canal 2 : Telegram DM (open rate >90%) ===
+    if (hasTelegram && app.user.telegramId) {
+      const tgMessage =
+        reminderNumber === 0
+          ? `👋 <b>${firstName}, ton funnel VIP t'attend</b>\n\n` +
+            `Tu es à l'étape : <b>${stepLabel}</b>\n\n` +
+            `C'est rapide à finaliser — et toujours 100% gratuit.\n\n` +
+            `▶️ Continue ici : ${appUrl}/vip`
+          : `💎 <b>Dernier rappel — VIP Boursikotons</b>\n\n` +
+            `Tu es bloqué à : <b>${stepLabel}</b> depuis un moment.\n\n` +
+            `C'est la dernière notif automatique qu'on t'envoie. Tu peux ` +
+            `reprendre quand tu veux.\n\n` +
+            `▶️ ${appUrl}/vip\n\n` +
+            `Besoin d'aide ? Contacte @boursi_support`;
+
+      const sent = await sendDirectMessage(
+        Number(app.user.telegramId),
+        tgMessage,
+        { disableWebPreview: true }
+      );
+      if (sent) {
+        results.telegramSent++;
+        anyChannelSucceeded = true;
+      }
+    }
+
+    if (!anyChannelSucceeded) {
+      results.errors++;
+      continue;
+    }
+
+    // Marque le reminder comme envoyé (au moins un canal a réussi)
+    await db
+      .update(vipApplications)
+      .set({
+        reminderCount: app.reminderCount + 1,
+        reminderSentAt: new Date(),
+        // NB : on ne touche pas à updatedAt sinon on perd le signal "inactif"
+      })
+      .where(eq(vipApplications.id, app.id));
   }
 
   return Response.json({

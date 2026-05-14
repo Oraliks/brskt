@@ -294,6 +294,17 @@ export const vipApplications = pgTable(
       .notNull()
       .defaultNow(),
 
+    // Réponses aux questions de qualification (posées par le bot via /qualify).
+    // JSONB pour rester flexible si on change les questions. Optionnel —
+    // un user qui n'a jamais répondu aura null. Permet à l'admin de mieux
+    // segmenter et personnaliser le suivi.
+    qualificationAnswers: jsonb('qualification_answers').$type<{
+      experience?: 'none' | 'beginner' | 'intermediate' | 'advanced';
+      goal?: 'income' | 'learn' | 'long_term' | 'curiosity';
+      timeAvailable?: 'few_hours' | 'evenings' | 'full_time';
+      askedAt?: string;
+    }>(),
+
     // Relances email automatiques (CRON quotidien vip-reminders)
     // reminderCount monte de 0 → 2 max (J+2 puis J+7 après dernière activité)
     reminderCount: integer('reminder_count').notNull().default(0),

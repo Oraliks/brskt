@@ -1,0 +1,1 @@
+ALTER TABLE "vip_applications" ADD COLUMN "qualification_answers" jsonb;

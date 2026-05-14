@@ -1,4 +1,4 @@
-import { Bot, type Context } from 'grammy';
+import { Bot, type Context, InlineKeyboard } from 'grammy';
 
 let botInstance: Bot<Context> | null = null;
 
@@ -16,6 +16,68 @@ export function getBot(): Bot<Context> {
   bot.command('start', async (ctx) => {
     const firstName = ctx.from?.first_name ?? '';
     const greeting = firstName ? `👋 Salut ${firstName} !` : '👋 Bienvenue !';
+
+    // Deeplink param : `/start vip_<source>` ou `/start hello` (default).
+    // Format utilisé : t.me/BoursikotonsBot?start=vip_landing|vip_ads|...
+    // On track le source pour mesurer quel canal convertit le mieux.
+    const startParam = ctx.match?.trim() ?? '';
+    if (startParam.startsWith('vip_') && ctx.from?.id) {
+      const source = startParam.slice(4); // 'landing', 'ads', 'instagram', etc.
+      try {
+        const { eq } = await import('drizzle-orm');
+        const { db } = await import('@/lib/db');
+        const { users } = await import('@/lib/db/schema');
+        const { emitFunnelEvent } = await import('@/lib/analytics/funnel');
+        const user = await db.query.users.findFirst({
+          where: eq(users.telegramId, ctx.from.id),
+        });
+        await emitFunnelEvent({
+          userId: user?.id ?? null,
+          sessionId: user?.id ?? `tg:${ctx.from.id}`,
+          eventName: 'bot_deeplink',
+          metadata: {
+            source,
+            telegramId: ctx.from.id,
+            telegramUsername: ctx.from.username,
+          },
+        });
+      } catch (err) {
+        console.warn('[bot] deeplink tracking failed', err);
+      }
+
+      await ctx.reply(
+        `${greeting}\n\n` +
+          `Tu viens de la source <b>${escapeUserText(source)}</b> — bien noté.\n\n` +
+          `💎 Le groupe VIP Telegram est <b>100% gratuit</b>.\n` +
+          `Tu déposes ton propre argent chez notre broker partenaire pour trader. ` +
+          `Nous, on est payés par le broker — pas par toi.\n\n` +
+          `<b>Suivante :</b> connecte-toi sur ${appUrl}/login (Telegram = 1 clic) ` +
+          `puis démarre le funnel ici : ${appUrl}/vip`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    // /start standard (hello ou pas de param)
+    try {
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('@/lib/db');
+      const { users } = await import('@/lib/db/schema');
+      const { emitFunnelEvent } = await import('@/lib/analytics/funnel');
+      if (ctx.from?.id) {
+        const user = await db.query.users.findFirst({
+          where: eq(users.telegramId, ctx.from.id),
+        });
+        await emitFunnelEvent({
+          userId: user?.id ?? null,
+          sessionId: user?.id ?? `tg:${ctx.from.id}`,
+          eventName: 'bot_started',
+          metadata: { telegramId: ctx.from.id },
+        });
+      }
+    } catch {
+      /* ignore tracking errors */
+    }
 
     await ctx.reply(
       `${greeting}\n\n` +
@@ -35,6 +97,7 @@ export function getBot(): Bot<Context> {
       `<b>Commandes disponibles</b>\n\n` +
         `/start — Démarrer\n` +
         `/status — Ma progression VIP & CPA\n` +
+        `/qualify — Mini-questionnaire pour personnaliser ton suivi\n` +
         `/dashboard — Mon espace\n` +
         `/vip — Funnel VIP\n` +
         `/help — Cette aide\n\n` +
@@ -158,6 +221,119 @@ export function getBot(): Bot<Context> {
       `📍 <b>Étape ${app.step}</b>\n${label}\n\nContinue ici : ${appUrl}/vip`,
       { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
     );
+  });
+
+  // /qualify — questions de qualification (3 quick questions via inline keyboard)
+  bot.command('qualify', async (ctx) => {
+    await ctx.reply(
+      `🎯 <b>Quelques questions rapides</b>\n\n` +
+        `Pour mieux te suivre et personnaliser les analyses, dis-moi ` +
+        `<b>ton expérience en trading</b> :`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard()
+          .text('🌱 Aucune', 'qual:exp:none')
+          .text('🔰 Débutant', 'qual:exp:beginner')
+          .row()
+          .text('📊 Intermédiaire', 'qual:exp:intermediate')
+          .text('💼 Avancé', 'qual:exp:advanced'),
+      }
+    );
+  });
+
+  // Callback queries pour /qualify — multi-step inline conversation
+  bot.callbackQuery(/^qual:(exp|goal|time):(.+)$/, async (ctx) => {
+    const [, field, value] = ctx.match ?? [];
+    if (!field || !value || !ctx.from?.id) return;
+
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, vipApplications } = await import('@/lib/db/schema');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.answerCallbackQuery({
+        text: 'Compte non trouvé — connecte-toi d\'abord',
+        show_alert: true,
+      });
+      return;
+    }
+
+    const app = await db.query.vipApplications.findFirst({
+      where: eq(vipApplications.userId, user.id),
+    });
+    if (!app) {
+      await ctx.answerCallbackQuery({
+        text: 'Démarre d\'abord le funnel VIP sur le site',
+        show_alert: true,
+      });
+      return;
+    }
+
+    const prev = app.qualificationAnswers ?? {};
+    const updated = { ...prev };
+    if (field === 'exp') {
+      updated.experience = value as typeof updated.experience;
+    } else if (field === 'goal') {
+      updated.goal = value as typeof updated.goal;
+    } else if (field === 'time') {
+      updated.timeAvailable = value as typeof updated.timeAvailable;
+    }
+    updated.askedAt = new Date().toISOString();
+
+    await db
+      .update(vipApplications)
+      .set({ qualificationAnswers: updated, updatedAt: new Date() })
+      .where(eq(vipApplications.id, app.id));
+
+    await ctx.answerCallbackQuery({ text: '✓ Noté' });
+
+    // Suivante question selon le field
+    if (field === 'exp') {
+      await ctx.editMessageText(
+        `✓ Expérience : <b>${value}</b>\n\n` +
+          `<b>Quel est ton objectif principal</b> avec le trading ?`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard()
+            .text('💰 Revenus complémentaires', 'qual:goal:income')
+            .row()
+            .text('📚 Apprendre', 'qual:goal:learn')
+            .text('🏦 Long terme', 'qual:goal:long_term')
+            .row()
+            .text('🤔 Curiosité', 'qual:goal:curiosity'),
+        }
+      );
+    } else if (field === 'goal') {
+      await ctx.editMessageText(
+        `✓ Objectif : <b>${value}</b>\n\n` +
+          `<b>Combien de temps</b> tu peux y consacrer ?`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard()
+            .text('🕐 Quelques heures/sem', 'qual:time:few_hours')
+            .row()
+            .text('🌙 Mes soirées', 'qual:time:evenings')
+            .row()
+            .text('💼 Temps plein', 'qual:time:full_time'),
+        }
+      );
+    } else if (field === 'time') {
+      await ctx.editMessageText(
+        `🎉 <b>Merci ${user.telegramFirstName ?? user.name ?? ''} !</b>\n\n` +
+          `Tes réponses :\n` +
+          `• Expérience : <b>${updated.experience}</b>\n` +
+          `• Objectif : <b>${updated.goal}</b>\n` +
+          `• Temps : <b>${updated.timeAvailable}</b>\n\n` +
+          `On va personnaliser ton suivi en conséquence. Continue ton funnel ici : ${appUrl}/vip`,
+        {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        }
+      );
+    }
   });
 
   // === Listener chat_member (quand quelqu'un rejoint ou quitte le groupe VIP) ===
@@ -380,4 +556,13 @@ async function sendVipWelcomeDM(
       /* l'erreur a déjà été loggée sur le premier sendMessage */
     }
   }
+}
+
+/**
+ * Échappe les caractères HTML pour les insérer en sécurité dans un message
+ * `parse_mode: 'HTML'`. Évite que `<i>spoof</i>` injecté par un user soit
+ * interprété par Telegram.
+ */
+function escapeUserText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
