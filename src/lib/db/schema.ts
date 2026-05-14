@@ -260,6 +260,11 @@ export const vipApplications = pgTable(
     ejectionReason: text('ejection_reason'),
     ejectedAt: timestamp('ejected_at'),
 
+    // Relances email automatiques (CRON quotidien vip-reminders)
+    // reminderCount monte de 0 → 2 max (J+2 puis J+7 après dernière activité)
+    reminderCount: integer('reminder_count').notNull().default(0),
+    reminderSentAt: timestamp('reminder_sent_at'),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

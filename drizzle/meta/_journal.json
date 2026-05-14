@@ -22,6 +22,13 @@
       "when": 1778764417939,
       "tag": "0002_messy_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778765030224,
+      "tag": "0003_lively_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }
