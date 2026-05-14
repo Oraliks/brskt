@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useLanding } from '../landing-context';
 
 const steps = [
@@ -14,8 +14,14 @@ const steps = [
   { n: 4, title: 'Accès VIP', body: 'Lien Telegram envoyé après validation. Rien à payer.' },
 ];
 
-export function VipSection() {
+interface Props {
+  /** Nombre de membres VIP qualifiés CPA. 0 = on masque le compteur. */
+  qualifiedCount?: number;
+}
+
+export function VipSection({ qualifiedCount = 0 }: Props) {
   const { goTo } = useLanding();
+  const showProof = qualifiedCount > 0;
 
   return (
     <div className="text-center max-w-[1100px] w-full">
@@ -33,6 +39,20 @@ export function VipSection() {
           VIP Telegram
         </span>
       </h2>
+
+      {showProof && (
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 mb-5">
+          <CheckCircle2 className="h-3 w-3" />
+          <span>
+            <strong className="text-emerald-200 font-semibold tabular-nums">
+              {qualifiedCount.toLocaleString('fr-FR')}
+            </strong>{' '}
+            {qualifiedCount === 1 ? 'membre qualifié' : 'membres qualifiés'} —
+            toujours dans le groupe
+          </span>
+        </div>
+      )}
+
       <p className="text-[17px] text-[var(--color-text-dim)] max-w-[600px] mx-auto mb-3">
         <strong className="text-white">L'accès au groupe VIP est gratuit.</strong>{' '}
         Tu déposes ton propre argent sur ton compte broker pour trader —

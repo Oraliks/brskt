@@ -1,7 +1,7 @@
 'use server';
 
 import { eq } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
 import {
@@ -321,6 +321,9 @@ export async function adminSetTradingProgressAction(
         // Pas d'email dédié pour l'instant, juste Telegram (event rare)
       });
     });
+
+    // Invalide le cache du compteur "X membres qualifiés" sur la landing
+    updateTag('vip-qualified-count');
   }
 
   revalidatePath('/admin/vip');
@@ -382,6 +385,11 @@ export async function adminUpdateManualIronfxAction(
         updatedAt: new Date(),
       },
     });
+
+  // Invalide le compteur landing si on a touché cpaQualified
+  if (cpaQualified !== undefined) {
+    updateTag('vip-qualified-count');
+  }
 
   revalidatePath('/admin/vip');
   return { success: true, data: undefined };
