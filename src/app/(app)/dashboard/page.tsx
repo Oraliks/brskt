@@ -207,6 +207,19 @@ interface BookingRowProps {
   };
 }
 
+/**
+ * Renvoie true si la formation est terminée (status completed) OU si la
+ * date confirmée est dépassée — auquel cas la page /formation/[id] affiche
+ * les ressources post-formation.
+ */
+function isPostFormation(b: BookingRowProps['booking']): boolean {
+  if (b.status === 'completed') return true;
+  if (!b.confirmedDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(b.confirmedDate) < today;
+}
+
 function BookingRow({ booking }: BookingRowProps) {
   const status = booking.status;
   const formation = booking.formation;
@@ -251,6 +264,14 @@ function BookingRow({ booking }: BookingRowProps) {
               <Link href={`/checkout/${booking.id}`}>
                 <CreditCard className="h-3 w-3" />
                 Finaliser le paiement
+              </Link>
+            </Button>
+          )}
+          {isPostFormation(booking) && (
+            <Button asChild size="sm" variant="secondary" className="mt-2">
+              <Link href={`/formation/${booking.id}`}>
+                Ressources
+                <ArrowRight className="h-3 w-3" />
               </Link>
             </Button>
           )}

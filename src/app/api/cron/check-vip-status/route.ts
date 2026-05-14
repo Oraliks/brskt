@@ -4,6 +4,8 @@ import { vipApplications } from '@/lib/db/schema';
 import { getIronFXAdapter } from '@/lib/ironfx';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { cleanupRateLimits } from '@/lib/rate-limit';
+import { notifyUser } from '@/lib/notify';
+import VipEjectionWarningEmail from '@root/emails/vip-ejection-warning';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,15 +14,25 @@ export const maxDuration = 60; // 60s sur Vercel Pro
 /**
  * Vérifie quotidiennement l'état des comptes IronFX des membres VIP.
  *
- * Règles d'éjection :
- *   - hasWithdrawn && !cpaQualified → éjection (le client a retiré avant qu'on touche notre CPA)
- *   - accountClosed → éjection
+ * Pattern warning J-1 → éjection :
+ *  - Si situation à risque détectée pour la 1ère fois → on envoie un email
+ *    + telegram warning, on set `ejectionWarnedAt`, et on ne touche pas
+ *    le statut. Le user a ~24h pour régulariser.
+ *  - Au check suivant (J+1, le CRON passe 1x/jour), si la situation est
+ *    toujours à risque ET ejectionWarnedAt set depuis > 12h → on éjecte.
+ *  - Si la situation est résolue entre temps → on reset ejectionWarnedAt.
+ *
+ * Situations à risque :
+ *   - hasWithdrawn && !cpaQualified (retrait avant qu'on touche notre CPA)
+ *   - accountClosed
  *
  * À configurer dans vercel.json :
  * {
  *   "crons": [{ "path": "/api/cron/check-vip-status", "schedule": "0 6 * * *" }]
  * }
  */
+
+const WARNING_GRACE_HOURS = 12; // Délai mini entre warning et éjection
 export async function GET(request: Request) {
   // Sécurité : seul Vercel Cron ou un appelant authentifié peut hit
   const authHeader = request.headers.get('authorization');
@@ -38,10 +50,14 @@ export async function GET(request: Request) {
 
   const results = {
     checked: 0,
+    warned: 0,
     ejected: 0,
+    cleared: 0,
     errors: 0,
     skipped: 0,
   };
+
+  const warningGraceMs = WARNING_GRACE_HOURS * 60 * 60 * 1000;
 
   for (const app of inGroupApps) {
     if (!app.brokerAccountId) {
@@ -58,22 +74,70 @@ export async function GET(request: Request) {
         continue;
       }
 
-      let ejectionReason: string | null = null;
+      let riskReason: string | null = null;
 
       if (status.hasWithdrawn && !status.cpaQualified) {
-        ejectionReason =
+        riskReason =
           'Tu as effectué un retrait avant que ton activité de trading ne déclenche notre commission de partenariat. Pour réintégrer le groupe : redépose des fonds et attends ta qualification.';
       } else if (status.accountClosed) {
-        ejectionReason =
+        riskReason =
           'Ton compte broker a été clôturé. Le statut VIP requiert un compte actif. Pour réintégrer : rouvre un compte via notre lien et effectue un nouveau dépôt.';
       }
 
-      if (ejectionReason) {
-        const ejection = await ejectFromTelegram(app.userId, ejectionReason);
-        if (ejection.success) {
-          results.ejected++;
+      if (riskReason) {
+        const warnedAt = app.ejectionWarnedAt
+          ? app.ejectionWarnedAt.getTime()
+          : null;
+        const enoughTimeElapsed =
+          warnedAt !== null && Date.now() - warnedAt >= warningGraceMs;
+
+        if (enoughTimeElapsed) {
+          // 2e passage avec situation toujours à risque → on éjecte
+          const ejection = await ejectFromTelegram(app.userId, riskReason);
+          if (ejection.success) {
+            results.ejected++;
+          } else {
+            results.errors++;
+          }
+        } else if (!warnedAt) {
+          // 1er passage → warning, set ejectionWarnedAt, notif user
+          await db
+            .update(vipApplications)
+            .set({ ejectionWarnedAt: new Date(), updatedAt: new Date() })
+            .where(eq(vipApplications.id, app.id));
+
+          const firstName =
+            app.user.telegramFirstName ?? app.user.name ?? '';
+          await notifyUser(app.user, {
+            email: {
+              subject:
+                '⚠️ Action requise — risque d\'éjection du groupe VIP',
+              react: VipEjectionWarningEmail({
+                firstName,
+                reason: riskReason,
+              }),
+            },
+            telegram:
+              `🚨 <b>ALERTE — Risque d'éjection</b>\n\n` +
+              `On a détecté une situation à risque sur ton compte :\n` +
+              `<i>${escapeHtml(riskReason)}</i>\n\n` +
+              `<b>Tu as ~24h pour régulariser</b> avant éjection automatique.\n` +
+              `Contacte-nous vite : https://t.me/boursi_support`,
+          });
+
+          results.warned++;
         } else {
-          results.errors++;
+          // Warning déjà set mais grace pas écoulée → on attend le prochain CRON
+          results.skipped++;
+        }
+      } else {
+        // Situation OK : si on avait un warning actif, on le clear
+        if (app.ejectionWarnedAt) {
+          await db
+            .update(vipApplications)
+            .set({ ejectionWarnedAt: null, updatedAt: new Date() })
+            .where(eq(vipApplications.id, app.id));
+          results.cleared++;
         }
       }
 
@@ -109,4 +173,8 @@ export async function GET(request: Request) {
     results,
     rateLimitsDeleted,
   });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

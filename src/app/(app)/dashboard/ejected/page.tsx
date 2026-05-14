@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
-import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, RefreshCw, TrendingUp } from 'lucide-react';
 import { db } from '@/lib/db';
-import { vipApplications } from '@/lib/db/schema';
+import { manualIronfxStatus, vipApplications } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/server';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,17 @@ export default async function EjectedPage() {
   if (!application || application.step !== 'ejected') {
     redirect('/dashboard');
   }
+
+  // Progression au moment de l'éjection (si on a un brokerAccountId)
+  const lastStatus = application.brokerAccountId
+    ? await db.query.manualIronfxStatus.findFirst({
+        where: eq(manualIronfxStatus.accountId, application.brokerAccountId),
+      })
+    : null;
+  const lastProgressPct = lastStatus?.tradingProgressPct ?? 0;
+  const hadDeposit = application.depositAmount
+    ? Number(application.depositAmount)
+    : 0;
 
   return (
     <Section className="pt-24 pb-32">
@@ -54,12 +65,56 @@ export default async function EjectedPage() {
 
           {application.ejectionReason && (
             <div className="mt-8 rounded-[var(--radius-lg)] bg-rose-500/10 border border-rose-500/20 p-6">
-              <div className="text-xs font-medium text-rose-200 uppercase tracking-wider mb-3">
+              <div className="text-xs font-medium text-rose-200 light:text-rose-700 uppercase tracking-wider mb-3">
                 Raison
               </div>
               <p className="text-base text-[var(--color-text)]">
                 {application.ejectionReason}
               </p>
+            </div>
+          )}
+
+          {/* Snapshot de progression au moment de l'éjection */}
+          {(lastProgressPct > 0 || hadDeposit > 0) && (
+            <div className="mt-6 rounded-[var(--radius-lg)] bg-[var(--color-surface-tint)] border border-[var(--color-border)] p-6 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-text-dim)] uppercase tracking-wider">
+                <TrendingUp className="h-3 w-3" />
+                Ta progression au moment de l&apos;éjection
+              </div>
+
+              {lastProgressPct > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm text-[var(--color-text-dim)]">
+                      Volume de trading généré
+                    </span>
+                    <span className="font-mono tabular-nums text-lg font-medium">
+                      {lastProgressPct}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint-strong)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-pink-500"
+                      style={{ width: `${Math.max(2, lastProgressPct)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-[var(--color-text-faint)]">
+                    Il manquait {Math.max(0, 100 - lastProgressPct)}% pour
+                    atteindre la qualification CPA et sécuriser ta place.
+                  </p>
+                </div>
+              )}
+
+              {hadDeposit > 0 && (
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-[var(--color-text-dim)]">
+                    Dépôt initial déclaré
+                  </span>
+                  <span className="font-mono tabular-nums font-medium">
+                    {hadDeposit}€
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

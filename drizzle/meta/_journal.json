@@ -43,6 +43,13 @@
       "when": 1778771556582,
       "tag": "0005_overjoyed_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778771840216,
+      "tag": "0006_harsh_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

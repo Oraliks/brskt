@@ -281,6 +281,11 @@ export const vipApplications = pgTable(
     // Éjection
     ejectionReason: text('ejection_reason'),
     ejectedAt: timestamp('ejected_at'),
+    // Pre-éjection warning : set quand le CRON détecte une situation à
+    // risque (retrait sans qualif, compte clôturé). Le user a alors une
+    // fenêtre d'~24h pour régulariser avant que le CRON suivant éjecte.
+    // Reset à null si la situation se résout.
+    ejectionWarnedAt: timestamp('ejection_warned_at'),
 
     // Relances email automatiques (CRON quotidien vip-reminders)
     // reminderCount monte de 0 → 2 max (J+2 puis J+7 après dernière activité)
