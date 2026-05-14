@@ -110,56 +110,49 @@ export default async function DashboardPage() {
 
   return (
     <>
-      {/* HEADER : TradingHero en background (h-full) + Salut/cards au-dessus */}
+      {/* HEADER compact : Salut au-dessus du chart en fond, puis 3 cards en row */}
       <Section className="pt-20 pb-4">
-        <div className="relative isolate">
-          {/* TradingHero en arrière-plan : h-full pour matcher la hauteur
-              de la colonne de droite (3 cards). opacity-30 pour rester
-              décor sans gêner la lecture. */}
+        {/* Zone titre + bot CTA avec chart en arriere-plan */}
+        <div className="relative isolate mb-3">
           <div className="absolute inset-0 -z-10 opacity-30 pointer-events-none overflow-hidden rounded-[var(--radius-lg)]">
-            <div className="h-full w-full">
-              <TradingHero />
-            </div>
+            <TradingHero />
           </div>
 
-          <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-start p-4 md:p-6">
-            {/* Gauche : Salut + bot CTA */}
-            <div className="space-y-3">
-              <p className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
-                Mon espace
-              </p>
-              <h1 className="font-serif text-4xl md:text-5xl text-gradient">
-                Salut {firstName}.
-              </h1>
-              {botUsername && (
-                <div className="inline-flex items-start gap-2.5 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 backdrop-blur-sm px-3 py-2 max-w-lg">
-                  <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
-                  <div className="text-xs text-[var(--color-text)]">
-                    <Link
-                      href={`https://t.me/${botUsername}?start=hello`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium underline underline-offset-2 hover:text-blue-200"
-                    >
-                      Envoie /start à @{botUsername}
-                    </Link>{' '}
-                    pour recevoir tes notifs sur Telegram.
-                  </div>
+          <div className="p-4 md:p-6 space-y-3 max-w-3xl">
+            <p className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
+              Mon espace
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl text-gradient">
+              Salut {firstName}.
+            </h1>
+            {botUsername && (
+              <div className="inline-flex items-start gap-2.5 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 backdrop-blur-sm px-3 py-2 max-w-lg">
+                <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-[var(--color-text)]">
+                  <Link
+                    href={`https://t.me/${botUsername}?start=hello`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-2 hover:text-blue-200"
+                  >
+                    Envoie /start à @{botUsername}
+                  </Link>{' '}
+                  pour recevoir tes notifs sur Telegram.
                 </div>
-              )}
-            </div>
-
-            {/* Droite : 3 mini cards stacked */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 lg:w-[280px]">
-              <MiniVipCard
-                application={vipApp ?? null}
-                tradingProgressPct={tradingProgressPct}
-                cpaQualified={cpaQualified}
-              />
-              <MiniFormationCard hasBooking={userBookings.length > 0} />
-              <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
-            </div>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* 3 cards en row full-width sous le titre */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MiniVipCard
+            application={vipApp ?? null}
+            tradingProgressPct={tradingProgressPct}
+            cpaQualified={cpaQualified}
+          />
+          <MiniFormationCard hasBooking={userBookings.length > 0} />
+          <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
         </div>
       </Section>
 
