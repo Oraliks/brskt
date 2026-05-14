@@ -14,8 +14,9 @@ const VIP_GROUP_ID = Number(process.env.VIP_GROUP_CHAT_ID);
  *   liens valides simultanément que l'user pourrait partager).
  * - Le lien est `member_limit: 1` → consommé après 1 join.
  * - Expire après 24h (Telegram).
- * - Le `name` du lien embed l'applicationId pour vérifier au join que c'est
- *   bien le bon user qui consomme le lien (cf. handleUserJoinedVip).
+ * - Au join, on retrouve l'application via `telegramInviteLink = invite_link`
+ *   (le `name` Telegram est limité à 32 chars donc on n'y stocke pas l'UUID
+ *   complet — voir handleUserJoinedVip).
  */
 export async function generateVipInvite(
   applicationId: string
@@ -47,7 +48,9 @@ export async function generateVipInvite(
   const invite = await bot.api.createChatInviteLink(VIP_GROUP_ID, {
     expire_date: expireDate,
     member_limit: 1, // single-use
-    name: `vip-${applicationId}`, // applicationId complet pour traçage exact
+    // Telegram name limit = 32 chars. UUID = 36, donc on tronque à 8 chars
+    // pour l'affichage admin. Le lookup au join se fait par invite_link (URL).
+    name: `vip-${applicationId.slice(0, 8)}`,
   });
 
   await db

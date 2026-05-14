@@ -84,7 +84,7 @@ export function getBot(): Bot<Context> {
 
 async function handleUserJoinedVip(
   telegramUserId: number,
-  inviteLinkName: string | null,
+  _inviteLinkName: string | null,
   inviteLinkUrl: string | null
 ) {
   const { eq } = await import('drizzle-orm');
@@ -96,26 +96,19 @@ async function handleUserJoinedVip(
     where: eq(users.telegramId, telegramUserId),
   });
 
-  // 2. Identifier à QUEL applicationId le lien d'invite était destiné
-  //    Format du name : `vip-<applicationId>`
-  let intendedAppId: string | null = null;
-  if (inviteLinkName?.startsWith('vip-')) {
-    intendedAppId = inviteLinkName.slice(4);
-  }
+  // 2. Identifier à QUELLE application le lien d'invite était destiné en
+  //    cherchant par URL (le `name` Telegram est limité à 32 chars donc on
+  //    ne peut pas y stocker un UUID complet — on s'appuie sur la persistence
+  //    `telegramInviteLink` côté DB).
+  const intendedApp = inviteLinkUrl
+    ? await db.query.vipApplications.findFirst({
+        where: eq(vipApplications.telegramInviteLink, inviteLinkUrl),
+        with: { user: true },
+      })
+    : null;
 
-  // 3. Cas A : on a un applicationId dans le lien
-  if (intendedAppId) {
-    const intendedApp = await db.query.vipApplications.findFirst({
-      where: eq(vipApplications.id, intendedAppId),
-      with: { user: true },
-    });
-
-    if (!intendedApp) {
-      // Lien valide mais application introuvable (donnée corrompue)
-      console.warn('[chat_member] invite link refers to unknown application', intendedAppId);
-      return;
-    }
-
+  // 3. Cas A : on a trouvé l'application destinatrice
+  if (intendedApp) {
     // 3.a. Si l'user qui rejoint EST l'user attendu → OK
     if (joiningUser && joiningUser.id === intendedApp.userId) {
       await db
@@ -132,7 +125,7 @@ async function handleUserJoinedVip(
     // 3.b. Squat — quelqu'un d'autre a utilisé le lien
     //      Auto-kick l'usurpateur et révoque le lien (déjà consommé mais sait-on jamais).
     console.warn(
-      `[chat_member] SQUATTER detected: tg=${telegramUserId} used invite for app=${intendedAppId} (user=${intendedApp.userId}). Auto-kicking.`
+      `[chat_member] SQUATTER detected: tg=${telegramUserId} used invite for app=${intendedApp.id} (user=${intendedApp.userId}). Auto-kicking.`
     );
     const bot = getBot();
     try {
@@ -150,8 +143,8 @@ async function handleUserJoinedVip(
           Number(process.env.VIP_GROUP_CHAT_ID),
           inviteLinkUrl
         );
-      } catch {
-        /* ignore */
+      } catch (err) {
+        console.warn('[chat_member] revoke squatter invite failed', err);
       }
     }
     // L'intended user n'a pas pu utiliser son lien → on remet sa step à deposit_validated
@@ -168,7 +161,8 @@ async function handleUserJoinedVip(
     return;
   }
 
-  // 4. Cas B : pas d'applicationId déductible (lien admin manuel ou ajout direct)
+  // 4. Cas B : pas d'application destinatrice trouvée (lien admin manuel,
+  //    ajout direct par l'admin, ou lien expiré déjà supprimé en DB).
   //    On marque l'user comme in_group si on le trouve en DB avec une app active.
   if (joiningUser) {
     await db

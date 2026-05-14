@@ -28,6 +28,7 @@ import { toast } from '@/components/ui/use-toast';
 import { adminBookingAction } from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
 import type { Booking, Formation, User } from '@/lib/db/schema';
+import type { AdminBookingActionInput } from '@/lib/validations';
 
 type Row = Booking & { formation: Formation; user: User };
 
@@ -200,7 +201,7 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
 
   function submit() {
     start(async () => {
-      let payload: any;
+      let payload: AdminBookingActionInput;
       if (dialog.type === 'confirm') {
         if (!date) {
           toast({ title: 'Choisis une date', variant: 'destructive' });

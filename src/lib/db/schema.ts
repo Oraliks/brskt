@@ -47,6 +47,21 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'refunded',
 ]);
 
+/**
+ * Étapes du funnel VIP.
+ *
+ * Actives (transitions automatiques / Server Actions) :
+ *   link_generated → signup_validated → deposit_pending → deposit_validated
+ *   → telegram_invited → in_group → (optionnel) ejected
+ *
+ * Réservées (pas de code qui les émet aujourd'hui, gardées pour évolutions
+ * futures — ex. tracking postback "clic affilié" ou "compte créé pas validé") :
+ *   - 'clicked'         : user a cliqué sur le lien affilié mais pas encore créé de compte
+ *   - 'signup_pending'  : compte créé chez IronFX mais en attente de validation KYC
+ *
+ * Si tu retires une valeur de l'enum, n'oublie pas la migration Drizzle et
+ * vérifie qu'aucun row n'utilise la valeur (sinon ALTER TYPE échouera).
+ */
 export const vipStepEnum = pgEnum('vip_step', [
   'link_generated',
   'clicked',

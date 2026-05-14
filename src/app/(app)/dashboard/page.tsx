@@ -44,15 +44,19 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  // On retire le redirect : on veut afficher "Tu as quitté le groupe" sur le dashboard
-  // (l'user peut toujours aller sur /dashboard/ejected via la card)
+  // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
+  // le groupe" et propose un clic vers /dashboard/ejected pour les détails.
 
   let tradingProgressPct = 0;
+  let cpaQualified = false;
   if (vipApp?.brokerAccountId && vipApp.step === 'in_group') {
     const st = await db.query.manualIronfxStatus.findFirst({
       where: eq(manualIronfxStatus.accountId, vipApp.brokerAccountId),
     });
-    if (st) tradingProgressPct = st.tradingProgressPct;
+    if (st) {
+      tradingProgressPct = st.tradingProgressPct;
+      cpaQualified = st.cpaQualified;
+    }
   }
 
   const firstName = session.user.telegramFirstName ?? session.user.name ?? '';
@@ -97,6 +101,7 @@ export default async function DashboardPage() {
           <VipCard
             application={vipApp ?? null}
             tradingProgressPct={tradingProgressPct}
+            cpaQualified={cpaQualified}
           />
 
           {/* Formation CTA */}
@@ -308,9 +313,11 @@ const VIP_STEPS_ORDER = [
 function VipCard({
   application,
   tradingProgressPct,
+  cpaQualified,
 }: {
   application: typeof vipApplications.$inferSelect | null;
   tradingProgressPct: number;
+  cpaQualified: boolean;
 }) {
   const step = application?.step;
   const isInGroup = step === 'in_group';
@@ -320,7 +327,9 @@ function VipCard({
   const stepNum = step
     ? VIP_STEPS_ORDER.indexOf(step as (typeof VIP_STEPS_ORDER)[number]) + 1
     : 0;
-  const isQualified = tradingProgressPct >= 100;
+  // Qualification = CPA généré côté broker (colonne DB, peut être set
+  // manuellement par l'admin). C'est le seul état qui protège de l'éjection.
+  const isQualified = cpaQualified;
 
   const href = isEjected ? '/dashboard/ejected' : '/vip';
 

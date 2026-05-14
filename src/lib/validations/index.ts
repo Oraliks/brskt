@@ -54,6 +54,8 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
+export type AdminBookingActionInput = z.infer<typeof adminBookingActionSchema>;
+
 // ============================================================
 // VIP
 // ============================================================
