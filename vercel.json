@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/check-price-alerts",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-briefing",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/check-economic-alerts",
+      "schedule": "*/30 * * * *"
     }
   ],
   "functions": {

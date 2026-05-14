@@ -128,6 +128,14 @@ export const users = pgTable(
     referralCode: text('referral_code').unique(),
     referredBy: uuid('referred_by'),
 
+    // Opt-in pour les notifications bot quotidiennes (true par défaut).
+    botSubscribedBriefing: boolean('bot_subscribed_briefing')
+      .notNull()
+      .default(true),
+    botSubscribedEvents: boolean('bot_subscribed_events')
+      .notNull()
+      .default(true),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -459,6 +467,41 @@ export const adminAuditLogs = pgTable(
     actionIdx: index('audit_log_action_idx').on(t.action),
     targetIdx: index('audit_log_target_idx').on(t.targetType, t.targetId),
     createdAtIdx: index('audit_log_created_at_idx').on(t.createdAt),
+  })
+);
+
+// ============================================================
+// ECONOMIC EVENTS — calendrier macro pour les alertes bot
+// ============================================================
+
+export const economicEventImpactEnum = pgEnum('economic_event_impact', [
+  'low',
+  'medium',
+  'high',
+]);
+
+/**
+ * Événements économiques (NFP, CPI, FOMC, etc.). Admin remplit manuellement
+ * pour MVP (à terme : sync depuis ForexFactory ou TradingEconomics).
+ *
+ * Le CRON `check-economic-alerts` toutes les 30 min vérifie si un event
+ * commence dans 30-60 min → DM aux subscribers.
+ */
+export const economicEvents = pgTable(
+  'economic_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(), // ex. "US CPI YoY"
+    currency: text('currency'), // ex. "USD", "EUR" (devise impactée)
+    impact: economicEventImpactEnum('impact').notNull().default('medium'),
+    eventAt: timestamp('event_at', { withTimezone: true }).notNull(),
+    notes: text('notes'),
+    notifiedAt: timestamp('notified_at'), // null = pas encore notifié
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    eventAtIdx: index('economic_events_event_at_idx').on(t.eventAt),
+    notifiedIdx: index('economic_events_notified_idx').on(t.notifiedAt),
   })
 );
 

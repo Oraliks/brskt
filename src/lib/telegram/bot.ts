@@ -108,6 +108,19 @@ export function getBot(): Bot<Context> {
         `/rr — Ratio risk/reward (entry, SL, TP)\n` +
         `/pip — Valeur du pip (paire, lots)\n` +
         `/convert — Conversion devises live\n\n` +
+        `<b>🔔 Alertes prix</b>\n` +
+        `/alert — Créer une alerte (FX ou crypto)\n` +
+        `/alerts — Mes alertes actives\n` +
+        `/unalert — Supprimer une alerte\n\n` +
+        `<b>📅 Briefings & macro</b>\n` +
+        `/subscribe — S'inscrire briefing/events\n` +
+        `/unsubscribe — Se désinscrire\n` +
+        `/events — Prochains événements macro\n\n` +
+        `<b>🎓 Quiz</b>\n` +
+        `/quiz — Question du jour\n` +
+        `/leaderboard — Classement hebdo\n\n` +
+        `<b>🔄 Inline</b>\n` +
+        `Tape <code>@boursikotonsbot EURUSD</code> dans n'importe quel chat\n\n` +
         `<b>Aide</b>\n` +
         `/help — Cette aide\n\n` +
         `Site : ${appUrl}`,
@@ -282,6 +295,133 @@ export function getBot(): Bot<Context> {
       `💱 <b>${args[0]} ${args[1]?.toUpperCase()} = ${result.converted} ${args[2]?.toUpperCase()}</b>\n\n` +
         `Taux : 1 ${args[1]?.toUpperCase()} = ${result.rate} ${args[2]?.toUpperCase()}\n` +
         `Date : ${result.date}`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // ============================================================
+  // Subscriptions : daily briefing + economic events alerts
+  // ============================================================
+
+  // /subscribe <briefing|events|all>
+  bot.command('subscribe', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const arg = (ctx.match ?? '').trim().toLowerCase();
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users } = await import('@/lib/db/schema');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(`Connecte-toi d'abord : ${appUrl}/login`);
+      return;
+    }
+
+    if (arg === 'briefing') {
+      await db.update(users).set({ botSubscribedBriefing: true }).where(eq(users.id, user.id));
+      await ctx.reply(`✓ Inscrit au briefing matinal (envoyé vers 8h CET).`);
+    } else if (arg === 'events') {
+      await db.update(users).set({ botSubscribedEvents: true }).where(eq(users.id, user.id));
+      await ctx.reply(`✓ Inscrit aux alertes calendrier macro (30 min avant chaque event).`);
+    } else if (arg === 'all' || arg === '') {
+      await db
+        .update(users)
+        .set({ botSubscribedBriefing: true, botSubscribedEvents: true })
+        .where(eq(users.id, user.id));
+      await ctx.reply(
+        `✓ Inscrit aux deux flux :\n` +
+          `• Briefing matinal (vers 8h CET)\n` +
+          `• Alertes calendrier macro (30 min avant)\n\n` +
+          `Désinscription : <code>/unsubscribe briefing</code> ou <code>/unsubscribe events</code>`,
+        { parse_mode: 'HTML' }
+      );
+    } else {
+      await ctx.reply(
+        `Usage : <code>/subscribe briefing</code>, <code>/subscribe events</code>, ou <code>/subscribe all</code>`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
+  // /unsubscribe <briefing|events|all>
+  bot.command('unsubscribe', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const arg = (ctx.match ?? '').trim().toLowerCase();
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users } = await import('@/lib/db/schema');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) return;
+
+    if (arg === 'briefing') {
+      await db.update(users).set({ botSubscribedBriefing: false }).where(eq(users.id, user.id));
+      await ctx.reply(`✓ Désinscrit du briefing matinal.`);
+    } else if (arg === 'events') {
+      await db.update(users).set({ botSubscribedEvents: false }).where(eq(users.id, user.id));
+      await ctx.reply(`✓ Désinscrit des alertes calendrier.`);
+    } else if (arg === 'all' || arg === '') {
+      await db
+        .update(users)
+        .set({ botSubscribedBriefing: false, botSubscribedEvents: false })
+        .where(eq(users.id, user.id));
+      await ctx.reply(`✓ Désinscrit de tous les flux automatiques.`);
+    } else {
+      await ctx.reply(
+        `Usage : <code>/unsubscribe briefing</code>, <code>events</code>, ou <code>all</code>`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
+  // /events — affiche le calendrier des prochains événements macro
+  bot.command('events', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const { gte, asc } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { economicEvents } = await import('@/lib/db/schema');
+
+    const upcoming = await db.query.economicEvents.findMany({
+      where: gte(economicEvents.eventAt, new Date()),
+      orderBy: [asc(economicEvents.eventAt)],
+      limit: 10,
+    });
+
+    if (upcoming.length === 0) {
+      await ctx.reply(
+        `📅 <b>Calendrier macro</b>\n\n` +
+          `Aucun event programmé. L'admin met à jour la liste régulièrement.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const lines = upcoming.map((e) => {
+      const date = new Date(e.eventAt).toLocaleString('fr-FR', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Paris',
+      });
+      const impactEmoji =
+        e.impact === 'high' ? '🔴' : e.impact === 'medium' ? '🟠' : '🟡';
+      return `${impactEmoji} <b>${escapeUserText(e.name)}</b>${
+        e.currency ? ` · ${e.currency}` : ''
+      }\n   ${date}`;
+    });
+
+    await ctx.reply(
+      `📅 <b>Prochains événements macro</b>\n\n${lines.join('\n\n')}\n\n` +
+        `<i>Alertes auto 30 min avant : /subscribe events</i>`,
       { parse_mode: 'HTML' }
     );
   });
