@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { vipApplications } from '@/lib/db/schema';
+import { manualIronfxStatus, vipApplications } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/server';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { VipLanding } from '@/components/vip/vip-landing';
@@ -15,7 +15,6 @@ export default async function VipPage() {
     return <VipLanding />;
   }
 
-  // Onboarding pas fini → renvoyer vers onboarding
   if (!session.user.email || !session.user.onboardingCompletedAt) {
     return (
       <Section className="pt-32 pb-32">
@@ -40,6 +39,17 @@ export default async function VipPage() {
     where: eq(vipApplications.userId, session.user.id),
   });
 
+  // Fetch progression de trading si l'user est in_group avec un compte broker
+  let tradingProgressPct = 0;
+  if (application?.brokerAccountId && application.step === 'in_group') {
+    const status = await db.query.manualIronfxStatus.findFirst({
+      where: eq(manualIronfxStatus.accountId, application.brokerAccountId),
+    });
+    if (status) {
+      tradingProgressPct = status.tradingProgressPct;
+    }
+  }
+
   return (
     <>
       <Section className="pt-32 pb-12">
@@ -56,7 +66,10 @@ export default async function VipPage() {
 
       <Section className="pt-0 pb-32">
         <div className="max-w-3xl mx-auto">
-          <VipWizard application={application ?? null} />
+          <VipWizard
+            application={application ?? null}
+            tradingProgressPct={tradingProgressPct}
+          />
         </div>
       </Section>
     </>

@@ -106,7 +106,14 @@ export const manualIronfxUpdateSchema = z.object({
   signupDetected: z.boolean().optional(),
   depositTotal: z.number().min(0).optional(),
   cpaQualified: z.boolean().optional(),
+  tradingProgressPct: z.number().int().min(0).max(100).optional(),
   accountClosed: z.boolean().optional(),
   hasWithdrawn: z.boolean().optional(),
   notes: z.string().optional(),
+});
+
+export const adminProgressUpdateSchema = z.object({
+  accountId: z.string(),
+  userId: z.string().uuid(),
+  tradingProgressPct: z.number().int().min(0).max(100),
 });

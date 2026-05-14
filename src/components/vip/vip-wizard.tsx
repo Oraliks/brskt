@@ -69,9 +69,14 @@ const STEP_LABELS: Record<Step, { title: string; sub: string }> = {
 
 interface VipWizardProps {
   application: VipApplication | null;
+  /** Progression de trading 0-100 — pertinente quand step = in_group */
+  tradingProgressPct?: number;
 }
 
-export function VipWizard({ application }: VipWizardProps) {
+export function VipWizard({
+  application,
+  tradingProgressPct = 0,
+}: VipWizardProps) {
   const currentStep = application?.step ?? null;
 
   if (currentStep === 'ejected') {
@@ -81,7 +86,10 @@ export function VipWizard({ application }: VipWizardProps) {
   return (
     <div className="space-y-8">
       <ProgressHeader currentStep={currentStep} />
-      <StepRenderer application={application} />
+      <StepRenderer
+        application={application}
+        tradingProgressPct={tradingProgressPct}
+      />
     </div>
   );
 }
@@ -105,7 +113,13 @@ function ProgressHeader({ currentStep }: { currentStep: Step | null }) {
   );
 }
 
-function StepRenderer({ application }: { application: VipApplication | null }) {
+function StepRenderer({
+  application,
+  tradingProgressPct,
+}: {
+  application: VipApplication | null;
+  tradingProgressPct: number;
+}) {
   const step = application?.step ?? null;
 
   if (step === null) {
@@ -127,7 +141,7 @@ function StepRenderer({ application }: { application: VipApplication | null }) {
     case 'telegram_invited':
       return <InviteStep inviteLink={application!.telegramInviteLink ?? ''} />;
     case 'in_group':
-      return <SuccessStep />;
+      return <SuccessStep tradingProgressPct={tradingProgressPct} />;
     default:
       return null;
   }
@@ -419,22 +433,80 @@ function InviteStep({ inviteLink }: { inviteLink: string }) {
   );
 }
 
-function SuccessStep() {
+function SuccessStep({ tradingProgressPct }: { tradingProgressPct: number }) {
+  const isQualified = tradingProgressPct >= 100;
+
   return (
-    <div className="glass-strong rounded-[var(--radius-2xl)] p-10 text-center space-y-4">
-      <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 border border-emerald-500/30">
-        <Check className="h-8 w-8 text-emerald-400" strokeWidth={3} />
+    <div className="space-y-6">
+      <div className="glass-strong rounded-[var(--radius-2xl)] p-10 text-center space-y-4">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 border border-emerald-500/30">
+          <Check className="h-8 w-8 text-emerald-400" strokeWidth={3} />
+        </div>
+        <h2 className="font-serif text-3xl md:text-4xl text-gradient">
+          Tu es membre VIP.
+        </h2>
+        <p className="text-[var(--color-text-dim)] max-w-md mx-auto">
+          Bienvenue. On vérifie périodiquement l'activité de ton compte broker.
+          Tant qu'il est actif, tu restes dans le groupe.
+        </p>
+        <Button asChild variant="secondary">
+          <Link href="/dashboard">Voir mon espace</Link>
+        </Button>
       </div>
-      <h2 className="font-serif text-3xl md:text-4xl text-gradient">
-        Tu es membre VIP.
-      </h2>
-      <p className="text-[var(--color-text-dim)] max-w-md mx-auto">
-        Bienvenue. On vérifie périodiquement l'activité de ton compte broker.
-        Tant qu'il est actif, tu restes dans le groupe.
-      </p>
-      <Button asChild variant="secondary">
-        <Link href="/dashboard">Voir mon espace</Link>
-      </Button>
+
+      <div
+        className={cn(
+          'glass rounded-[var(--radius-lg)] p-6',
+          isQualified && 'border-emerald-500/30 bg-emerald-500/5'
+        )}
+      >
+        {isQualified ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-lg">
+                🎉
+              </span>
+              <div>
+                <h3 className="font-semibold text-emerald-300">
+                  Félicitations — tu es à 100%
+                </h3>
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  Ta place dans le VIP est sécurisée. Aucun risque de kick.
+                </p>
+              </div>
+            </div>
+            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-400"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-medium text-sm">
+                Progression de trading depuis ton arrivée
+              </h3>
+              <span className="font-mono text-2xl font-medium text-white tabular-nums">
+                {tradingProgressPct}%
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-pink-500 transition-all"
+                style={{
+                  width: `${Math.max(0, Math.min(100, tradingProgressPct))}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-[var(--color-text-dim)]">
+              À 100%, ta place dans le VIP est sécurisée. D'ici là, évite de
+              retirer tes fonds pour ne pas être éjecté automatiquement.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

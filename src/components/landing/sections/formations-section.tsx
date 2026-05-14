@@ -21,12 +21,12 @@ const formations: FormationCardData[] = [
   {
     tag: 'Distance',
     title: 'Formation à distance',
-    desc: 'Une semaine intensive via visio privée. Idéal pour apprendre depuis chez soi.',
+    desc: '7 jours de formation intensive en visio privée. On reste jusqu\'à ce que les modules soient acquis.',
     price: '1500€',
-    priceUnit: '/ semaine',
+    priceUnit: '/ formation',
     features: [
-      '5 jours · sessions privées',
-      'Calendrier flexible',
+      '7 jours · sessions privées',
+      'Modules garantis acquis',
       'Support post-formation',
     ],
     checkColor: '#14b8a6',
@@ -37,11 +37,11 @@ const formations: FormationCardData[] = [
   {
     tag: 'Présentiel · Dubaï',
     title: 'Formation présentiel',
-    desc: 'Une semaine intensive en personne à Dubaï. Apprentissage immersif au plus près du marché.',
+    desc: '7 jours de formation intensive en personne à Dubaï. Apprentissage immersif au plus près du marché.',
     price: '3500€',
-    priceUnit: '/ semaine',
+    priceUnit: '/ formation',
     features: [
-      '5 jours · 1-to-1',
+      '7 jours · 1-to-1',
       'Setup trading sur place',
       'Vol A/R non inclus',
     ],

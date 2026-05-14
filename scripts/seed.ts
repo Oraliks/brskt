@@ -27,9 +27,9 @@ async function main() {
         slug: 'formation-distance',
         mode: 'remote',
         description:
-          '5 jours intensifs en visio privée. Calendrier flexible, méthode complète.',
+          '7 jours en visio privée. 5 modules à acquérir (Graphiques, Fondamental, Matières premières, Psychologie, Money management). On reste jusqu\'à ce que tout soit assimilé.',
         priceEur: '1500',
-        durationDays: 5,
+        durationDays: 7,
         active: true,
       },
       {
@@ -37,9 +37,9 @@ async function main() {
         slug: 'formation-dubai',
         mode: 'onsite',
         description:
-          '5 jours intensifs en face-à-face à Dubaï. Setup pro sur place, immersion totale. Vol A/R non inclus.',
+          '7 jours en face-à-face à Dubaï. 5 modules à acquérir (Graphiques, Fondamental, Matières premières, Psychologie, Money management). Setup pro sur place. Vol A/R non inclus.',
         priceEur: '3500',
-        durationDays: 5,
+        durationDays: 7,
         active: true,
       },
     ])

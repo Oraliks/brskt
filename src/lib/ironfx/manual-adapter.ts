@@ -1,4 +1,4 @@
-import { and, eq, gte } from 'drizzle-orm';
+import { eq, gte } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { manualIronfxStatus } from '@/lib/db/schema';
 import type { IronFXAdapter, IronFXClientStatus } from './types';
@@ -38,6 +38,7 @@ export class IronFXManualAdapter implements IronFXAdapter {
       depositTotal: Number(row.depositTotal),
       depositCurrency: row.depositCurrency ?? 'EUR',
       cpaQualified: row.cpaQualified,
+      tradingProgressPct: Math.max(0, Math.min(100, row.tradingProgressPct)),
       accountClosed: row.accountClosed,
       hasWithdrawn: row.hasWithdrawn,
       lastUpdated: row.updatedAt,

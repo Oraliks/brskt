@@ -88,12 +88,26 @@ export class IronFXApiAdapter implements IronFXAdapter {
     accountId: string,
     raw: Record<string, unknown>
   ): IronFXClientStatus {
+    const cpaQualified = Boolean(raw.cpa_qualified ?? raw.is_qualified);
+    // En mode API on a juste cpaQualified bool — on traduit en 0% ou 100%.
+    // Si IronFX expose un score plus granulaire un jour (raw.progress_pct),
+    // on l'utilise en priorité.
+    const apiProgress =
+      raw.progress_pct ?? raw.trading_progress ?? raw.progress;
+    const tradingProgressPct =
+      typeof apiProgress === 'number'
+        ? Math.max(0, Math.min(100, apiProgress))
+        : cpaQualified
+        ? 100
+        : 0;
+
     return {
       accountId,
       signupDetected: Boolean(raw.signup_detected ?? raw.has_signed_up),
       depositTotal: Number(raw.deposit_total ?? raw.total_deposits ?? 0),
       depositCurrency: String(raw.currency ?? 'EUR'),
-      cpaQualified: Boolean(raw.cpa_qualified ?? raw.is_qualified),
+      cpaQualified,
+      tradingProgressPct,
       accountClosed: Boolean(raw.account_closed ?? raw.is_closed),
       hasWithdrawn: Boolean(raw.has_withdrawn ?? raw.withdrew),
       lastUpdated: new Date(

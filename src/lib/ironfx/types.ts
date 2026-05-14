@@ -7,6 +7,10 @@ export interface IronFXClientStatus {
   depositCurrency: string;
   /** True quand IronFX nous a payé la commission CPA (objectif business : $1 minimum) */
   cpaQualified: boolean;
+  /** Progression de trading 0-100, montrée au user.
+   *  En mode API : 0 ou 100 selon cpaQualified.
+   *  En mode manuel : valeur saisie par l'admin (granulaire). */
+  tradingProgressPct: number;
   accountClosed: boolean;
   /** True si le client a retiré son argent */
   hasWithdrawn: boolean;

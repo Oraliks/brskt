@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, UserX, Wallet } from 'lucide-react';
+import { Check, Loader2, TrendingUp, UserX, Wallet } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -26,13 +27,22 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import {
   adminEjectAction,
+  adminSetTradingProgressAction,
   adminValidateDepositAction,
   adminValidateSignupAction,
 } from '@/lib/actions/admin';
-import type { VipApplication, User } from '@/lib/db/schema';
-import { formatDate } from '@/lib/utils';
+import type {
+  ManualIronfxStatus,
+  User,
+  VipApplication,
+} from '@/lib/db/schema';
+import type { IronFXMode } from '@/lib/ironfx';
+import { cn, formatDate } from '@/lib/utils';
 
-type Row = VipApplication & { user: User };
+type Row = VipApplication & {
+  user: User;
+  ironfxStatus: ManualIronfxStatus | null;
+};
 
 const STEP_VARIANT: Record<
   VipApplication['step'],
@@ -51,14 +61,19 @@ const STEP_VARIANT: Record<
 
 interface Props {
   applications: Row[];
+  ironfxMode: IronFXMode;
 }
 
-export function VipTable({ applications }: Props) {
+export function VipTable({ applications, ironfxMode }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [ejectTarget, setEjectTarget] = useState<Row | null>(null);
+  const [progressTarget, setProgressTarget] = useState<Row | null>(null);
 
-  function quickAction(label: string, fn: () => Promise<{ success: boolean; error?: string }>) {
+  function quickAction(
+    label: string,
+    fn: () => Promise<{ success: boolean; error?: string }>
+  ) {
     start(async () => {
       const result = await fn();
       if (result.success) {
@@ -83,6 +98,7 @@ export function VipTable({ applications }: Props) {
             <TableHead>Compte broker</TableHead>
             <TableHead>Dépôt</TableHead>
             <TableHead>Étape</TableHead>
+            <TableHead>Progression</TableHead>
             <TableHead>MAJ</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -90,7 +106,10 @@ export function VipTable({ applications }: Props) {
         <TableBody>
           {applications.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-sm text-[var(--color-text-dim)] py-10">
+              <TableCell
+                colSpan={7}
+                className="text-center text-sm text-[var(--color-text-dim)] py-10"
+              >
                 Aucune application VIP.
               </TableCell>
             </TableRow>
@@ -128,11 +147,14 @@ export function VipTable({ applications }: Props) {
                   {a.step.replace('_', ' ')}
                 </Badge>
               </TableCell>
+              <TableCell>
+                <ProgressCell row={a} ironfxMode={ironfxMode} />
+              </TableCell>
               <TableCell className="text-xs text-[var(--color-text-dim)]">
                 {formatDate(a.updatedAt)}
               </TableCell>
               <TableCell className="text-right">
-                <div className="inline-flex gap-1">
+                <div className="inline-flex flex-wrap gap-1 justify-end">
                   {a.step === 'signup_pending' && (
                     <Button
                       size="sm"
@@ -163,12 +185,24 @@ export function VipTable({ applications }: Props) {
                       Valider dépôt
                     </Button>
                   )}
+                  {a.step === 'in_group' &&
+                    ironfxMode === 'manual' &&
+                    a.brokerAccountId && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setProgressTarget(a)}
+                      >
+                        <TrendingUp className="h-3 w-3" />
+                        Progression
+                      </Button>
+                    )}
                   {a.step === 'in_group' && (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setEjectTarget(a)}
-                      className="text-rose-300"
+                      className="text-rose-300 hover:bg-rose-500/10"
                     >
                       <UserX className="h-3 w-3" />
                       Éjecter
@@ -188,7 +222,181 @@ export function VipTable({ applications }: Props) {
           onDone={() => router.refresh()}
         />
       )}
+
+      {progressTarget && (
+        <ProgressDialog
+          row={progressTarget}
+          onClose={() => setProgressTarget(null)}
+          onDone={() => router.refresh()}
+        />
+      )}
     </div>
+  );
+}
+
+function ProgressCell({
+  row,
+  ironfxMode,
+}: {
+  row: Row;
+  ironfxMode: IronFXMode;
+}) {
+  if (row.step !== 'in_group') {
+    return <span className="text-xs text-[var(--color-text-faint)]">—</span>;
+  }
+  const pct = row.ironfxStatus?.tradingProgressPct ?? 0;
+  return (
+    <div className="space-y-1 max-w-[140px]">
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="font-mono tabular-nums text-white font-medium">
+          {pct}%
+        </span>
+        {pct >= 100 && (
+          <span className="text-[10px] text-emerald-300">qualifié</span>
+        )}
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+        <div
+          className={cn(
+            'h-full transition-all rounded-full',
+            pct >= 100
+              ? 'bg-emerald-400'
+              : 'bg-gradient-to-r from-[var(--color-accent)] to-pink-500'
+          )}
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </div>
+      {ironfxMode === 'manual' && (
+        <div className="text-[10px] text-[var(--color-text-faint)]">manuel</div>
+      )}
+    </div>
+  );
+}
+
+function ProgressDialog({
+  row,
+  onClose,
+  onDone,
+}: {
+  row: Row;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [value, setValue] = useState(row.ironfxStatus?.tradingProgressPct ?? 0);
+  const [pending, start] = useTransition();
+
+  useEffect(() => {
+    setValue(row.ironfxStatus?.tradingProgressPct ?? 0);
+  }, [row]);
+
+  function submit() {
+    if (!row.brokerAccountId) {
+      toast({
+        title: 'Pas de compte broker',
+        description: 'L\'user n\'a pas encore déclaré son ID broker.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    start(async () => {
+      const result = await adminSetTradingProgressAction({
+        accountId: row.brokerAccountId!,
+        userId: row.userId,
+        tradingProgressPct: value,
+      });
+      if (result.success) {
+        toast({
+          title:
+            value >= 100
+              ? `✓ ${row.user.name} qualifié à 100% — notif envoyée`
+              : `✓ Progression : ${value}%`,
+        });
+        onClose();
+        onDone();
+      } else {
+        toast({
+          title: 'Erreur',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Progression de trading — {row.user.name}</DialogTitle>
+          <DialogDescription>
+            Ajuste le pourcentage de progression. À 100%, le user devient
+            qualifié et est protégé du kick automatique.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <Label htmlFor="progress">Pourcentage</Label>
+              <span className="font-mono text-2xl font-medium">{value}%</span>
+            </div>
+            <input
+              id="progress"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+              className="w-full accent-[var(--color-accent)]"
+            />
+            <div className="mt-2 h-2 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className={cn(
+                  'h-full transition-all rounded-full',
+                  value >= 100
+                    ? 'bg-emerald-400'
+                    : 'bg-gradient-to-r from-[var(--color-accent)] to-pink-500'
+                )}
+                style={{ width: `${value}%` }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="progress-input">Ou entre une valeur précise</Label>
+            <Input
+              id="progress-input"
+              type="number"
+              min={0}
+              max={100}
+              value={value}
+              onChange={(e) =>
+                setValue(Math.max(0, Math.min(100, Number(e.target.value))))
+              }
+              className="mt-2"
+            />
+          </div>
+
+          {value >= 100 && (
+            <div className="rounded-md bg-emerald-500/10 border border-emerald-500/25 px-3 py-2 text-xs text-emerald-200">
+              ✓ À 100%, on flag le user comme qualifié et on lui envoie
+              automatiquement un message de félicitations.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button onClick={submit} disabled={pending}>
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Enregistrer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -243,7 +451,7 @@ function EjectDialog({
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Ex: retrait avant qualification CPA"
+            placeholder="Ex: retrait avant qualification"
           />
         </div>
         <DialogFooter>

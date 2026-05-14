@@ -1,0 +1,1 @@
+ALTER TABLE "manual_ironfx_status" ADD COLUMN "trading_progress_pct" integer DEFAULT 0 NOT NULL;

@@ -12,6 +12,7 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminProgressUpdateSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
 } from '@/lib/validations';
@@ -243,6 +244,85 @@ export async function adminEjectAction(
   if (!res.success) {
     return { success: false, error: res.error ?? 'Éjection échouée' };
   }
+  revalidatePath('/admin/vip');
+  revalidatePath('/vip');
+  revalidatePath('/dashboard');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Met à jour la progression de trading d'un user (mode manuel IronFX).
+ *
+ * Pattern : l'admin ajuste un % de 0 à 100. Quand le % atteint 100,
+ * on flag cpaQualified=true sur manualIronfxStatus ET vipApplications,
+ * et on envoie une notif "Félicitations" au user.
+ *
+ * Auto-crée le row manual_ironfx_status si pas encore présent.
+ */
+export async function adminSetTradingProgressAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminProgressUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  const { accountId, userId, tradingProgressPct } = parsed.data;
+  const nowQualified = tradingProgressPct >= 100;
+
+  // Upsert manual_ironfx_status
+  await db
+    .insert(manualIronfxStatus)
+    .values({
+      accountId,
+      userId,
+      tradingProgressPct,
+      cpaQualified: nowQualified,
+      updatedBy: session.user.id,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: manualIronfxStatus.accountId,
+      set: {
+        tradingProgressPct,
+        cpaQualified: nowQualified,
+        updatedBy: session.user.id,
+        updatedAt: new Date(),
+      },
+    });
+
+  // Sync vipApplications.cpaQualified (le CRON le fait aussi, mais on
+  // veut que ce soit instantané pour la notif)
+  const vipApp = await db.query.vipApplications.findFirst({
+    where: eq(vipApplications.userId, userId),
+    with: { user: true },
+  });
+
+  if (vipApp && nowQualified && !vipApp.cpaQualified) {
+    await db
+      .update(vipApplications)
+      .set({
+        cpaQualified: true,
+        cpaQualifiedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(vipApplications.id, vipApp.id));
+
+    // Notif "Félicitations" au user
+    after(() => {
+      const firstName =
+        vipApp.user.telegramFirstName ?? vipApp.user.name ?? '';
+      return notifyUser(vipApp.user, {
+        telegram:
+          `🎉 <b>Félicitations ${escapeHtml(firstName)} !</b>\n\n` +
+          `Tu es maintenant à <b>100%</b> de progression de trading.\n` +
+          `Ta place dans le VIP est sécurisée — pas de risque d'éjection sur retrait.`,
+        // Pas d'email dédié pour l'instant, juste Telegram (event rare)
+      });
+    });
+  }
+
   revalidatePath('/admin/vip');
   revalidatePath('/vip');
   revalidatePath('/dashboard');

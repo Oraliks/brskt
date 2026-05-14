@@ -306,6 +306,9 @@ export const manualIronfxStatus = pgTable(
       .default('0'),
     depositCurrency: text('deposit_currency').default('EUR'),
     cpaQualified: boolean('cpa_qualified').notNull().default(false),
+    /** Progression de l'user de 0 à 100. Auto-set cpaQualified=true à 100.
+     *  Affiché côté user comme "X% de trading depuis ton arrivée". */
+    tradingProgressPct: integer('trading_progress_pct').notNull().default(0),
     accountClosed: boolean('account_closed').notNull().default(false),
     hasWithdrawn: boolean('has_withdrawn').notNull().default(false),
     notes: text('notes'),

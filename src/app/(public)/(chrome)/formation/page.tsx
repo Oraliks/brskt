@@ -12,48 +12,48 @@ export const dynamic = 'force-dynamic';
 
 const curriculum = [
   {
-    day: 'Jour 1',
-    title: 'Fondamentaux & Money Management',
+    label: 'Module 01',
+    title: 'Graphiques',
     points: [
-      'Mécanique des marchés (FX, indices, crypto)',
-      'Risque par trade, taille de position',
-      'Construire un journal de trading',
+      'Lecture des chandeliers et structures de marché',
+      'Supports, résistances, tendances',
+      'Configurations chartistes et setups',
     ],
   },
   {
-    day: 'Jour 2',
-    title: 'Analyse technique avancée',
+    label: 'Module 02',
+    title: 'Fondamental',
     points: [
-      'Structure de marché, ranges, breakouts',
-      'Confluences (RSI, EMA, volumes)',
-      'Setups gagnants documentés',
+      'Comprendre les actualités économiques',
+      'Calendrier économique et impact',
+      'Banques centrales, taux, indicateurs clés',
     ],
   },
   {
-    day: 'Jour 3',
-    title: 'Psychologie & exécution',
+    label: 'Module 03',
+    title: 'Matières premières',
+    points: [
+      'Or, pétrole, indices : spécificités',
+      'Saisonnalité et cycles',
+      'Corrélations avec le Forex et les crypto',
+    ],
+  },
+  {
+    label: 'Module 04',
+    title: 'Psychologie',
     points: [
       'Discipline du trader pro',
-      'Gestion émotionnelle des pertes',
+      'Gestion émotionnelle des pertes et gains',
       'Routine pré- et post-marché',
     ],
   },
   {
-    day: 'Jour 4',
-    title: 'Trading live encadré',
+    label: 'Module 05',
+    title: 'Money management',
     points: [
-      'Premières positions réelles sous notre regard',
-      'Debrief en temps réel',
+      'Risque par trade, taille de position',
+      'Construire un journal de trading',
       'Plan de trading personnalisé',
-    ],
-  },
-  {
-    day: 'Jour 5',
-    title: 'Stratégie long terme',
-    points: [
-      "Construire ton edge",
-      'Suivi 30 jours post-formation',
-      'Onboarding VIP Telegram',
     ],
   },
 ];
@@ -73,12 +73,12 @@ export default async function FormationPage() {
           eyebrow="Formation"
           title={
             <>
-              5 jours pour devenir
+              7 jours pour devenir
               <br />
               <span className="font-serif italic">trader.</span>
             </>
           }
-          description="Méthode appliquée sur les marchés réels. Pas de PDF générique."
+          description="5 modules à acquérir. La formation dure 7 jours, mais on reste avec toi jusqu'à ce que tout soit assimilé."
         />
       </Section>
 
@@ -88,14 +88,14 @@ export default async function FormationPage() {
             icon={Wifi}
             badge="Distance"
             title={remote?.title ?? 'Formation Trading à distance'}
-            description={remote?.description ?? '5 jours en visio privée 1:1.'}
+            description={remote?.description ?? '7 jours en visio privée 1:1.'}
             price={remote?.priceEur ? Number(remote.priceEur) : 1500}
             mode="remote"
             includes={[
-              'Visio privée 1:1 sur 5 jours',
+              'Visio privée 1:1 sur 7 jours',
+              '5 modules garantis acquis',
               'Tous les replays + ressources',
               'Plan de trading personnalisé',
-              'Suivi 30 jours post-formation',
               'Accès au funnel VIP Telegram',
             ]}
           />
@@ -105,14 +105,14 @@ export default async function FormationPage() {
             title={onsite?.title ?? 'Formation Trading à Dubaï'}
             description={
               onsite?.description ??
-              '5 jours intensifs sur place à Dubaï. Setup pro, immersion.'
+              '7 jours intensifs sur place à Dubaï. Setup pro, immersion.'
             }
             price={onsite?.priceEur ? Number(onsite.priceEur) : 3500}
             mode="onsite"
             includes={[
-              "5 jours intensifs face-à-face",
+              "7 jours intensifs face-à-face",
+              '5 modules garantis acquis',
               'Setup professionnel sur place',
-              "Networking traders Dubaï",
               'Tous les avantages de la version distance',
               'Accès prioritaire au VIP',
             ]}
@@ -127,30 +127,27 @@ export default async function FormationPage() {
           eyebrow="Programme"
           title={
             <>
-              5 jours, <span className="font-serif italic">5 niveaux.</span>
+              5 modules, <span className="font-serif italic">7 jours minimum.</span>
             </>
           }
-          description="Le programme est identique en distance ou présentiel. Seule l'expérience change."
+          description="On valide chaque module avant de passer au suivant. Si on déborde sur les 7 jours, on continue — l'objectif c'est que tu maîtrises, pas qu'on coche une case."
         />
 
         <div className="mt-12 max-w-4xl mx-auto space-y-4">
-          {curriculum.map((day, i) => (
+          {curriculum.map((mod) => (
             <div
-              key={day.day}
+              key={mod.label}
               className="glass rounded-[var(--radius-lg)] p-6 md:p-8 grid md:grid-cols-[180px_1fr] gap-6"
             >
               <div>
-                <div className="font-mono text-xs text-[var(--color-text-faint)] tracking-wider">
-                  {String(i + 1).padStart(2, '0')}
+                <div className="font-mono text-xs text-[var(--color-text-faint)] tracking-wider uppercase">
+                  {mod.label}
                 </div>
-                <div className="mt-1 font-serif text-xl">{day.day}</div>
+                <div className="mt-1 font-serif text-xl">{mod.title}</div>
               </div>
               <div>
-                <h3 className="text-lg font-semibold tracking-tight">
-                  {day.title}
-                </h3>
-                <ul className="mt-3 space-y-2">
-                  {day.points.map((p) => (
+                <ul className="space-y-2">
+                  {mod.points.map((p) => (
                     <li
                       key={p}
                       className="flex items-start gap-3 text-sm text-[var(--color-text-dim)]"

@@ -11,7 +11,7 @@ export function HeroSection() {
       {/* Badge */}
       <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-300 mb-8">
         <span className="landing-pulse-dot h-1.5 w-1.5 rounded-full bg-indigo-300" />
-        Basé à Dubaï · Trading depuis 2018
+        Trading depuis 2018
       </div>
 
       {/* Title */}
