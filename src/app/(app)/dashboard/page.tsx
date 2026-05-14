@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
+import { TradingHero } from '@/components/shared/trading-hero';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +94,11 @@ export default async function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Décor : chart animé, comble l'espace entre header et cards */}
+        <div className="mt-8">
+          <TradingHero />
+        </div>
       </Section>
 
       <Section className="py-0">

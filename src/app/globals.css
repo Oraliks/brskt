@@ -406,6 +406,51 @@
   animation: landing-pulse 2s ease-in-out infinite;
 }
 
+/* ----- Trading hero (dashboard) ----- */
+@keyframes trading-line-draw {
+  from {
+    stroke-dasharray: 1200;
+    stroke-dashoffset: 1200;
+  }
+  to {
+    stroke-dasharray: 1200;
+    stroke-dashoffset: 0;
+  }
+}
+.trading-hero__line {
+  animation: trading-line-draw 2.2s ease-out forwards;
+}
+
+@keyframes trading-candle-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.trading-hero__candle {
+  opacity: 0;
+  transform-origin: center;
+  animation: trading-candle-rise 0.5s ease-out forwards;
+}
+
+@keyframes trading-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.trading-hero__dot {
+  opacity: 0;
+  animation:
+    radix-fade-in 0.4s 2.2s ease-out forwards,
+    trading-dot-pulse 1.6s 2.6s ease-in-out infinite;
+}
+.trading-hero__dot > circle:first-child {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: trading-halo-grow 1.6s 2.6s ease-in-out infinite;
+}
+@keyframes trading-halo-grow {
+  0%, 100% { transform: scale(1); opacity: 0.25; }
+  50% { transform: scale(1.6); opacity: 0.10; }
+}
+
 /* ----- Animations Radix data-state (équivalent tw-animate-css minimal) ----- */
 @keyframes radix-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes radix-fade-out { from { opacity: 1; } to { opacity: 0; } }

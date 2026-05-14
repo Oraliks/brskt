@@ -46,7 +46,7 @@ export function VipLanding() {
               <Link href="/login?redirectTo=/vip">Démarrer le funnel</Link>
             </Button>
             <Button asChild size="xl" variant="ghost">
-              <Link href="/#methode">Comprendre la méthode</Link>
+              <Link href="/formation">Voir la formation</Link>
             </Button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { and, eq, gt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { sessions, type User } from '@/lib/db/schema';
@@ -45,7 +45,7 @@ export async function requireAuth(): Promise<AppSession> {
  * pas en DB) pour passer.
  *
  * Format: `ADMIN_TELEGRAM_IDS=123,456,789` (séparé par virgule)
- * Si la var n'est pas définie, on log un warning mais on autorise (legacy).
+ * Si la var n'est pas définie : aucun admin n'est autorisé (mode safe).
  */
 function getAdminWhitelist(): Set<number> | null {
   const raw = process.env.ADMIN_TELEGRAM_IDS;
@@ -57,26 +57,44 @@ function getAdminWhitelist(): Set<number> | null {
   return new Set(ids);
 }
 
-export async function requireAdmin(): Promise<AppSession> {
-  const session = await requireAuth();
+/**
+ * Vérifie sans throw qu'un user est admin (role DB + whitelist Telegram ID).
+ * Utilisé côté UI pour afficher conditionnellement le lien "Admin".
+ *
+ * Pour bloquer l'accès à une route, utiliser `requireAdmin()` qui renvoie un 404.
+ */
+export function isAdminUser(user: User | null | undefined): boolean {
+  if (!user || user.role !== 'admin') return false;
+  const whitelist = getAdminWhitelist();
+  if (!whitelist) return false; // Aucun admin si whitelist non définie
+  const tgId = user.telegramId ? Number(user.telegramId) : 0;
+  return whitelist.has(tgId);
+}
 
-  if (session.user.role !== 'admin') {
-    redirect('/dashboard');
+/**
+ * Protège les routes /admin/*.
+ *
+ * Renvoie un 404 (notFound) au lieu d'un redirect dans tous les cas non-admin :
+ *  - Pas authentifié
+ *  - Authentifié mais role !== 'admin'
+ *  - Authentifié + role admin mais telegramId pas dans ADMIN_TELEGRAM_IDS
+ *
+ * Le 404 est volontaire (security through obscurity) : un attaquant non
+ * authentifié ne doit même pas savoir que /admin existe.
+ */
+export async function requireAdmin(): Promise<AppSession> {
+  const session = await getSession();
+  if (!session) {
+    notFound();
   }
 
-  const whitelist = getAdminWhitelist();
-  if (whitelist !== null) {
-    const tgId = session.user.telegramId ? Number(session.user.telegramId) : 0;
-    if (!whitelist.has(tgId)) {
+  if (!isAdminUser(session.user)) {
+    if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_TELEGRAM_IDS) {
       console.warn(
-        `[requireAdmin] User ${session.user.id} has role=admin but Telegram ID ${tgId} is not in ADMIN_TELEGRAM_IDS whitelist. Denying access.`
+        '[requireAdmin] ADMIN_TELEGRAM_IDS not set in prod — no admin can access /admin'
       );
-      redirect('/dashboard');
     }
-  } else if (process.env.NODE_ENV === 'production') {
-    console.warn(
-      '[requireAdmin] ADMIN_TELEGRAM_IDS not set — defense-in-depth disabled. Set it for prod safety.'
-    );
+    notFound();
   }
 
   return session;

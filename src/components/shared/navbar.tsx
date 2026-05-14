@@ -14,8 +14,6 @@ interface NavbarProps {
 const links = [
   { href: '/formation', label: 'Formation' },
   { href: '/vip', label: 'VIP Telegram' },
-  { href: '/#methode', label: 'Méthode' },
-  { href: '/#faq', label: 'FAQ' },
 ];
 
 export function Navbar({ authenticated = false }: NavbarProps) {
@@ -57,7 +55,7 @@ export function Navbar({ authenticated = false }: NavbarProps) {
         </div>
 
         <button
-          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/5"
+          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-[var(--color-surface-tint)]"
           onClick={() => setOpen((v) => !v)}
           aria-label="Menu"
         >
