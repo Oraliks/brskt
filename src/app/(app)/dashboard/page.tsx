@@ -78,15 +78,15 @@ export default async function DashboardPage() {
         </div>
 
         {botUsername && (
-          <div className="mt-8 inline-flex items-start gap-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/25 px-4 py-3 max-w-xl">
-            <MessageCircle className="h-4 w-4 text-blue-300 flex-shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <strong className="text-blue-200">Notifications temps réel :</strong>{' '}
+          <div className="mt-8 inline-flex items-start gap-3 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 px-4 py-3 max-w-xl">
+            <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-[var(--color-text)]">
+              <strong className="text-blue-200 light:text-blue-800 font-semibold">Notifications temps réel :</strong>{' '}
               <Link
                 href={`https://t.me/${botUsername}?start=hello`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-[var(--color-text)]"
+                className="underline underline-offset-2 hover:text-[var(--color-text)] light:text-blue-700"
               >
                 envoie <code className="font-mono bg-[var(--color-surface-tint)] px-1.5 py-0.5 rounded">/start</code> à @{botUsername}
               </Link>{' '}

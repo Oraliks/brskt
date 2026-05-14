@@ -9,8 +9,8 @@ export function HeroSection() {
   return (
     <div className="relative w-full max-w-4xl text-center">
       {/* Badge */}
-      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-300 mb-8 opacity-0 animate-[radix-fade-in_0.8s_0.1s_forwards] hover:border-indigo-400/50 hover:bg-indigo-500/15 transition-colors">
-        <span className="landing-pulse-dot h-1.5 w-1.5 rounded-full bg-indigo-300" />
+      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 light:bg-indigo-500/15 border border-indigo-500/30 light:border-indigo-500/50 text-xs font-semibold text-indigo-300 light:text-indigo-700 mb-8 opacity-0 animate-[radix-fade-in_0.8s_0.1s_forwards] hover:border-indigo-400/50 hover:bg-indigo-500/15 transition-colors">
+        <span className="landing-pulse-dot h-1.5 w-1.5 rounded-full bg-indigo-300 light:bg-indigo-600" />
         Trading depuis 2018
       </div>
 
