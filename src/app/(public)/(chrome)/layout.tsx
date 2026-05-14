@@ -1,7 +1,7 @@
 import { BackgroundFX } from '@/components/shared/background-fx';
 import { Footer } from '@/components/shared/footer';
 import { Navbar } from '@/components/shared/navbar';
-import { getSession } from '@/lib/auth/server';
+import { getSession, isAdminUser } from '@/lib/auth/server';
 
 export default async function PublicLayout({
   children,
@@ -9,10 +9,17 @@ export default async function PublicLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession().catch(() => null);
+  const user = session?.user
+    ? {
+        name:
+          session.user.telegramFirstName ?? session.user.name ?? 'Toi',
+        image: session.user.telegramPhotoUrl ?? null,
+      }
+    : null;
   return (
     <>
       <BackgroundFX />
-      <Navbar authenticated={Boolean(session?.user)} />
+      <Navbar user={user} isAdmin={isAdminUser(session?.user)} />
       <main className="relative">{children}</main>
       <Footer />
     </>
