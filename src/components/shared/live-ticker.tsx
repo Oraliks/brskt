@@ -18,12 +18,14 @@ import type { MarketQuote } from '@/lib/market-quotes';
  */
 
 interface Props {
-  initial: MarketQuote[];
+  /** Quotes initiales fournies au SSR — évite le flash de loading au 1er paint.
+   *  Si vide, le composant fetch au mount et affiche un placeholder discret. */
+  initial?: MarketQuote[];
 }
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-export function LiveTicker({ initial }: Props) {
+export function LiveTicker({ initial = [] }: Props) {
   const [quotes, setQuotes] = useState<MarketQuote[]>(initial);
 
   useEffect(() => {
@@ -48,6 +50,11 @@ export function LiveTicker({ initial }: Props) {
       }
     }
 
+    // Premier fetch immédiat si pas d'initial
+    if (initial.length === 0) {
+      void refresh();
+    }
+
     const interval = setInterval(refresh, REFRESH_INTERVAL_MS);
     const onVisible = () => {
       if (document.visibilityState === 'visible') refresh();
@@ -59,7 +66,18 @@ export function LiveTicker({ initial }: Props) {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [initial.length]);
+
+  // Pendant le 1er fetch (initial vide), on affiche un placeholder discret
+  if (quotes.length === 0) {
+    return (
+      <div className="live-ticker relative w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-tint)] py-2.5 px-4">
+        <div className="text-[10px] font-mono text-[var(--color-text-faint)] uppercase tracking-wider">
+          Chargement des marchés…
+        </div>
+      </div>
+    );
+  }
 
   // Dupliqué pour le défilement infini sans cut-off visible
   const loop = [...quotes, ...quotes];

@@ -58,7 +58,7 @@ export default async function CheckoutPage({ params }: PageProps) {
   const installmentMode = isInstallments && booking.installmentsPaid > 0;
 
   return (
-    <Section className="pt-24 pb-32">
+    <Section className="pt-12 pb-24">
       <div className="max-w-3xl mx-auto">
         <p className="text-sm text-[var(--color-text-dim)] uppercase tracking-wider">
           {installmentMode

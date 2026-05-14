@@ -35,7 +35,7 @@ export default async function EjectedPage() {
     : 0;
 
   return (
-    <Section className="pt-24 pb-32">
+    <Section className="pt-12 pb-24">
       <div className="max-w-2xl mx-auto">
         <Link
           href="/dashboard"

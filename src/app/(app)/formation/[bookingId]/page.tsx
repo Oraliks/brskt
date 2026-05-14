@@ -65,7 +65,7 @@ export default async function PostFormationPage({ params }: PageProps) {
   const isOnsite = formation.mode === 'onsite';
 
   return (
-    <Section className="pt-24 pb-32">
+    <Section className="pt-12 pb-24">
       <div className="max-w-3xl mx-auto">
         <Link
           href="/dashboard"

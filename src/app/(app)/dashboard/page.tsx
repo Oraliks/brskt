@@ -28,10 +28,8 @@ import { Section } from '@/components/shared/section';
 import { ProposedDateActions } from '@/components/formation/proposed-date-actions';
 import { DeleteCancelledBooking } from '@/components/formation/delete-cancelled-booking';
 import { TradingHero } from '@/components/shared/trading-hero';
-import { LiveTicker } from '@/components/shared/live-ticker';
 import { ReferralLinkCopy } from '@/components/dashboard/referral-link-copy';
 import { buildReferralLink, ensureReferralCode } from '@/lib/referrals';
-import { fetchMarketQuotes } from '@/lib/market-quotes';
 import { getChannelMemberCount } from '@/lib/telegram/community-stats';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 
@@ -46,7 +44,7 @@ export default async function DashboardPage() {
 
   const referralCode = await ensureReferralCode(session.user.id);
 
-  const [userBookings, vipApp, myReferrals, topReferrer, channelCount, marketQuotes] = await Promise.all([
+  const [userBookings, vipApp, myReferrals, topReferrer, channelCount] = await Promise.all([
     db.query.bookings.findMany({
       where: eq(bookings.userId, session.user.id),
       orderBy: [desc(bookings.createdAt)],
@@ -77,15 +75,6 @@ export default async function DashboardPage() {
       .limit(3),
     // Count membres du canal Telegram (best-effort, cache 10min)
     getChannelMemberCount(),
-    // Prix live des marchés (Yahoo Finance, cache 60s côté CDN).
-    // Best-effort : si Yahoo répond pas en 3s, on rend la page sans quotes
-    // initiales et le client component les fetch au mount.
-    Promise.race([
-      fetchMarketQuotes(),
-      new Promise<never[]>((resolve) =>
-        setTimeout(() => resolve([]), 3000)
-      ),
-    ]),
   ]);
 
   // Note : pas de redirect pour les éjectés — la VipCard affiche "Tu as quitté
@@ -111,7 +100,7 @@ export default async function DashboardPage() {
   return (
     <>
       {/* HEADER compact : Salut au-dessus du chart en fond, puis 3 cards en row */}
-      <Section className="pt-20 pb-4">
+      <Section className="pt-10 pb-4">
         {/* Zone titre + bot CTA avec chart en arriere-plan */}
         <div className="relative isolate mb-3">
           <div className="absolute inset-0 -z-10 opacity-30 pointer-events-none overflow-hidden rounded-[var(--radius-lg)]">
@@ -153,24 +142,6 @@ export default async function DashboardPage() {
           />
           <MiniFormationCard hasBooking={userBookings.length > 0} />
           <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
-        </div>
-      </Section>
-
-      {/* LIVE TICKER — bande fine, prix temps réel */}
-      <Section className="py-2">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="relative inline-flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)] font-medium hidden sm:inline">
-              Live
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <LiveTicker initial={marketQuotes} />
-          </div>
         </div>
       </Section>
 
