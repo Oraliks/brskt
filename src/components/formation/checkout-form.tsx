@@ -5,12 +5,19 @@ import { Bitcoin, CreditCard, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { createPaymentAction } from '@/lib/actions/payments';
+import { requestNextInstallmentAction } from '@/lib/actions/bookings';
 import type { PaymentMethodType } from '@/lib/payments/types';
 import { cn, formatPrice } from '@/lib/utils';
 
 interface CheckoutFormProps {
   bookingId: string;
   amount: number;
+  /**
+   * Si true : on est sur une 2e ou 3e échéance d'un paiement en 3x.
+   * On appelle requestNextInstallmentAction au lieu de createPaymentAction
+   * pour créer un nouveau Payment lié à la même réservation.
+   */
+  installmentMode?: boolean;
 }
 
 const methods: Array<{
@@ -39,16 +46,25 @@ const methods: Array<{
   },
 ];
 
-export function CheckoutForm({ bookingId, amount }: CheckoutFormProps) {
+export function CheckoutForm({
+  bookingId,
+  amount,
+  installmentMode = false,
+}: CheckoutFormProps) {
   const [pending, start] = useTransition();
   const [selected, setSelected] = useState<PaymentMethodType>('card');
 
   function handlePay() {
     start(async () => {
-      const result = await createPaymentAction({
-        bookingId,
-        method: selected,
-      });
+      const result = installmentMode
+        ? await requestNextInstallmentAction({
+            bookingId,
+            paymentMethod: selected,
+          })
+        : await createPaymentAction({
+            bookingId,
+            method: selected,
+          });
       if (result.success) {
         window.location.href = result.data.redirectUrl;
       } else {

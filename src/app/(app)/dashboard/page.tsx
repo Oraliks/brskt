@@ -259,6 +259,17 @@ function BookingRow({ booking }: BookingRowProps) {
         />
       )}
 
+      {booking.paymentPlan === 'installments_3x' &&
+        booking.installmentsPaid < booking.installmentTotal && (
+          <InstallmentsBlock
+            bookingId={booking.id}
+            installmentsPaid={booking.installmentsPaid}
+            installmentTotal={booking.installmentTotal}
+            priceEur={Number(formation.priceEur)}
+            blockedUntilFullyPaid
+          />
+        )}
+
       {status === 'cancelled' && booking.adminNotes && (
         <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-4">
           <div className="text-xs font-medium text-rose-200 uppercase tracking-wider mb-1">
@@ -268,6 +279,67 @@ function BookingRow({ booking }: BookingRowProps) {
             {booking.adminNotes}
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+function InstallmentsBlock({
+  bookingId,
+  installmentsPaid,
+  installmentTotal,
+  priceEur,
+  blockedUntilFullyPaid,
+}: {
+  bookingId: string;
+  installmentsPaid: number;
+  installmentTotal: number;
+  priceEur: number;
+  blockedUntilFullyPaid?: boolean;
+}) {
+  const perInstallment =
+    Math.round((priceEur / installmentTotal) * 100) / 100;
+  return (
+    <div className="rounded-[var(--radius-md)] bg-indigo-500/8 border border-indigo-500/25 p-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-xs font-medium text-indigo-200 uppercase tracking-wider mb-1">
+            Paiement en {installmentTotal} fois
+          </div>
+          <div className="text-sm">
+            <strong className="text-white font-mono tabular-nums">
+              {installmentsPaid}/{installmentTotal}
+            </strong>{' '}
+            échéances réglées · {perInstallment}€ par échéance
+          </div>
+        </div>
+        <Button asChild size="sm">
+          <Link href={`/checkout/${bookingId}?next=1`}>
+            <CreditCard className="h-3 w-3" />
+            Payer l'échéance {installmentsPaid + 1}
+          </Link>
+        </Button>
+      </div>
+      <div className="flex gap-1.5">
+        {Array.from({ length: installmentTotal }).map((_, i) => (
+          <div
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < installmentsPaid
+                ? 'bg-emerald-400'
+                : i === installmentsPaid
+                ? 'bg-indigo-400'
+                : 'bg-white/10'
+            }`}
+          />
+        ))}
+      </div>
+      {blockedUntilFullyPaid && (
+        <p className="text-xs text-[var(--color-text-dim)] leading-relaxed">
+          ⓘ La formation ne pourra avoir lieu qu'une fois la totalité du
+          paiement reçue ({installmentTotal} échéances). Aucun remboursement
+          des échéances déjà versées.
+        </p>
       )}
     </div>
   );

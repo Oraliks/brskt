@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Section, SectionHeader } from '@/components/shared/section';
+import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
 import { formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -170,7 +171,10 @@ export default async function FormationPage() {
           </h2>
           <p className="mt-4 text-[var(--color-text-dim)] max-w-xl mx-auto">
             Tu proposes jusqu'à 3 créneaux préférés. On revient vers toi sous 24h
-            pour valider ou te proposer une alternative.
+            pour valider ou te proposer une alternative.{' '}
+            <strong className="text-white">
+              Paiement en 1 fois ou en 3 fois sans frais.
+            </strong>
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="xl" variant="glow">
@@ -180,6 +184,12 @@ export default async function FormationPage() {
               </Link>
             </Button>
           </div>
+        </div>
+      </Section>
+
+      <Section className="pt-0 pb-24">
+        <div className="max-w-3xl mx-auto">
+          <PaymentDisclaimer variant="full" tone="neutral" />
         </div>
       </Section>
     </>

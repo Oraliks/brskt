@@ -76,7 +76,8 @@ export async function createBookingAction(
     return { success: false, error: 'Formation introuvable' };
   }
 
-  // 1. Booking
+  // 1. Booking — payment plan détermine installmentTotal
+  const installmentTotal = parsed.data.paymentPlan === 'installments_3x' ? 3 : 1;
   const [booking] = await db
     .insert(bookings)
     .values({
@@ -85,6 +86,9 @@ export async function createBookingAction(
       preferredDates: parsed.data.preferredDates,
       preferredAsap: parsed.data.preferredAsap,
       status: 'pending_payment',
+      paymentPlan: parsed.data.paymentPlan,
+      installmentTotal,
+      installmentsPaid: 0,
     })
     .returning();
 
@@ -104,7 +108,14 @@ export async function createBookingAction(
     };
   }
 
-  const amount = Number(formation.priceEur);
+  const fullPrice = Number(formation.priceEur);
+  // Montant de la PREMIÈRE échéance — en 3x, c'est 1/3, sinon le total
+  // (arrondi au centime près pour éviter les écarts d'arrondi : la dernière
+  // échéance absorbe le résidu côté requestNextInstallmentAction).
+  const amount =
+    installmentTotal === 1
+      ? fullPrice
+      : Math.round((fullPrice / installmentTotal) * 100) / 100;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
   let paymentSession;
@@ -117,6 +128,8 @@ export async function createBookingAction(
       metadata: {
         formationMode: formation.mode,
         formationTitle: formation.title,
+        installmentIndex: '1',
+        installmentTotal: String(installmentTotal),
       },
       returnUrl: `${appUrl}/dashboard?booked=${booking.id}`,
       cancelUrl: `${appUrl}/checkout/${booking.id}?cancelled=1`,
@@ -286,4 +299,139 @@ export async function respondToProposedDateAction(
   revalidatePath('/dashboard');
   revalidatePath('/admin/bookings');
   return { success: true, data: undefined };
+}
+
+// ============================================================
+// Échéances suivantes pour paiement en 3x
+// ============================================================
+
+/**
+ * Crée une session de paiement pour la PROCHAINE échéance d'un booking en 3x.
+ * Le user appelle cette action depuis son dashboard quand il veut régler
+ * l'échéance 2 ou 3 d'un booking où `installments_paid < installment_total`.
+ *
+ * Règles :
+ *  - Booking doit appartenir à l'user
+ *  - paymentPlan doit être 'installments_3x'
+ *  - installments_paid doit être < installment_total
+ *  - Aucune session pending sur l'échéance courante (sinon on retourne
+ *    l'URL existante via getPaymentSession)
+ *
+ * La dernière échéance absorbe le résidu d'arrondi pour que le user ait
+ * payé exactement le prix total à la fin.
+ */
+export async function requestNextInstallmentAction(input: {
+  bookingId: string;
+  paymentMethod: 'card' | 'paypal' | 'crypto';
+}): Promise<ActionResult<{ redirectUrl: string; installmentIndex: number }>> {
+  const session = await requireOnboarded();
+
+  // Rate limit doux : 5 / 10 min par user
+  const rl = await checkRateLimit({
+    key: `next_installment:user:${session.user.id}`,
+    limit: 5,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return {
+      success: false,
+      error: `Trop de tentatives. Réessaye dans ${Math.ceil(rl.resetIn / 60)} min.`,
+    };
+  }
+
+  const booking = await db.query.bookings.findFirst({
+    where: eq(bookings.id, input.bookingId),
+    with: { formation: true },
+  });
+
+  if (!booking || booking.userId !== session.user.id) {
+    return { success: false, error: 'Réservation introuvable' };
+  }
+
+  if (booking.paymentPlan !== 'installments_3x') {
+    return {
+      success: false,
+      error: "Cette réservation n'est pas en paiement échelonné",
+    };
+  }
+
+  if (booking.installmentsPaid >= booking.installmentTotal) {
+    return {
+      success: false,
+      error: 'Toutes les échéances ont déjà été réglées',
+    };
+  }
+
+  const fullPrice = Number(booking.formation.priceEur);
+  const perInstallment =
+    Math.round((fullPrice / booking.installmentTotal) * 100) / 100;
+  const nextIndex = booking.installmentsPaid + 1; // 2 ou 3
+  // Dernière échéance : on absorbe le résidu pour que total payé = fullPrice
+  const isLast = nextIndex === booking.installmentTotal;
+  const amount = isLast
+    ? Math.round(
+        (fullPrice - perInstallment * (booking.installmentTotal - 1)) * 100
+      ) / 100
+    : perInstallment;
+
+  let provider;
+  try {
+    provider = getPaymentProvider(input.paymentMethod);
+  } catch (err) {
+    console.error('[next-installment] payment provider error', err);
+    return {
+      success: false,
+      error: `Le moyen de paiement "${input.paymentMethod}" n'est pas encore configuré.`,
+    };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  let paymentSession;
+  try {
+    paymentSession = await provider.createSession({
+      userId: session.user.id,
+      bookingId: booking.id,
+      amount,
+      currency: 'EUR',
+      metadata: {
+        formationMode: booking.formation.mode,
+        formationTitle: booking.formation.title,
+        installmentIndex: String(nextIndex),
+        installmentTotal: String(booking.installmentTotal),
+      },
+      returnUrl: `${appUrl}/dashboard?paid=${booking.id}`,
+      cancelUrl: `${appUrl}/checkout/${booking.id}?cancelled=1`,
+    });
+  } catch (err) {
+    console.error('[next-installment] payment session error', err);
+    return {
+      success: false,
+      error: "Impossible d'initialiser le paiement. Contacte l'équipe.",
+    };
+  }
+
+  await db.insert(payments).values({
+    userId: session.user.id,
+    bookingId: booking.id,
+    amountEur: String(amount),
+    method: input.paymentMethod,
+    provider: provider.name,
+    providerSessionId: paymentSession.sessionId,
+    status: 'pending',
+  });
+
+  if (!paymentSession.redirectUrl) {
+    return {
+      success: false,
+      error: "Le provider de paiement n'a pas retourné de redirection",
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      redirectUrl: paymentSession.redirectUrl,
+      installmentIndex: nextIndex,
+    },
+  };
 }

@@ -49,6 +49,24 @@ export default function BookingConfirmedEmail({
           paiement effectué.
         </Text>
       )}
+
+      <Text
+        style={{
+          ...styles.paragraph,
+          fontSize: '12px',
+          color: '#a3a3ad',
+          marginTop: '24px',
+          padding: '12px 16px',
+          background: 'rgba(255,255,255,0.03)',
+          borderRadius: '10px',
+          border: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <strong style={{ color: '#f5f5f7' }}>Conditions :</strong> aucun
+        remboursement une fois la réservation initiée (créneau bloqué,
+        préparation logistique). Si tu as choisi le paiement en 3 fois, la
+        formation aura lieu après réception de la 3<sup>e</sup> échéance.
+      </Text>
     </EmailLayout>
   );
 }

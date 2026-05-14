@@ -48,6 +48,21 @@ export const paymentStatusEnum = pgEnum('payment_status', [
 ]);
 
 /**
+ * Plan de paiement pour une réservation de formation.
+ * - `full` : paiement en 1 fois (cas par défaut)
+ * - `installments_3x` : paiement en 3 mensualités égales sans frais
+ *
+ * Règles métier (cf. disclaimers UI) :
+ *  - Aucun remboursement une fois le 1er paiement effectué
+ *  - La formation n'a lieu QUE lorsque la totalité (installments_paid =
+ *    installment_total) a été reçue
+ */
+export const paymentPlanEnum = pgEnum('payment_plan', [
+  'full',
+  'installments_3x',
+]);
+
+/**
  * Étapes du funnel VIP.
  *
  * Actives (transitions automatiques / Server Actions) :
@@ -177,6 +192,13 @@ export const bookings = pgTable(
     status: bookingStatusEnum('status').notNull().default('pending_admin'),
 
     paymentId: uuid('payment_id'),
+
+    // Plan de paiement (1 fois ou 3 fois sans frais)
+    paymentPlan: paymentPlanEnum('payment_plan').notNull().default('full'),
+    // Nombre d'échéances total (1 pour 'full', 3 pour 'installments_3x')
+    installmentTotal: integer('installment_total').notNull().default(1),
+    // Nombre d'échéances déjà payées (incrémenté par les webhooks)
+    installmentsPaid: integer('installments_paid').notNull().default(0),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

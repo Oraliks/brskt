@@ -17,6 +17,12 @@ export const bookingFormSchema = z
       .max(3, 'Maximum 3 créneaux'),
     preferredAsap: z.boolean().default(false),
     paymentMethod: z.enum(['card', 'paypal', 'crypto']),
+    /**
+     * Plan de paiement :
+     *  - `full` : 1 fois (défaut)
+     *  - `installments_3x` : 3 mensualités égales sans frais
+     */
+    paymentPlan: z.enum(['full', 'installments_3x']).default('full'),
   })
   .refine((data) => data.preferredDates.length > 0 || data.preferredAsap, {
     message: 'Choisis au moins un créneau ou coche "Dès que possible"',

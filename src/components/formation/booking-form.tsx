@@ -18,9 +18,12 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { createBookingAction } from '@/lib/actions/bookings';
+import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
 import { formatPrice, cn } from '@/lib/utils';
 import type { Formation } from '@/lib/db/schema';
 import type { PaymentMethodType } from '@/lib/payments/types';
+
+type PaymentPlan = 'full' | 'installments_3x';
 
 interface BookingFormProps {
   formations: Formation[];
@@ -58,8 +61,15 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
   const [asap, setAsap] = useState(false);
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('card');
+  const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>('full');
 
   const selected = formations.find((f) => f.id === formationId);
+  const fullPrice = selected ? Number(selected.priceEur) : 0;
+  const installments = paymentPlan === 'installments_3x' ? 3 : 1;
+  const firstAmount =
+    installments === 1
+      ? fullPrice
+      : Math.round((fullPrice / installments) * 100) / 100;
 
   function addSlot() {
     if (slots.length >= 3) return;
@@ -100,6 +110,7 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         preferredDates: validSlots,
         preferredAsap: asap,
         paymentMethod,
+        paymentPlan,
       });
 
       if (result.success) {
@@ -267,8 +278,9 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         </legend>
         <p className="text-xs text-[var(--color-text-dim)] mb-4">
           Tu paies maintenant pour bloquer ta place. La date sera ensuite
-          validée par l'équipe sous 24h. En cas de refus ou de non-accord,
-          remboursement intégral.
+          validée par l'équipe sous 24h. Si aucune date ne convient à l'équipe
+          ET que tu refuses la contre-proposition, on annule la réservation
+          (cas exceptionnel — voir conditions ci-dessous).
         </p>
         <div className="grid gap-2">
           {PAYMENT_METHODS.map((m) => (
@@ -307,23 +319,112 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
         </div>
       </fieldset>
 
+      {/* 5. Plan de paiement (1× ou 3×) */}
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1 block">
+          5. Plan de paiement
+        </legend>
+        <p className="text-xs text-[var(--color-text-dim)] mb-4">
+          Le paiement en 3 fois sans frais est notre flexibilité. La formation
+          n'aura lieu qu'<strong>après réception de la totalité du paiement</strong>.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setPaymentPlan('full')}
+            className={cn(
+              'glass rounded-[var(--radius-md)] p-4 text-left transition-all',
+              paymentPlan === 'full'
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
+                : 'hover:border-white/14'
+            )}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium">Paiement en 1 fois</span>
+              <span
+                className={cn(
+                  'h-4 w-4 rounded-full border-2 flex items-center justify-center',
+                  paymentPlan === 'full'
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                    : 'border-[var(--color-border-strong)]'
+                )}
+              >
+                {paymentPlan === 'full' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                )}
+              </span>
+            </div>
+            <div className="text-xs text-[var(--color-text-dim)]">
+              {selected ? formatPrice(fullPrice) : '—'} maintenant
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentPlan('installments_3x')}
+            className={cn(
+              'glass rounded-[var(--radius-md)] p-4 text-left transition-all',
+              paymentPlan === 'installments_3x'
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
+                : 'hover:border-white/14'
+            )}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium">
+                3 fois sans frais
+                <Badge variant="success" className="ml-2 align-middle">
+                  Flexible
+                </Badge>
+              </span>
+              <span
+                className={cn(
+                  'h-4 w-4 rounded-full border-2 flex items-center justify-center',
+                  paymentPlan === 'installments_3x'
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                    : 'border-[var(--color-border-strong)]'
+                )}
+              >
+                {paymentPlan === 'installments_3x' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                )}
+              </span>
+            </div>
+            <div className="text-xs text-[var(--color-text-dim)]">
+              3 × {selected ? formatPrice(firstAmount) : '—'} · formation après
+              la 3<sup>e</sup>
+            </div>
+          </button>
+        </div>
+      </fieldset>
+
+      {/* Disclaimer no-refund + conditions */}
+      <PaymentDisclaimer variant="full" tone="amber" />
+
       {/* Récap */}
       {selected && (
-        <div className="glass-strong rounded-[var(--radius-lg)] p-5 flex items-center justify-between">
+        <div className="glass-strong rounded-[var(--radius-lg)] p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
-              À payer maintenant
+              {paymentPlan === 'installments_3x'
+                ? '1ʳᵉ échéance (sur 3) à payer maintenant'
+                : 'À payer maintenant'}
             </div>
             <div className="font-serif text-3xl text-gradient mt-1">
-              {formatPrice(Number(selected.priceEur))}
+              {formatPrice(firstAmount)}
             </div>
-            <p className="text-xs text-[var(--color-text-faint)] mt-1">
-              Remboursement intégral si refus d'une contre-proposition de date.
-            </p>
+            {paymentPlan === 'installments_3x' && (
+              <p className="text-xs text-[var(--color-text-dim)] mt-1">
+                Échéances 2 et 3 réglables depuis ton dashboard. Total :{' '}
+                <strong className="text-white">{formatPrice(fullPrice)}</strong>.
+              </p>
+            )}
           </div>
           <Button type="submit" size="lg" disabled={isPending}>
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isPending ? 'Préparation…' : 'Payer et réserver'}
+            {isPending
+              ? 'Préparation…'
+              : paymentPlan === 'installments_3x'
+              ? 'Payer 1ʳᵉ échéance'
+              : 'Payer et réserver'}
           </Button>
         </div>
       )}

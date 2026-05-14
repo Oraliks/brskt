@@ -147,20 +147,49 @@ async function processPaymentEvent(
     .where(eq(payments.id, payment.id));
 
   // Mettre à jour le booking lié
-  // Nouveau flow : paiement reçu AVANT validation admin de la date.
-  // Donc completed → pending_admin (admin doit valider la date)
-  // failed → cancelled (la réservation est annulée, user devra recommencer)
+  // Flow paiement en 1 fois : completed → pending_admin (admin valide la date)
+  // Flow paiement en 3x : completed → incrément installmentsPaid, le booking
+  //   ne passe à `pending_admin` que quand TOUTES les échéances sont payées.
+  //   La formation ne peut donc avoir lieu qu'après paiement total.
   if (payment.bookingId) {
     if (event.status === 'completed') {
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, payment.bookingId),
+      });
+      if (!booking) {
+        console.warn(
+          `[${providerName}] booking ${payment.bookingId} not found for completed payment`
+        );
+        return;
+      }
+
+      const newInstallmentsPaid = booking.installmentsPaid + 1;
+      const allPaid = newInstallmentsPaid >= booking.installmentTotal;
+
       await db
         .update(bookings)
-        .set({ status: 'pending_admin', updatedAt: new Date() })
-        .where(eq(bookings.id, payment.bookingId));
+        .set({
+          installmentsPaid: newInstallmentsPaid,
+          // Passe à pending_admin SEULEMENT si toutes les échéances reçues.
+          // Sinon on reste en pending_payment en attendant la suite.
+          status: allPaid ? 'pending_admin' : 'pending_payment',
+          updatedAt: new Date(),
+        })
+        .where(eq(bookings.id, booking.id));
     } else if (event.status === 'failed') {
-      await db
-        .update(bookings)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(eq(bookings.id, payment.bookingId));
+      // En 3x, l'échec d'une échéance NON-1 ne cancel pas le booking
+      // (l'user peut retenter). On cancel uniquement si c'est la 1ère
+      // (installmentsPaid === 0, car le webhook n'incrémente que sur completed).
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, payment.bookingId),
+      });
+      if (booking && booking.installmentsPaid === 0) {
+        await db
+          .update(bookings)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(eq(bookings.id, payment.bookingId));
+      }
+      // Sinon : l'user peut retenter l'échéance via requestNextInstallmentAction
     }
   }
 }

@@ -29,6 +29,13 @@
       "when": 1778765030224,
       "tag": "0003_lively_scarlet_witch",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778765458012,
+      "tag": "0004_simple_valeria_richards",
+      "breakpoints": true
     }
   ]
 }
