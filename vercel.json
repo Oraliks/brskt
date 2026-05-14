@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/daily-quiz",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/check-price-alerts",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {

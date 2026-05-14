@@ -287,6 +287,194 @@ export function getBot(): Bot<Context> {
   });
 
   // ============================================================
+  // Price alerts
+  // ============================================================
+
+  // /alert <symbol> <threshold> <above|below>
+  bot.command('alert', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const args = (ctx.match ?? '').trim().split(/\s+/);
+    if (args.length < 3 || !args[0]) {
+      await ctx.reply(
+        `🔔 <b>Alerte de prix</b>\n\n` +
+          `Usage : <code>/alert &lt;symbol&gt; &lt;prix&gt; &lt;above|below&gt;</code>\n\n` +
+          `Exemples :\n` +
+          `<code>/alert EURUSD 1.0900 above</code>\n` +
+          `<code>/alert BTC 100000 above</code>\n` +
+          `<code>/alert ETH 2500 below</code>\n\n` +
+          `Sources : FX (paires 6 chars) ou crypto (BTC, ETH, SOL...).\n` +
+          `Le bot te DM dès que le prix franchit le seuil.\n\n` +
+          `Voir tes alertes : /alerts\n` +
+          `Supprimer : /unalert &lt;numéro&gt;`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const symbol = (args[0] ?? '').toUpperCase().replace(/[/\s]/g, '');
+    const threshold = Number(args[1]);
+    const directionStr = (args[2] ?? '').toLowerCase();
+
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+      await ctx.reply(`❌ Prix invalide : "${args[1]}"`);
+      return;
+    }
+    if (directionStr !== 'above' && directionStr !== 'below') {
+      await ctx.reply(
+        `❌ Direction invalide. Utilise <code>above</code> ou <code>below</code>.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    // Détermine la source : FX si 6 chars [A-Z], crypto sinon
+    let source: 'fx' | 'crypto';
+    if (/^[A-Z]{6}$/.test(symbol)) {
+      source = 'fx';
+    } else if (/^[A-Z]{2,8}$/.test(symbol)) {
+      source = 'crypto';
+      // Vérifie qu'on connaît ce crypto
+      const { lookupQuote } = await import('@/lib/bot/inline-quotes');
+      const q = await lookupQuote(symbol);
+      if (!q || q.type !== 'crypto') {
+        await ctx.reply(
+          `❌ Symbol "${symbol}" non reconnu. Cryptos supportés : BTC, ETH, SOL, BNB, XRP, ADA, DOGE et ~25 autres.`
+        );
+        return;
+      }
+    } else {
+      await ctx.reply(`❌ Symbol invalide : "${symbol}"`);
+      return;
+    }
+
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, priceAlerts } = await import('@/lib/db/schema');
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(
+        `Tu n'as pas encore de compte. Connecte-toi : ${appUrl}/login`,
+        { link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    await db.insert(priceAlerts).values({
+      userId: user.id,
+      symbol,
+      source,
+      threshold: String(threshold),
+      direction: directionStr,
+    });
+
+    await ctx.reply(
+      `🔔 <b>Alerte créée</b>\n\n` +
+        `${symbol} ${directionStr === 'above' ? '⬆️ au-dessus de' : '⬇️ en-dessous de'} <b>${threshold}</b>\n\n` +
+        `Le bot te ping dès que c'est franchi.\n` +
+        `Liste : /alerts`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /alerts — liste les alertes actives
+  bot.command('alerts', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const { bumpBotStreak } = await import('@/lib/bot/streak');
+    void bumpBotStreak(ctx.from.id);
+
+    const { eq, and, isNull, desc } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, priceAlerts } = await import('@/lib/db/schema');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(`Connecte-toi : ${appUrl}/login`);
+      return;
+    }
+
+    const list = await db.query.priceAlerts.findMany({
+      where: and(
+        eq(priceAlerts.userId, user.id),
+        isNull(priceAlerts.triggeredAt)
+      ),
+      orderBy: [desc(priceAlerts.createdAt)],
+      limit: 20,
+    });
+
+    if (list.length === 0) {
+      await ctx.reply(
+        `🔔 <b>Aucune alerte active</b>\n\n` +
+          `Crée-en une avec :\n` +
+          `<code>/alert EURUSD 1.0900 above</code>`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const lines = list.map((a, i) => {
+      const arrow = a.direction === 'above' ? '⬆️' : '⬇️';
+      return `${i + 1}. ${a.symbol} ${arrow} <b>${a.threshold}</b>`;
+    });
+    await ctx.reply(
+      `🔔 <b>Tes alertes (${list.length})</b>\n\n${lines.join('\n')}\n\n` +
+        `Supprimer : <code>/unalert &lt;numéro&gt;</code>`,
+      { parse_mode: 'HTML' }
+    );
+  });
+
+  // /unalert <num> — supprime une alerte
+  bot.command('unalert', async (ctx) => {
+    if (!ctx.from?.id) return;
+    const arg = (ctx.match ?? '').trim();
+    const num = Number(arg);
+    if (!Number.isInteger(num) || num < 1) {
+      await ctx.reply(`Usage : <code>/unalert &lt;numéro&gt;</code>`, {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+
+    const { eq, and, isNull, desc } = await import('drizzle-orm');
+    const { db } = await import('@/lib/db');
+    const { users, priceAlerts } = await import('@/lib/db/schema');
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, ctx.from.id),
+    });
+    if (!user) {
+      await ctx.reply(`Connecte-toi : ${appUrl}/login`);
+      return;
+    }
+
+    const list = await db.query.priceAlerts.findMany({
+      where: and(
+        eq(priceAlerts.userId, user.id),
+        isNull(priceAlerts.triggeredAt)
+      ),
+      orderBy: [desc(priceAlerts.createdAt)],
+      limit: 20,
+    });
+
+    const target = list[num - 1];
+    if (!target) {
+      await ctx.reply(`❌ Pas d'alerte n°${num}. Voir /alerts.`);
+      return;
+    }
+
+    await db.delete(priceAlerts).where(eq(priceAlerts.id, target.id));
+    await ctx.reply(
+      `✓ Alerte supprimée : ${target.symbol} ${target.direction === 'above' ? '⬆️' : '⬇️'} ${target.threshold}`
+    );
+  });
+
+  // ============================================================
   // Quiz quotidien
   // ============================================================
 

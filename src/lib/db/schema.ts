@@ -463,6 +463,41 @@ export const adminAuditLogs = pgTable(
 );
 
 // ============================================================
+// PRICE ALERTS — alertes de prix configurées par les users via le bot
+// ============================================================
+
+export const priceAlertDirectionEnum = pgEnum('price_alert_direction', [
+  'above',
+  'below',
+]);
+
+export const priceAlertSourceEnum = pgEnum('price_alert_source', [
+  'fx',
+  'crypto',
+]);
+
+export const priceAlerts = pgTable(
+  'price_alerts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    symbol: text('symbol').notNull(),
+    source: priceAlertSourceEnum('source').notNull(),
+    threshold: numeric('threshold', { precision: 20, scale: 8 }).notNull(),
+    direction: priceAlertDirectionEnum('direction').notNull(),
+    triggeredAt: timestamp('triggered_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdIdx: index('price_alerts_user_id_idx').on(t.userId),
+    symbolIdx: index('price_alerts_symbol_idx').on(t.symbol, t.source),
+    triggeredIdx: index('price_alerts_triggered_idx').on(t.triggeredAt),
+  })
+);
+
+// ============================================================
 // QUIZ — questions quotidiennes & réponses utilisateurs
 // ============================================================
 
