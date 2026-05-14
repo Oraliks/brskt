@@ -7,14 +7,18 @@ import { db } from '@/lib/db';
 import {
   bookings,
   manualIronfxStatus,
+  users,
   vipApplications,
 } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
   adminProgressUpdateSchema,
+  adminSetUserBannedSchema,
+  adminSetUserRoleSchema,
   adminVipOverrideSchema,
   botFeaturesSchema,
+  dailyBriefingSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
   welcomeBonusSchema,
@@ -22,6 +26,7 @@ import {
 import { setIronFXMode } from '@/lib/ironfx';
 import { setWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { setBotFeatures } from '@/lib/settings/bot-features';
+import { setDailyBriefing } from '@/lib/settings/daily-briefing';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -713,6 +718,153 @@ export async function adminSetWelcomeBonusAction(
   revalidatePath('/admin/settings');
   revalidatePath('/vip');
   revalidatePath('/');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Configure le daily briefing du bot (toggle + template).
+ * Push CRON à 7h UTC.
+ */
+export async function adminSetDailyBriefingAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = dailyBriefingSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  await setDailyBriefing(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'daily_briefing_update',
+    targetType: 'settings',
+    targetId: 'daily_briefing',
+    after: { enabled: parsed.data.enabled, templateLength: parsed.data.template.length },
+  });
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/bot');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+/**
+ * Change le rôle d'un utilisateur. Empêche un admin de se retirer lui-même
+ * ses droits (sinon il pourrait se locker dehors).
+ */
+export async function adminSetUserRoleAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminSetUserRoleSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  if (parsed.data.userId === session.user.id && parsed.data.role !== 'admin') {
+    return {
+      success: false,
+      error: 'Un admin ne peut pas retirer son propre rôle admin',
+    };
+  }
+
+  const target = await db.query.users.findFirst({
+    where: eq(users.id, parsed.data.userId),
+    columns: { id: true, role: true, name: true, email: true },
+  });
+
+  if (!target) {
+    return { success: false, error: 'Utilisateur introuvable' };
+  }
+
+  if (target.role === parsed.data.role) {
+    return { success: true, data: undefined };
+  }
+
+  await db
+    .update(users)
+    .set({ role: parsed.data.role, updatedAt: new Date() })
+    .where(eq(users.id, parsed.data.userId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'user_role_set',
+    targetType: 'user',
+    targetId: parsed.data.userId,
+    before: { role: target.role },
+    after: { role: parsed.data.role },
+  });
+
+  revalidatePath('/admin/users');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Ban ou un-ban un utilisateur. Quand banné :
+ *  - Sessions actives doivent être révoquées (Better Auth check à la requête)
+ *  - Le bot Telegram refuse les interactions
+ *  - L'utilisateur ne peut plus se reconnecter
+ */
+export async function adminSetUserBannedAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminSetUserBannedSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  if (parsed.data.userId === session.user.id) {
+    return { success: false, error: 'Tu ne peux pas te bannir toi-même' };
+  }
+
+  const target = await db.query.users.findFirst({
+    where: eq(users.id, parsed.data.userId),
+    columns: { id: true, role: true, bannedAt: true, name: true },
+  });
+
+  if (!target) {
+    return { success: false, error: 'Utilisateur introuvable' };
+  }
+
+  if (target.role === 'admin' && parsed.data.banned) {
+    return {
+      success: false,
+      error: 'Impossible de bannir un autre admin. Retire son rôle d\'abord.',
+    };
+  }
+
+  await db
+    .update(users)
+    .set({
+      bannedAt: parsed.data.banned ? new Date() : null,
+      bannedReason: parsed.data.banned ? parsed.data.reason ?? null : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, parsed.data.userId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: parsed.data.banned ? 'user_banned' : 'user_unbanned',
+    targetType: 'user',
+    targetId: parsed.data.userId,
+    before: { wasBanned: !!target.bannedAt },
+    after: { reason: parsed.data.reason ?? null },
+  });
+
+  revalidatePath('/admin/users');
   return { success: true, data: undefined };
 }
 

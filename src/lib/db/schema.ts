@@ -136,6 +136,11 @@ export const users = pgTable(
       .notNull()
       .default(true),
 
+    // Modération : ban admin. Quand bannedAt est set, le user ne peut plus
+    // se connecter ni interagir avec le bot. Reason affichée dans l'audit log.
+    bannedAt: timestamp('banned_at'),
+    bannedReason: text('banned_reason'),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

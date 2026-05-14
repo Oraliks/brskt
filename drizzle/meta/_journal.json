@@ -92,6 +92,13 @@
       "when": 1778779691654,
       "tag": "0012_mighty_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778784110999,
+      "tag": "0013_spicy_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

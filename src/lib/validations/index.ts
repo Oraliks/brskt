@@ -186,3 +186,23 @@ export const adminProgressUpdateSchema = z.object({
   userId: z.string().uuid(),
   tradingProgressPct: z.number().int().min(0).max(100),
 });
+
+export const dailyBriefingSchema = z.object({
+  enabled: z.boolean(),
+  template: z.string().min(20, 'Template trop court').max(4000, 'Template trop long'),
+});
+
+// ============================================================
+// ADMIN USERS
+// ============================================================
+
+export const adminSetUserRoleSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(['user', 'admin']),
+});
+
+export const adminSetUserBannedSchema = z.object({
+  userId: z.string().uuid(),
+  banned: z.boolean(),
+  reason: z.string().max(500).optional(),
+});

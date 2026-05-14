@@ -1,63 +1,112 @@
-import { AdminContainer, AdminPageHeader } from '@/components/admin/page-header';
+import { Database, Gift, KeyRound, Sun } from 'lucide-react';
+import {
+  AdminContainer,
+  AdminPageHeader,
+} from '@/components/admin/page-header';
+import { SectionCard } from '@/components/admin/section-card';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import { IronFxModeForm } from '@/components/admin/ironfx-mode-form';
 import { WelcomeBonusForm } from '@/components/admin/welcome-bonus-form';
+import { DailyBriefingForm } from '@/components/admin/daily-briefing-form';
 import { getIronFXMode } from '@/lib/ironfx';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
+import { getDailyBriefing } from '@/lib/settings/daily-briefing';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  const [mode, welcomeBonus] = await Promise.all([
+  const [mode, welcomeBonus, briefing] = await Promise.all([
     getIronFXMode(),
     getWelcomeBonus(),
+    getDailyBriefing(),
   ]);
 
   return (
     <AdminContainer>
       <AdminPageHeader
         title="Paramètres"
-        description="Configuration de la plateforme."
+        description="Configuration de la plateforme. Les modifications sont immédiates — pas de redéploiement."
       />
 
-      <div className="space-y-6 max-w-3xl">
-        <section className="glass rounded-[var(--radius-lg)] p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Mode IronFX</h2>
-            <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-              Contrôle comment Boursikotons récupère le statut des comptes broker.
-            </p>
-          </div>
-          <IronFxModeForm currentMode={mode} />
-        </section>
+      <Tabs defaultValue="ironfx">
+        <TabsList className="w-full sm:w-auto flex-wrap">
+          <TabsTrigger value="ironfx" className="gap-1.5">
+            <Database className="h-3.5 w-3.5" />
+            IronFX
+          </TabsTrigger>
+          <TabsTrigger value="bonus" className="gap-1.5">
+            <Gift className="h-3.5 w-3.5" />
+            Welcome bonus
+          </TabsTrigger>
+          <TabsTrigger value="briefing" className="gap-1.5">
+            <Sun className="h-3.5 w-3.5" />
+            Daily briefing
+          </TabsTrigger>
+          <TabsTrigger value="env" className="gap-1.5">
+            <KeyRound className="h-3.5 w-3.5" />
+            Environnement
+          </TabsTrigger>
+        </TabsList>
 
-        <section className="glass rounded-[var(--radius-lg)] p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Welcome bonus IronFX</h2>
-            <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-              Quand activé, un bandeau est affiché sur la page <code>/vip</code>{' '}
-              pour mettre en avant une offre de bienvenue négociée avec le broker.
-            </p>
-          </div>
-          <WelcomeBonusForm initial={welcomeBonus} />
-        </section>
+        <TabsContent value="ironfx">
+          <SectionCard
+            title="Mode IronFX"
+            description="Contrôle comment Boursikotons récupère le statut des comptes broker."
+            icon={<Database className="h-4 w-4" />}
+          >
+            <IronFxModeForm currentMode={mode} />
+          </SectionCard>
+        </TabsContent>
 
-        <section className="glass rounded-[var(--radius-lg)] p-6">
-          <h2 className="text-lg font-semibold">Variables d'environnement</h2>
-          <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-            Configurées via Vercel ou .env.local (lecture seule ici).
-          </p>
-          <div className="mt-4 grid sm:grid-cols-2 gap-2 text-xs">
-            <EnvStatus name="TELEGRAM_BOT_TOKEN" />
-            <EnvStatus name="VIP_GROUP_CHAT_ID" />
-            <EnvStatus name="PADDLE_API_KEY" />
-            <EnvStatus name="PAYPAL_CLIENT_ID" />
-            <EnvStatus name="NOWPAYMENTS_API_KEY" />
-            <EnvStatus name="IRONFX_API_KEY" optional />
-            <EnvStatus name="RESEND_API_KEY" />
-            <EnvStatus name="CRON_SECRET" />
-          </div>
-        </section>
-      </div>
+        <TabsContent value="bonus">
+          <SectionCard
+            title="Welcome bonus IronFX"
+            description="Bandeau affiché sur /vip et la landing quand activé."
+            icon={<Gift className="h-4 w-4" />}
+          >
+            <WelcomeBonusForm initial={welcomeBonus} />
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="briefing">
+          <SectionCard
+            title="Briefing matinal Telegram"
+            description="Push CRON quotidien à 7h UTC aux opt-in. Supporte {{firstName}}."
+            icon={<Sun className="h-4 w-4" />}
+          >
+            <DailyBriefingForm initial={briefing} />
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="env">
+          <SectionCard
+            title="Variables d'environnement"
+            description="Configurées via Vercel ou .env.local — lecture seule depuis ici."
+            icon={<KeyRound className="h-4 w-4" />}
+          >
+            <div className="grid sm:grid-cols-2 gap-2">
+              <EnvStatus name="TELEGRAM_BOT_TOKEN" />
+              <EnvStatus name="TELEGRAM_BOT_USERNAME" />
+              <EnvStatus name="VIP_GROUP_CHAT_ID" />
+              <EnvStatus name="PADDLE_API_KEY" />
+              <EnvStatus name="PAYPAL_CLIENT_ID" />
+              <EnvStatus name="NOWPAYMENTS_API_KEY" />
+              <EnvStatus name="IRONFX_API_KEY" optional />
+              <EnvStatus name="RESEND_API_KEY" />
+              <EnvStatus name="CRON_SECRET" />
+              <EnvStatus name="MAGIC_LINK_SECRET" />
+              <EnvStatus name="ADMIN_TELEGRAM_IDS" />
+              <EnvStatus name="NEXT_PUBLIC_POSTHOG_KEY" optional />
+              <EnvStatus name="SENTRY_DSN" optional />
+            </div>
+          </SectionCard>
+        </TabsContent>
+      </Tabs>
     </AdminContainer>
   );
 }
@@ -71,15 +120,15 @@ function EnvStatus({
 }) {
   const set = Boolean(process.env[name]);
   return (
-    <div className="flex items-center justify-between rounded-md bg-white/[0.02] border border-[var(--color-border)] px-3 py-2">
+    <div className="flex items-center justify-between rounded-md bg-white/[0.02] border border-[var(--color-border)] px-3 py-1.5 text-xs">
       <code className="font-mono">{name}</code>
       <span
         className={
           set
-            ? 'text-emerald-300'
+            ? 'text-emerald-300 light:text-emerald-700'
             : optional
             ? 'text-[var(--color-text-faint)]'
-            : 'text-rose-300'
+            : 'text-rose-300 light:text-rose-700'
         }
       >
         {set ? '✓ set' : optional ? '— absent' : '✗ manquant'}
