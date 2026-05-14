@@ -1,24 +1,37 @@
 /**
- * Décor SVG animé pour le hero du dashboard : ligne de prix stylisée +
- * candlesticks subtils + petit "live price" qui pulse. Tout CSS/SVG,
- * pas de JS — Server Component compatible.
+ * Décor SVG animé pour le hero du dashboard.
  *
- * Vit dans le vide entre le welcome et les 3 cards pour donner une
- * texture visuelle au lieu d'un grand espace blanc.
+ * Plus vivant que la version précédente :
+ *  - 2 lignes de prix qui se tracent en boucle continue (pas un one-shot)
+ *  - Effet de "data flow" : un point lumineux qui se déplace le long de la ligne
+ *  - Candles qui apparaissent en cascade
+ *  - Ticker latéral avec prix qui clignotent
+ *
+ * Tout CSS/SVG, pas de JS — Server Component compatible.
+ * Utilisé en arrière-plan (opacity réduite) derrière le header dashboard.
  */
 
 const PRICE_PATH =
   'M 0 60 L 40 55 L 80 62 L 120 50 L 160 56 L 200 42 L 240 48 L 280 35 L 320 38 L 360 28 L 400 22 L 440 18 L 480 14 L 520 12 L 560 8 L 600 10';
-// Aire sous la courbe (referme en bas)
+const PRICE_PATH_2 =
+  'M 0 75 L 40 72 L 80 78 L 120 70 L 160 68 L 200 60 L 240 64 L 280 55 L 320 52 L 360 48 L 400 42 L 440 38 L 480 34 L 520 30 L 560 28 L 600 25';
 const AREA_PATH = `${PRICE_PATH} L 600 100 L 0 100 Z`;
 
-// Quelques "candles" pour décorer — positions (x, low, high, open, close)
 const CANDLES: Array<{ x: number; low: number; high: number; open: number; close: number }> = [
   { x: 80, low: 70, high: 50, open: 64, close: 56 },
   { x: 200, low: 56, high: 38, open: 50, close: 44 },
   { x: 320, low: 44, high: 30, open: 40, close: 34 },
   { x: 440, low: 30, high: 14, open: 24, close: 18 },
   { x: 540, low: 18, high: 4, open: 14, close: 9 },
+];
+
+const TICKERS = [
+  { sym: 'EURUSD', value: '1.0942', delta: '+0.12%', up: true },
+  { sym: 'GBPUSD', value: '1.2734', delta: '+0.31%', up: true },
+  { sym: 'XAUUSD', value: '2 387', delta: '-0.18%', up: false },
+  { sym: 'BTC', value: '67 240', delta: '+2.4%', up: true },
+  { sym: 'ETH', value: '3 412', delta: '+1.1%', up: true },
+  { sym: 'SOL', value: '162.5', delta: '-0.6%', up: false },
 ];
 
 export function TradingHero() {
@@ -32,7 +45,7 @@ export function TradingHero() {
       >
         <defs>
           <linearGradient id="th-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(99,102,241,0.22)" />
+            <stop offset="0%" stopColor="rgba(99,102,241,0.28)" />
             <stop offset="100%" stopColor="rgba(99,102,241,0)" />
           </linearGradient>
           <linearGradient id="th-stroke" x1="0" y1="0" x2="1" y2="0">
@@ -40,19 +53,31 @@ export function TradingHero() {
             <stop offset="60%" stopColor="#ec4899" />
             <stop offset="100%" stopColor="#14b8a6" />
           </linearGradient>
+          <linearGradient id="th-stroke-2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.4" />
+          </linearGradient>
+          {/* Glow filter pour la particule qui voyage */}
+          <filter id="th-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        {/* Lignes horizontales de grille (très subtiles) */}
+        {/* Lignes horizontales (grille subtile) */}
         <g stroke="currentColor" className="text-[var(--color-border)]" strokeWidth="0.3">
           <line x1="0" y1="25" x2="600" y2="25" />
           <line x1="0" y1="50" x2="600" y2="50" />
           <line x1="0" y1="75" x2="600" y2="75" />
         </g>
 
-        {/* Candlesticks */}
+        {/* Candlesticks (apparition en cascade) */}
         <g className="trading-hero__candles">
           {CANDLES.map((c, i) => {
-            const bullish = c.close < c.open; // y inversé donc close < open = bullish (price up)
+            const bullish = c.close < c.open;
             const bodyTop = Math.min(c.open, c.close);
             const bodyH = Math.abs(c.close - c.open);
             return (
@@ -61,7 +86,6 @@ export function TradingHero() {
                 style={{ animationDelay: `${i * 0.15}s` }}
                 className="trading-hero__candle"
               >
-                {/* Wick */}
                 <line
                   x1={c.x}
                   x2={c.x}
@@ -69,16 +93,15 @@ export function TradingHero() {
                   y2={c.low}
                   stroke={bullish ? '#10b981' : '#ef4444'}
                   strokeWidth="0.8"
-                  opacity="0.35"
+                  opacity="0.45"
                 />
-                {/* Body */}
                 <rect
                   x={c.x - 3.5}
                   y={bodyTop}
                   width="7"
                   height={Math.max(bodyH, 1.5)}
                   fill={bullish ? '#10b981' : '#ef4444'}
-                  opacity="0.35"
+                  opacity="0.45"
                   rx="0.5"
                 />
               </g>
@@ -89,8 +112,20 @@ export function TradingHero() {
         {/* Aire sous la courbe */}
         <path d={AREA_PATH} fill="url(#th-area)" />
 
-        {/* Courbe principale — animée via stroke-dashoffset */}
+        {/* Courbe secondaire (en arrière) */}
         <path
+          d={PRICE_PATH_2}
+          fill="none"
+          stroke="url(#th-stroke-2)"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="trading-hero__line-bg"
+        />
+
+        {/* Courbe principale — boucle continue */}
+        <path
+          id="th-main-path"
           d={PRICE_PATH}
           fill="none"
           stroke="url(#th-stroke)"
@@ -100,6 +135,13 @@ export function TradingHero() {
           className="trading-hero__line"
         />
 
+        {/* Particule qui voyage le long de la ligne (effet "data flow") */}
+        <circle r="3" fill="#14b8a6" filter="url(#th-glow)">
+          <animateMotion dur="4s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#th-main-path" />
+          </animateMotion>
+        </circle>
+
         {/* Live price dot (dernier point) */}
         <g className="trading-hero__dot">
           <circle cx="600" cy="10" r="6" fill="#14b8a6" opacity="0.25" />
@@ -107,15 +149,30 @@ export function TradingHero() {
         </g>
       </svg>
 
-      {/* Ticker latéral droit avec un mini "ladder" de prix */}
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex-col gap-0.5 font-mono text-[9px] text-[var(--color-text-faint)] tabular-nums hidden md:flex">
-        <span>1.0942</span>
-        <span className="text-emerald-400 light:text-emerald-600">▲ 0.12%</span>
-        <span>1.0930</span>
-        <span>1.0918</span>
+      {/* Ticker latéral droit — clignotant */}
+      <div className="absolute right-1 top-1 flex-col gap-1 font-mono text-[9px] tabular-nums hidden md:flex">
+        {TICKERS.slice(0, 4).map((t, i) => (
+          <div
+            key={t.sym}
+            className="trading-hero__ticker flex items-center justify-end gap-1.5 px-1.5 py-0.5 rounded bg-black/30 backdrop-blur-sm"
+            style={{ animationDelay: `${i * 0.6}s` }}
+          >
+            <span className="text-[var(--color-text-faint)]">{t.sym}</span>
+            <span className="text-[var(--color-text-dim)]">{t.value}</span>
+            <span
+              className={
+                t.up
+                  ? 'text-emerald-400 light:text-emerald-600'
+                  : 'text-rose-400 light:text-rose-600'
+              }
+            >
+              {t.up ? '▲' : '▼'} {t.delta}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* Fade gauche pour intégrer dans la mise en page */}
+      {/* Fade gauche */}
       <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[var(--color-bg)] to-transparent" />
     </div>
   );

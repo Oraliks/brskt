@@ -20,7 +20,7 @@ import {
   AdminContainer,
   AdminPageHeader,
 } from '@/components/admin/page-header';
-import { StatCard, StatCardGrid } from '@/components/admin/stat-card';
+import { StatCard } from '@/components/admin/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { getChannelMemberCount } from '@/lib/telegram/community-stats';
 import { formatDate, formatPrice } from '@/lib/utils';
@@ -75,7 +75,7 @@ export default async function AdminOverview() {
         description="Vue globale de la plateforme."
       />
 
-      <StatCardGrid cols={4} className="mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <StatCard
           label="Utilisateurs"
           value={usersCount?.c ?? 0}
@@ -91,38 +91,35 @@ export default async function AdminOverview() {
           value={paidPayments?.c ?? 0}
           icon={<CreditCard className="h-4 w-4" />}
         />
-        {channelCount !== null && (
-          <StatCard
-            label="Canal Telegram"
-            value={channelCount.toLocaleString('fr-FR')}
-            tone="info"
-            hint="membres (live)"
-            icon={<TrendingUp className="h-4 w-4" />}
-          />
-        )}
-      </StatCardGrid>
-
-      <StatCardGrid cols={3}>
+        <StatCard
+          label="Canal Telegram"
+          value={
+            channelCount !== null
+              ? channelCount.toLocaleString('fr-FR')
+              : '—'
+          }
+          tone={channelCount !== null ? 'info' : 'default'}
+          hint={channelCount !== null ? 'membres' : 'config manquante'}
+          icon={<TrendingUp className="h-4 w-4" />}
+        />
         <StatCard
           label="VIP in_group"
           value={inGroup}
-          tone="default"
           icon={<Sparkles className="h-4 w-4" />}
         />
         <StatCard
           label="Qualifiés CPA"
           value={qualified}
-          hint={`${conversionPct}% du in_group`}
+          hint={`${conversionPct}% conv.`}
           tone={qualified > 0 ? 'success' : 'default'}
         />
         <StatCard
           label="Conversion CPA"
           value={`${conversionPct}%`}
-          hint="ratio qualified / in_group"
           tone="info"
           icon={<Percent className="h-4 w-4" />}
         />
-      </StatCardGrid>
+      </div>
 
       <div className="mt-8">
         <div className="flex items-center justify-between mb-3">

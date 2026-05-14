@@ -9,6 +9,7 @@ import {
   CreditCard,
   Gift,
   MessageCircle,
+  Sparkles,
   Trophy,
   XCircle,
 } from 'lucide-react';
@@ -98,122 +99,59 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <Section className="pt-24 pb-12">
-        <div className="space-y-2">
-          <p className="text-sm text-[var(--color-text-dim)] uppercase tracking-wider">
-            Mon espace
-          </p>
-          <h1 className="font-serif text-4xl md:text-5xl text-gradient">
-            Salut {firstName}.
-          </h1>
-        </div>
+      {/* HEADER : Salut + 3 mini cards à droite, chart animé en arrière */}
+      <Section className="pt-20 pb-6">
+        <div className="relative">
+          {/* TradingHero en arrière-plan (absolu, derrière) */}
+          <div className="absolute inset-0 -z-10 opacity-50 pointer-events-none">
+            <TradingHero />
+          </div>
 
-        {botUsername && (
-          <div className="mt-8 inline-flex items-start gap-3 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 px-4 py-3 max-w-xl">
-            <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-[var(--color-text)]">
-              <strong className="text-blue-200 light:text-blue-800 font-semibold">Notifications temps réel :</strong>{' '}
-              <Link
-                href={`https://t.me/${botUsername}?start=hello`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-[var(--color-text)] light:text-blue-700"
-              >
-                envoie <code className="font-mono bg-[var(--color-surface-tint)] px-1.5 py-0.5 rounded">/start</code> à @{botUsername}
-              </Link>{' '}
-              une fois pour recevoir confirmations & alertes directement sur Telegram.
+          <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-start">
+            {/* Gauche : Salut + bot CTA */}
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--color-text-dim)] uppercase tracking-wider">
+                Mon espace
+              </p>
+              <h1 className="font-serif text-4xl md:text-5xl text-gradient">
+                Salut {firstName}.
+              </h1>
+              {botUsername && (
+                <div className="inline-flex items-start gap-2.5 rounded-[var(--radius-md)] bg-blue-500/10 light:bg-blue-500/15 border border-blue-500/25 light:border-blue-500/50 px-3 py-2 max-w-lg">
+                  <MessageCircle className="h-4 w-4 text-blue-300 light:text-blue-700 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-[var(--color-text)]">
+                    <Link
+                      href={`https://t.me/${botUsername}?start=hello`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium underline underline-offset-2 hover:text-blue-200"
+                    >
+                      Envoie /start à @{botUsername}
+                    </Link>{' '}
+                    pour recevoir tes notifs sur Telegram.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Droite : 3 mini cards stacked */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 lg:w-[280px]">
+              <MiniVipCard
+                application={vipApp ?? null}
+                tradingProgressPct={tradingProgressPct}
+                cpaQualified={cpaQualified}
+              />
+              <MiniFormationCard hasBooking={userBookings.length > 0} />
+              <MiniChannelCard channelUrl={channelUrl} count={channelCount} />
             </div>
           </div>
-        )}
-
-        {/* Décor : chart animé, comble l'espace entre header et cards */}
-        <div className="mt-8">
-          <TradingHero />
         </div>
       </Section>
 
-      <Section className="py-0">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* VIP Card */}
-          <VipCard
-            application={vipApp ?? null}
-            tradingProgressPct={tradingProgressPct}
-            cpaQualified={cpaQualified}
-          />
-
-          {/* Formation CTA */}
-          <Link
-            href={userBookings.length === 0 ? '/formation/reserver' : '/formation'}
-            className="glass rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group"
-          >
-            <div className="flex items-start justify-between">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--color-accent)]/15 border border-[var(--color-accent)]/30">
-                <CalendarDays className="h-4 w-4 text-[var(--color-accent-hover)]" />
-              </span>
-              <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
-            </div>
-            <h3 className="mt-6 text-lg font-semibold">
-              {userBookings.length === 0 ? 'Réserver une formation' : 'Voir les formations'}
-            </h3>
-            <p className="mt-2 text-sm text-[var(--color-text-dim)]">
-              {userBookings.length === 0
-                ? '7 jours intensifs, à distance ou à Dubaï.'
-                : "Tu as déjà une réservation, vois-la ci-dessous."}
-            </p>
-          </Link>
-
-          {/* Telegram channel link */}
-          {channelUrl ? (
-            <a
-              href={channelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="glass rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group"
-            >
-              <div className="flex items-start justify-between">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-blue-500/15 border border-blue-500/30">
-                  <MessageCircle className="h-4 w-4 text-blue-300" />
-                </span>
-                <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
-              </div>
-              <h3 className="mt-6 text-lg font-semibold">Notre canal Telegram</h3>
-              <p className="mt-2 text-sm text-[var(--color-text-dim)]">
-                Annonces, contenu gratuit et nouvelles cohortes.
-              </p>
-            </a>
-          ) : null}
-        </div>
-      </Section>
-
-      {/* Communauté (si dispo) */}
-      {channelCount !== null && channelCount > 0 && (
-        <Section className="py-4">
-          <CommunityBanner count={channelCount} channelUrl={channelUrl} />
-        </Section>
-      )}
-
-      {/* Parrainage */}
-      <Section className="py-8">
-        <ReferralSection
-          myReferrals={myReferrals}
-          topReferrer={topReferrer.map((r) => ({
-            firstName: r.firstName,
-            username: r.username,
-            count: r.c,
-          }))}
-          botUsername={botUsername}
-          referralLink={buildReferralLink(
-            botUsername,
-            process.env.NEXT_PUBLIC_APP_URL,
-            referralCode
-          )}
-        />
-      </Section>
-
-      {/* Bookings */}
-      <Section className="py-12">
-        <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-2xl font-semibold tracking-tight">
+      {/* RÉSERVATIONS */}
+      <Section className="py-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-xl font-semibold tracking-tight">
             Mes réservations
           </h2>
           {userBookings.length > 0 && (
@@ -235,6 +173,24 @@ export default async function DashboardPage() {
             ))}
           </div>
         )}
+      </Section>
+
+      {/* PARRAINAGE */}
+      <Section className="py-6">
+        <ReferralSection
+          myReferrals={myReferrals}
+          topReferrer={topReferrer.map((r) => ({
+            firstName: r.firstName,
+            username: r.username,
+            count: r.c,
+          }))}
+          botUsername={botUsername}
+          referralLink={buildReferralLink(
+            botUsername,
+            process.env.NEXT_PUBLIC_APP_URL,
+            referralCode
+          )}
+        />
       </Section>
     </>
   );
@@ -475,130 +431,6 @@ const VIP_STEPS_ORDER = [
   'in_group',
 ] as const;
 
-function VipCard({
-  application,
-  tradingProgressPct,
-  cpaQualified,
-}: {
-  application: typeof vipApplications.$inferSelect | null;
-  tradingProgressPct: number;
-  cpaQualified: boolean;
-}) {
-  const step = application?.step;
-  const isInGroup = step === 'in_group';
-  const isEjected = step === 'ejected';
-  const inProgress = step && !isInGroup && !isEjected;
-
-  const stepNum = step
-    ? VIP_STEPS_ORDER.indexOf(step as (typeof VIP_STEPS_ORDER)[number]) + 1
-    : 0;
-  // Qualification = CPA généré côté broker (colonne DB, peut être set
-  // manuellement par l'admin). C'est le seul état qui protège de l'éjection.
-  const isQualified = cpaQualified;
-
-  const href = isEjected ? '/dashboard/ejected' : '/vip';
-
-  return (
-    <Link
-      href={href}
-      className="glass-strong rounded-[var(--radius-lg)] p-6 hover:border-[var(--color-border-strong)] transition-colors group relative overflow-hidden block"
-    >
-      <div
-        className={cn(
-          'absolute inset-0 pointer-events-none',
-          isEjected
-            ? 'bg-gradient-to-br from-rose-500/10 to-transparent'
-            : isInGroup
-            ? 'bg-gradient-to-br from-emerald-500/10 to-transparent'
-            : 'bg-gradient-to-br from-amber-500/10 to-transparent'
-        )}
-      />
-      <div className="relative">
-        <div className="flex items-start justify-between">
-          <Badge
-            variant={isEjected ? 'danger' : isInGroup ? 'success' : 'gold'}
-          >
-            <MessageCircle className="h-3 w-3 mr-1" />
-            VIP Telegram
-          </Badge>
-          <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
-        </div>
-
-        <div className="mt-6 flex items-center gap-2">
-          {isInGroup ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-          ) : isEjected ? (
-            <XCircle className="h-5 w-5 text-rose-400" />
-          ) : inProgress ? (
-            <Clock className="h-5 w-5 text-amber-400" />
-          ) : (
-            <XCircle className="h-5 w-5 text-[var(--color-text-faint)]" />
-          )}
-          <h3 className="text-lg font-semibold">
-            {isInGroup
-              ? isQualified
-                ? 'Membre VIP ✓ qualifié'
-                : 'Tu es dans le groupe'
-              : isEjected
-              ? 'Tu as quitté le groupe'
-              : inProgress
-              ? `Funnel : ${stepNum}/7`
-              : 'Pas encore démarré'}
-          </h3>
-        </div>
-
-        <p className="mt-2 text-sm text-[var(--color-text-dim)]">
-          {isInGroup
-            ? isQualified
-              ? 'Ta place est sécurisée — pas de risque de kick.'
-              : `${tradingProgressPct}% de trading depuis ton arrivée`
-            : isEjected
-            ? 'Voir la raison et les conditions de réintégration'
-            : inProgress
-            ? 'On te tient au courant à chaque étape'
-            : 'Démarre le funnel — 100% gratuit'}
-        </p>
-
-        {/* Progress bar : funnel avant in_group, trading après */}
-        {inProgress && (
-          <div className="mt-4 space-y-2">
-            <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all duration-500"
-                style={{ width: `${(stepNum / 7) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {isInGroup && (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-baseline justify-between text-xs">
-              <span className="text-[var(--color-text-dim)]">
-                Volume de trading
-              </span>
-              <span className="font-mono tabular-nums font-medium">
-                {tradingProgressPct}%
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all duration-500',
-                  isQualified
-                    ? 'bg-emerald-400'
-                    : 'bg-gradient-to-r from-[var(--color-accent)] to-pink-500'
-                )}
-                style={{ width: `${Math.max(2, tradingProgressPct)}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </Link>
-  );
-}
-
 interface ReferralEntry {
   firstName: string | null;
   username: string | null;
@@ -692,40 +524,164 @@ function ReferralSection({
   );
 }
 
-function CommunityBanner({
-  count,
-  channelUrl,
+/**
+ * Mini-card VIP : statut compact + barre de progression si in_group.
+ */
+function MiniVipCard({
+  application,
+  tradingProgressPct,
+  cpaQualified,
 }: {
-  count: number;
-  channelUrl: string | undefined;
+  application: typeof vipApplications.$inferSelect | null;
+  tradingProgressPct: number;
+  cpaQualified: boolean;
 }) {
-  const display = count.toLocaleString('fr-FR');
+  const step = application?.step;
+  const isInGroup = step === 'in_group';
+  const isEjected = step === 'ejected';
+  const inProgress = step && !isInGroup && !isEjected;
+  const stepNum = step
+    ? VIP_STEPS_ORDER.indexOf(step as (typeof VIP_STEPS_ORDER)[number]) + 1
+    : 0;
+  const href = isEjected ? '/dashboard/ejected' : '/vip';
+
+  const tone = isEjected
+    ? 'bg-rose-500/8 border-rose-500/25'
+    : isInGroup
+    ? 'bg-emerald-500/8 border-emerald-500/25'
+    : 'bg-amber-500/8 border-amber-500/25';
+  const Icon = isInGroup
+    ? CheckCircle2
+    : isEjected
+    ? XCircle
+    : inProgress
+    ? Clock
+    : Sparkles;
+  const iconColor = isInGroup
+    ? 'text-emerald-300'
+    : isEjected
+    ? 'text-rose-300'
+    : inProgress
+    ? 'text-amber-300'
+    : 'text-indigo-300';
+
   return (
-    <div className="glass rounded-[var(--radius-lg)] px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-      <div className="flex items-center gap-3">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-500/15 border border-blue-500/30">
-          <MessageCircle className="h-4 w-4 text-blue-300" />
-        </span>
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
-            Communauté Telegram
-          </div>
-          <div className="text-lg font-semibold tabular-nums">
-            {display} membres sur le canal
-          </div>
-        </div>
-      </div>
-      {channelUrl && (
-        <Link
-          href={channelUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium text-[var(--color-accent-hover)] hover:underline inline-flex items-center gap-1"
-        >
-          Ouvrir le canal
-          <ArrowRight className="h-3 w-3" />
-        </Link>
+    <Link
+      href={href}
+      className={cn(
+        'group relative overflow-hidden rounded-[var(--radius-lg)] border p-3 transition-all hover:-translate-y-0.5 hover:shadow-lg',
+        tone
       )}
-    </div>
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className={cn('h-4 w-4', iconColor)} />
+          <span className="text-[10px] uppercase tracking-wider font-medium">
+            VIP Telegram
+          </span>
+        </div>
+        <ArrowRight className="h-3 w-3 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
+      </div>
+      <div className="mt-1.5 text-sm font-semibold leading-tight">
+        {isInGroup
+          ? cpaQualified
+            ? 'Qualifié ✓'
+            : 'Dans le groupe'
+          : isEjected
+          ? 'Tu as quitté'
+          : inProgress
+          ? `Étape ${stepNum}/7`
+          : 'Pas démarré'}
+      </div>
+      {inProgress && (
+        <div className="mt-2 h-1 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all"
+            style={{ width: `${(stepNum / 7) * 100}%` }}
+          />
+        </div>
+      )}
+      {isInGroup && (
+        <div className="mt-2 h-1 w-full rounded-full bg-[var(--color-surface-tint)] overflow-hidden">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all',
+              cpaQualified
+                ? 'bg-emerald-400'
+                : 'bg-gradient-to-r from-indigo-400 to-pink-400'
+            )}
+            style={{ width: `${Math.max(2, tradingProgressPct)}%` }}
+          />
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function MiniFormationCard({ hasBooking }: { hasBooking: boolean }) {
+  return (
+    <Link
+      href={hasBooking ? '/formation' : '/formation/reserver'}
+      className="group rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-accent)]/5 hover:bg-[var(--color-accent)]/10 hover:border-[var(--color-accent)]/30 transition-all p-3"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-[var(--color-accent-hover)]" />
+          <span className="text-[10px] uppercase tracking-wider font-medium">
+            Formation
+          </span>
+        </div>
+        <ArrowRight className="h-3 w-3 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
+      </div>
+      <div className="mt-1.5 text-sm font-semibold leading-tight">
+        {hasBooking ? 'Mes formations' : 'Réserver une formation'}
+      </div>
+      <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
+        {hasBooking ? 'Voir ma session' : '1500€ distance · 3500€ Dubaï'}
+      </div>
+    </Link>
+  );
+}
+
+function MiniChannelCard({
+  channelUrl,
+  count,
+}: {
+  channelUrl: string | undefined;
+  count: number | null;
+}) {
+  const target = channelUrl ?? '#';
+  return (
+    <a
+      href={target}
+      target={channelUrl ? '_blank' : undefined}
+      rel={channelUrl ? 'noopener noreferrer' : undefined}
+      className={cn(
+        'group rounded-[var(--radius-lg)] border border-blue-500/25 bg-blue-500/8 transition-all p-3',
+        channelUrl
+          ? 'hover:bg-blue-500/15 hover:border-blue-500/40'
+          : 'pointer-events-none opacity-70'
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-4 w-4 text-blue-300" />
+          <span className="text-[10px] uppercase tracking-wider font-medium text-blue-200">
+            Canal Telegram
+          </span>
+        </div>
+        {channelUrl && (
+          <ArrowRight className="h-3 w-3 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
+        )}
+      </div>
+      <div className="mt-1.5 text-sm font-semibold leading-tight tabular-nums">
+        {count !== null
+          ? `${count.toLocaleString('fr-FR')} membres`
+          : 'Annonces & alertes'}
+      </div>
+      <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
+        {count !== null ? 'Contenu gratuit, ouvert à tous' : 'Notre canal public'}
+      </div>
+    </a>
   );
 }

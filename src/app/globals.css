@@ -413,18 +413,36 @@
 }
 
 /* ----- Trading hero (dashboard) ----- */
-@keyframes trading-line-draw {
-  from {
+@keyframes trading-line-loop {
+  0% {
     stroke-dasharray: 1200;
     stroke-dashoffset: 1200;
   }
-  to {
-    stroke-dasharray: 1200;
+  40% {
     stroke-dashoffset: 0;
+  }
+  60% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -1200;
   }
 }
 .trading-hero__line {
-  animation: trading-line-draw 2.2s ease-out forwards;
+  stroke-dasharray: 1200;
+  animation: trading-line-loop 8s ease-in-out infinite;
+}
+.trading-hero__line-bg {
+  stroke-dasharray: 1200;
+  animation: trading-line-loop 8s ease-in-out 1s infinite;
+  opacity: 0.5;
+}
+@keyframes trading-ticker-blink {
+  0%, 100% { opacity: 0.85; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(-2px); }
+}
+.trading-hero__ticker {
+  animation: trading-ticker-blink 3s ease-in-out infinite;
 }
 
 @keyframes trading-candle-rise {

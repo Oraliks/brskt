@@ -141,16 +141,44 @@ export function getBot(): Bot<Context> {
       /* ignore tracking errors */
     }
 
+    const botUser = process.env.TELEGRAM_BOT_USERNAME ?? 'boursikotonsbot';
     await ctx.reply(
       `${greeting}\n\n` +
-        `Tu es bien connecté au bot Boursikotons. À partir d'ici tu vas recevoir en temps réel :\n` +
-        `• Confirmations de réservation formation\n` +
-        `• Validations VIP (inscription, dépôt, accès Telegram)\n` +
-        `• Messages de l'équipe\n\n` +
-        `🔗 Mon espace : ${appUrl}/dashboard\n` +
-        `💎 VIP Telegram (gratuit) : ${appUrl}/vip\n` +
-        `📚 Réserver une formation : ${appUrl}/formation`,
-      { link_preview_options: { is_disabled: true } }
+        `<b>Bienvenue sur Boursikotons</b> — formation trading + groupe VIP Telegram gratuit (rémunération via broker partenaire, pas par toi).\n\n` +
+        `━━━━━━━━━━━━━━━\n\n` +
+        `<b>🚀 Démarrer</b>\n` +
+        `• <a href="${appUrl}/login">Se connecter au site</a> (1 clic Telegram)\n` +
+        `• <a href="${appUrl}/vip">Funnel VIP</a> (gratuit)\n` +
+        `• <a href="${appUrl}/formation">Réserver une formation</a>\n` +
+        `• <a href="${appUrl}/dashboard">Mon espace</a>\n\n` +
+        `<b>🛠 Calculatrices trading</b>\n` +
+        `/size — Taille de position\n` +
+        `/rr — Ratio risk/reward\n` +
+        `/pip — Valeur du pip\n` +
+        `/convert — Conversion devises live\n\n` +
+        `<b>🔔 Alertes & macro</b>\n` +
+        `/alert /alerts /unalert — Alertes prix FX/crypto\n` +
+        `/events — Calendrier économique\n` +
+        `/subscribe /unsubscribe — Briefing matinal & events\n\n` +
+        `<b>🎓 Apprendre & jouer</b>\n` +
+        `/quiz — Question du jour\n` +
+        `/leaderboard — Classement hebdo\n` +
+        `/streak — Mon streak quotidien\n\n` +
+        `<b>👤 Compte</b>\n` +
+        `/status — Ma progression VIP & CPA\n` +
+        `/login — Magic link de connexion direct\n` +
+        `/qualify — Personnaliser mon suivi\n\n` +
+        `<b>🎁 Parrainage & témoignages</b>\n` +
+        `/invite — Mon lien d'invitation perso\n` +
+        `/temoignage <i>&lt;ton avis&gt;</i> — Laisser un avis (validé par l'équipe puis publié sur le site)\n\n` +
+        `<b>💬 Mode inline</b>\n` +
+        `Tape <code>@${botUser} EURUSD</code> dans n'importe quel chat pour partager un prix live.\n\n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `<i>Liste complète : /help</i>`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+      }
     );
   });
 
@@ -185,6 +213,8 @@ export function getBot(): Bot<Context> {
         `Tape <code>@boursikotonsbot EURUSD</code> dans n'importe quel chat\n\n` +
         `<b>🎁 Parrainage</b>\n` +
         `/invite — Mon lien d'invitation perso\n\n` +
+        `<b>⭐ Témoignages</b>\n` +
+        `/temoignage <i>&lt;ton avis&gt;</i> — Laisser un avis qui sera publié sur le site après validation\n\n` +
         `<b>Aide</b>\n` +
         `/help — Cette aide\n\n` +
         `Site : ${appUrl}`,
