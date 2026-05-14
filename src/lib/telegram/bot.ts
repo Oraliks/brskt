@@ -219,9 +219,18 @@ async function handleUserJoinedVip(
         .set({
           step: 'in_group',
           telegramInviteUsed: true,
+          currentStepEnteredAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(vipApplications.id, intendedApp.id));
+      // Event funnel
+      const { emitFunnelEvent } = await import('@/lib/analytics/funnel');
+      await emitFunnelEvent({
+        userId: joiningUser.id,
+        sessionId: joiningUser.id,
+        eventName: 'vip_joined_group',
+        metadata: { applicationId: intendedApp.id },
+      });
       // DM de bienvenue (best-effort — peut échouer si l'user n'a jamais
       // ouvert le bot, auquel cas Telegram interdit le DM).
       await sendVipWelcomeDM(telegramUserId, joiningUser.telegramFirstName);

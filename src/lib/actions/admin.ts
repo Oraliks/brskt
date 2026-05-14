@@ -20,6 +20,7 @@ import { setIronFXMode } from '@/lib/ironfx';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
+import { emitFunnelEvent } from '@/lib/analytics/funnel';
 import BookingConfirmedEmail from '@root/emails/booking-confirmed';
 import BookingProposedEmail from '@root/emails/booking-proposed';
 import BookingRefusedEmail from '@root/emails/booking-refused';
@@ -200,7 +201,11 @@ export async function adminValidateSignupAction(
 
   await db
     .update(vipApplications)
-    .set({ step: 'signup_validated', updatedAt: new Date() })
+    .set({
+      step: 'signup_validated',
+      currentStepEnteredAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(eq(vipApplications.id, applicationId));
 
   const firstName = app.user.telegramFirstName ?? app.user.name ?? '';
@@ -217,6 +222,13 @@ export async function adminValidateSignupAction(
         `${APP_URL}/vip pour déclarer ton dépôt.`,
     })
   );
+
+  await emitFunnelEvent({
+    userId: app.userId,
+    sessionId: app.userId,
+    eventName: 'vip_signup_validated',
+    metadata: { applicationId: app.id, validatedByAdmin: session.user.id },
+  });
 
   await logAdminAction({
     adminId: session.user.id,
@@ -245,7 +257,11 @@ export async function adminValidateDepositAction(
 
   await db
     .update(vipApplications)
-    .set({ step: 'deposit_validated', updatedAt: new Date() })
+    .set({
+      step: 'deposit_validated',
+      currentStepEnteredAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(eq(vipApplications.id, applicationId));
 
   const firstName = app.user.telegramFirstName ?? app.user.name ?? '';
@@ -262,6 +278,13 @@ export async function adminValidateDepositAction(
         `(à usage unique, expire en 24h) :\n${APP_URL}/vip`,
     })
   );
+
+  await emitFunnelEvent({
+    userId: app.userId,
+    sessionId: app.userId,
+    eventName: 'vip_deposit_validated',
+    metadata: { applicationId: app.id, validatedByAdmin: session.user.id },
+  });
 
   await logAdminAction({
     adminId: session.user.id,
@@ -373,6 +396,14 @@ export async function adminSetTradingProgressAction(
 
     // Invalide le cache du compteur "X membres qualifiés" sur la landing
     updateTag('vip-qualified-count');
+
+    // Event funnel
+    await emitFunnelEvent({
+      userId,
+      sessionId: userId,
+      eventName: 'vip_qualified',
+      metadata: { applicationId: vipApp.id, byAdmin: session.user.id },
+    });
   }
 
   // Audit log : on stocke le delta avant/après le %

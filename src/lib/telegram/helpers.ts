@@ -107,9 +107,19 @@ export async function ejectFromTelegram(
       step: 'ejected',
       ejectedAt: new Date(),
       ejectionReason: reason,
+      currentStepEnteredAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(vipApplications.userId, userId));
+
+  // Event funnel
+  const { emitFunnelEvent } = await import('@/lib/analytics/funnel');
+  await emitFunnelEvent({
+    userId,
+    sessionId: userId,
+    eventName: 'vip_ejected',
+    metadata: { reason },
+  });
 
   // Notif privée Telegram
   try {

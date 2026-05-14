@@ -1,13 +1,14 @@
 import Link from 'next/link';
-import { and, desc, gte, sql } from 'drizzle-orm';
+import { and, count, desc, gte, sql } from 'drizzle-orm';
 import {
   AlertTriangle,
   ArrowRight,
+  Clock,
   TrendingDown,
   Users,
 } from 'lucide-react';
 import { db } from '@/lib/db';
-import { vipApplications } from '@/lib/db/schema';
+import { funnelEvents, vipApplications } from '@/lib/db/schema';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -103,12 +104,42 @@ export default async function AdminFunnelPage({
       id: vipApplications.id,
       step: vipApplications.step,
       createdAt: vipApplications.createdAt,
+      currentStepEnteredAt: vipApplications.currentStepEnteredAt,
     })
     .from(vipApplications)
     .where(cohortWhere);
 
   const total = apps.length;
   const ejectedCount = apps.filter((a) => a.step === 'ejected').length;
+
+  // Agrégation des events funnel sur la même cohorte (par event_name)
+  const eventStats = await db
+    .select({
+      eventName: funnelEvents.eventName,
+      c: count(),
+    })
+    .from(funnelEvents)
+    .where(start ? gte(funnelEvents.createdAt, start) : undefined)
+    .groupBy(funnelEvents.eventName);
+  const eventCounts = new Map(eventStats.map((e) => [e.eventName, e.c]));
+
+  // Time-in-step moyen pour les apps actuellement bloquées (en jours)
+  const stuckByStepData = new Map<
+    string,
+    { count: number; avgDaysStuck: number }
+  >();
+  for (const a of apps) {
+    if (a.step === 'in_group' || a.step === 'ejected') continue;
+    const enteredAt = a.currentStepEnteredAt ?? a.createdAt;
+    const daysStuck =
+      (Date.now() - enteredAt.getTime()) / (1000 * 60 * 60 * 24);
+    const prev = stuckByStepData.get(a.step) ?? { count: 0, avgDaysStuck: 0 };
+    const newCount = prev.count + 1;
+    stuckByStepData.set(a.step, {
+      count: newCount,
+      avgDaysStuck: (prev.avgDaysStuck * prev.count + daysStuck) / newCount,
+    });
+  }
 
   // Pour chaque étape du funnel, compte les apps dont le RANG d'étape >= rang de cette étape.
   // On exclut 'ejected' (rang 99) du compteur "in_group" car ils ont quitté.
@@ -216,10 +247,11 @@ export default async function AdminFunnelPage({
             const width = total > 0 ? (step.reached / total) * 100 : 0;
             const isFirst = i === 0;
             const stuckHere = stuckByStep.get(step.key) ?? 0;
+            const stuckStats = stuckByStepData.get(step.key);
             return (
               <div key={step.key}>
                 <div className="flex items-baseline justify-between text-sm mb-1.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs text-[var(--color-text-dim)] w-4">
                       {i + 1}
                     </span>
@@ -231,6 +263,12 @@ export default async function AdminFunnelPage({
                       >
                         {stuckHere} bloqués ici
                       </Link>
+                    )}
+                    {stuckStats && stuckStats.avgDaysStuck > 0.5 && (
+                      <span className="text-[10px] text-amber-300 light:text-amber-700 inline-flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5" />~
+                        {stuckStats.avgDaysStuck.toFixed(1)}j en moyenne
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 font-mono tabular-nums text-xs">
@@ -270,20 +308,58 @@ export default async function AdminFunnelPage({
         </div>
       </div>
 
-      {/* Note funnel_events */}
-      <div className="glass rounded-[var(--radius-md)] p-4 mb-8 border-amber-500/30 bg-amber-500/5">
-        <div className="flex items-start gap-3 text-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-300 flex-shrink-0 mt-0.5" />
-          <div>
-            <strong className="text-amber-200">Tracking limité :</strong> ce
-            funnel est calculé depuis <code>vip_applications.step</code>.
-            Pour un tracking plus fin (clics sur lien affilié, abandons
-            avant inscription, temps passé par étape), implémenter
-            l'émission d'événements dans la table{' '}
-            <code>funnel_events</code> (actuellement vide).
+      {/* Events détaillés (depuis funnel_events) */}
+      {eventStats.length > 0 && (
+        <div className="glass rounded-[var(--radius-lg)] p-6 mb-8">
+          <h2 className="text-base font-semibold mb-1">
+            Événements détaillés
+          </h2>
+          <p className="text-xs text-[var(--color-text-dim)] mb-5">
+            Compteur par <code>event_name</code> dans la cohorte. Donne une
+            vue plus fine que les step (notamment{' '}
+            <code>vip_link_clicked</code> = clics sur le lien d&apos;affilié,
+            non capturé dans le step).
+          </p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {eventStats
+              .sort((a, b) => b.c - a.c)
+              .map((e) => (
+                <div
+                  key={e.eventName}
+                  className="flex items-baseline justify-between px-3 py-2 rounded-md bg-[var(--color-surface-tint)]"
+                >
+                  <span className="font-mono text-xs">{e.eventName}</span>
+                  <span className="font-mono tabular-nums font-semibold">
+                    {e.c}
+                  </span>
+                </div>
+              ))}
           </div>
+          {/* Conversion link_generated → link_clicked en highlight */}
+          {(() => {
+            const generated = eventCounts.get('vip_link_generated') ?? 0;
+            const clicked = eventCounts.get('vip_link_clicked') ?? 0;
+            if (generated === 0) return null;
+            const rate = (clicked / generated) * 100;
+            return (
+              <div className="mt-5 p-3 rounded-md bg-indigo-500/8 border border-indigo-500/25 text-sm">
+                <strong>
+                  Taux de clic sur le lien d&apos;affiliation :{' '}
+                  <span className="font-mono">{rate.toFixed(1)}%</span>
+                </strong>{' '}
+                ({clicked}/{generated})
+                {rate < 50 && (
+                  <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                    Moins de la moitié des users génèrent puis cliquent. Peut
+                    indiquer un manque de confiance / clarté au step{' '}
+                    <code>link_generated</code>.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
-      </div>
+      )}
 
       {/* Apps récentes en bottleneck */}
       <RecentBottleneck total={total} cohortStartDate={start} />

@@ -9,6 +9,7 @@ import { adminNotifications, vipApplications } from '@/lib/db/schema';
 import { requireOnboarded } from '@/lib/auth/server';
 import { generateVipInvite } from '@/lib/telegram/helpers';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { emitFunnelEvent } from '@/lib/analytics/funnel';
 import {
   vipBrokerAccountSchema,
   vipDepositSchema,
@@ -38,13 +39,11 @@ export async function startVipFunnelAction(): Promise<
   }
 
   const ref = nanoid(10);
-  // On append notre ref au query string du lien IronFX comme sub_id.
-  // IronAffiliates renvoie ce paramètre dans les postbacks S2S (mode API).
-  const baseLink =
-    process.env.IRONFX_AFFILIATE_BASE_LINK ?? 'https://ironfx.com/?ref=';
-  const subIdParam = process.env.IRONFX_AFFILIATE_SUBID_PARAM ?? 'sub_id';
-  const separator = baseLink.includes('?') ? '&' : '?';
-  const affiliateLink = `${baseLink}${separator}${subIdParam}=${ref}`;
+  // Le lien d'affiliation passe par notre redirect interne pour tracker
+  // l'event `vip_link_clicked` avant de rediriger vers IronFX (qui recevra
+  // toujours le sub_id correctement).
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const affiliateLink = `${appUrl}/api/affiliate-redirect?ref=${encodeURIComponent(ref)}`;
 
   const [app] = await db
     .insert(vipApplications)
@@ -57,6 +56,19 @@ export async function startVipFunnelAction(): Promise<
     .returning();
 
   if (!app) return { success: false, error: 'Création échouée' };
+
+  await emitFunnelEvent({
+    userId: session.user.id,
+    sessionId: session.user.id,
+    eventName: 'vip_funnel_started',
+    metadata: { affiliateRef: ref },
+  });
+  await emitFunnelEvent({
+    userId: session.user.id,
+    sessionId: session.user.id,
+    eventName: 'vip_link_generated',
+    metadata: { affiliateRef: ref },
+  });
 
   revalidatePath('/vip');
   return {
@@ -101,9 +113,17 @@ export async function submitBrokerAccountAction(
     .set({
       brokerAccountId: parsed.data.brokerAccountId,
       step: 'signup_pending',
+      currentStepEnteredAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(vipApplications.userId, session.user.id));
+
+  await emitFunnelEvent({
+    userId: session.user.id,
+    sessionId: session.user.id,
+    eventName: 'vip_broker_submitted',
+    metadata: { brokerAccountId: parsed.data.brokerAccountId },
+  });
 
   after(async () => {
     await db.insert(adminNotifications).values({
@@ -172,9 +192,17 @@ export async function submitDepositAction(
       depositAmount: String(parsed.data.amount),
       depositCurrency: parsed.data.currency,
       step: 'deposit_pending',
+      currentStepEnteredAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(vipApplications.id, app.id));
+
+  await emitFunnelEvent({
+    userId: session.user.id,
+    sessionId: session.user.id,
+    eventName: 'vip_deposit_submitted',
+    metadata: { amount: parsed.data.amount, currency: parsed.data.currency },
+  });
 
   after(async () => {
     await db.insert(adminNotifications).values({
@@ -223,6 +251,12 @@ export async function requestTelegramInviteAction(): Promise<
 
   try {
     const link = await generateVipInvite(app.id);
+    await emitFunnelEvent({
+      userId: session.user.id,
+      sessionId: session.user.id,
+      eventName: 'vip_invite_requested',
+      metadata: { applicationId: app.id },
+    });
     revalidatePath('/vip');
     return { success: true, data: { inviteLink: link } };
   } catch (err) {

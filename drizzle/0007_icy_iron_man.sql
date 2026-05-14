@@ -1,0 +1,1 @@
+ALTER TABLE "vip_applications" ADD COLUMN "current_step_entered_at" timestamp DEFAULT now() NOT NULL;

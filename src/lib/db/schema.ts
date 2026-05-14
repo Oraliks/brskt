@@ -287,6 +287,13 @@ export const vipApplications = pgTable(
     // Reset à null si la situation se résout.
     ejectionWarnedAt: timestamp('ejection_warned_at'),
 
+    // Timestamp d'entrée dans l'étape courante (mis à jour à chaque
+    // transition). Permet de calculer le time-in-step et déclencher
+    // des alertes admin sur les users bloqués trop longtemps.
+    currentStepEnteredAt: timestamp('current_step_entered_at')
+      .notNull()
+      .defaultNow(),
+
     // Relances email automatiques (CRON quotidien vip-reminders)
     // reminderCount monte de 0 → 2 max (J+2 puis J+7 après dernière activité)
     reminderCount: integer('reminder_count').notNull().default(0),
