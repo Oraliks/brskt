@@ -20,7 +20,10 @@ interface LandingShellProps {
 }
 
 const ANIM_MS = 800;
-const DESKTOP_BREAKPOINT = '(min-width: 768px)';
+// Mode "desktop fullpage" : uniquement si la fenêtre est ≥ 768px ET le
+// pointeur est fin (souris). Sinon on bascule en mode mobile (scroll natif)
+// — couvre les tablettes touch en landscape, écrans tactiles, accessibilité.
+const DESKTOP_QUERY = '(min-width: 768px) and (pointer: fine)';
 
 export function LandingShell({ labels, nav, children }: LandingShellProps) {
   const sections = useMemo(
@@ -30,16 +33,21 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
   const total = sections.length;
 
   const [active, setActive] = useState(0);
-  const [isDesktop, setIsDesktop] = useState(true);
+  // IMPORTANT : par défaut on suppose MOBILE, pas desktop. Sinon entre le
+  // SSR/hydratation et le 1er useEffect, le user mobile a le body bloqué
+  // en overflow:hidden + container en h-[100dvh]/overflow-hidden, ce qui
+  // l'empêche de scroller pendant ce délai (qui peut être visible sur les
+  // appareils lents). Default mobile = safe.
+  const [isDesktop, setIsDesktop] = useState(false);
 
   const lockedUntil = useRef(0);
   const touchStartY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
 
-  // Détecter desktop vs mobile
+  // Détecter desktop vs mobile (largeur ≥ 768px ET souris/trackpad)
   useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_BREAKPOINT);
+    const mq = window.matchMedia(DESKTOP_QUERY);
     const update = () => setIsDesktop(mq.matches);
     update();
     mq.addEventListener('change', update);

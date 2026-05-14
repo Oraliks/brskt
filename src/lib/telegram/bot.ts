@@ -128,6 +128,40 @@ export function getBot(): Bot<Context> {
     const tgId = ctx.from?.id;
     if (!tgId) return;
 
+    // Check env vars en amont pour donner un message clair (vs erreur opaque)
+    const hasSecret =
+      !!process.env.MAGIC_LINK_SECRET?.trim() ||
+      !!process.env.BETTER_AUTH_SECRET?.trim();
+    if (!hasSecret) {
+      console.error('[bot] /login: no secret configured');
+      await ctx.reply(
+        `⚠️ Le service de magic-link n'est pas encore configuré côté serveur.\n\n` +
+          `Préviens l'admin : <code>MAGIC_LINK_SECRET</code> ou <code>BETTER_AUTH_SECRET</code> ` +
+          `doit être défini dans les variables d'environnement Vercel.\n\n` +
+          `En attendant, essaye le widget classique : ${appUrl}/login`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+      // Alerte admin Telegram
+      await alertAdmins(
+        `🚨 <b>/login command failed</b>\n\n` +
+          `User Telegram ID : <code>${tgId}</code>\n` +
+          `Cause : aucun secret configuré (MAGIC_LINK_SECRET ni BETTER_AUTH_SECRET)\n\n` +
+          `Set la var sur Vercel et redéploie.`
+      );
+      return;
+    }
+
+    if (!appUrl) {
+      console.error('[bot] /login: NEXT_PUBLIC_APP_URL missing');
+      await ctx.reply(
+        `⚠️ Configuration manquante (NEXT_PUBLIC_APP_URL). Préviens l'admin.`
+      );
+      await alertAdmins(
+        `🚨 <b>/login command failed</b>\n\nNEXT_PUBLIC_APP_URL not set.`
+      );
+      return;
+    }
+
     try {
       const { signMagicToken } = await import('@/lib/auth/magic-link');
       const token = signMagicToken(tgId);
@@ -141,10 +175,19 @@ export function getBot(): Bot<Context> {
         { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
       );
     } catch (err) {
-      console.error('[bot] /login error', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[bot] /login unexpected error', err);
       await ctx.reply(
-        `❌ Impossible de générer le lien de connexion pour le moment. ` +
-          `Réessaye dans quelques secondes ou utilise ${appUrl}/login`
+        `❌ Erreur inattendue lors de la génération du lien.\n\n` +
+          `Détails techniques (montre à l'admin) :\n` +
+          `<code>${escapeUserText(msg).slice(0, 200)}</code>\n\n` +
+          `Réessaye dans 30s ou utilise ${appUrl}/login`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+      await alertAdmins(
+        `🚨 <b>/login command crashed</b>\n\n` +
+          `User Telegram ID : <code>${tgId}</code>\n` +
+          `Error : <code>${escapeUserText(msg).slice(0, 500)}</code>`
       );
     }
   });
@@ -593,4 +636,22 @@ async function sendVipWelcomeDM(
  */
 function escapeUserText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Envoie un message au channel admin Telegram (ADMIN_ALERT_CHAT_ID).
+ * Silencieux si l'env var n'est pas configurée. Best-effort.
+ */
+async function alertAdmins(message: string): Promise<void> {
+  const chatId = process.env.ADMIN_ALERT_CHAT_ID;
+  if (!chatId) return;
+  try {
+    const bot = getBot();
+    await bot.api.sendMessage(Number(chatId), message, {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
+  } catch (err) {
+    console.warn('[bot] alertAdmins failed', err);
+  }
 }
