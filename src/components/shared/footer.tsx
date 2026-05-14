@@ -37,7 +37,12 @@ export function Footer() {
             title="Contact"
             links={[
               { href: 'mailto:contact@boursikotons.com', label: 'Email' },
-              { href: 'https://t.me/', label: 'Telegram' },
+              {
+                href:
+                  process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL ??
+                  'https://t.me/',
+                label: 'Canal Telegram',
+              },
             ]}
           />
         </div>

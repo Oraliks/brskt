@@ -46,6 +46,7 @@ export default async function DashboardPage() {
   const firstName = session.user.telegramFirstName ?? session.user.name ?? '';
 
   const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+  const channelUrl = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
 
   return (
     <>
@@ -99,29 +100,31 @@ export default async function DashboardPage() {
             </h3>
             <p className="mt-2 text-sm text-[var(--color-text-dim)]">
               {userBookings.length === 0
-                ? '5 jours intensifs, à distance ou à Dubaï.'
+                ? '7 jours intensifs, à distance ou à Dubaï.'
                 : "Tu as déjà une réservation, vois-la ci-dessous."}
             </p>
           </Link>
 
-          {/* Telegram link */}
-          <a
-            href="https://t.me/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="glass rounded-[var(--radius-lg)] p-6 hover:border-white/14 transition-colors group"
-          >
-            <div className="flex items-start justify-between">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-blue-500/15 border border-blue-500/30">
-                <MessageCircle className="h-4 w-4 text-blue-300" />
-              </span>
-              <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
-            </div>
-            <h3 className="mt-6 text-lg font-semibold">Notre canal Telegram</h3>
-            <p className="mt-2 text-sm text-[var(--color-text-dim)]">
-              Annonces, contenu gratuit et nouvelles cohortes.
-            </p>
-          </a>
+          {/* Telegram channel link */}
+          {channelUrl ? (
+            <a
+              href={channelUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass rounded-[var(--radius-lg)] p-6 hover:border-white/14 transition-colors group"
+            >
+              <div className="flex items-start justify-between">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-blue-500/15 border border-blue-500/30">
+                  <MessageCircle className="h-4 w-4 text-blue-300" />
+                </span>
+                <ArrowRight className="h-4 w-4 text-[var(--color-text-dim)] group-hover:translate-x-1 transition-transform" />
+              </div>
+              <h3 className="mt-6 text-lg font-semibold">Notre canal Telegram</h3>
+              <p className="mt-2 text-sm text-[var(--color-text-dim)]">
+                Annonces, contenu gratuit et nouvelles cohortes.
+              </p>
+            </a>
+          ) : null}
         </div>
       </Section>
 
