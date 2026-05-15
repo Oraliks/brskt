@@ -292,6 +292,19 @@ export const adminSetUserBannedSchema = z.object({
 });
 
 // ============================================================
+// ADMIN FORMATIONS (édition prix, titre, etc.)
+// ============================================================
+
+export const adminUpdateFormationSchema = z.object({
+  formationId: z.string().uuid(),
+  title: z.string().min(3, 'Titre trop court').max(120).optional(),
+  description: z.string().max(2000).optional(),
+  priceEur: z.number().min(0).max(1_000_000).optional(),
+  durationDays: z.number().int().min(1).max(60).optional(),
+  active: z.boolean().optional(),
+});
+
+// ============================================================
 // TESTIMONIALS
 // ============================================================
 

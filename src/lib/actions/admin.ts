@@ -6,6 +6,7 @@ import { after } from 'next/server';
 import { db } from '@/lib/db';
 import {
   bookings,
+  formations,
   manualIronfxStatus,
   testimonials,
   userBans,
@@ -18,6 +19,7 @@ import {
   adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
+  adminUpdateFormationSchema,
   adminVipOverrideSchema,
   automationsPatchSchema,
   botFeaturesSchema,
@@ -1012,6 +1014,79 @@ export async function adminModerateTestimonialAction(
 
   revalidatePath('/admin/testimonials');
   revalidatePath('/temoignages');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// FORMATIONS (édition admin : prix, titre, desc, durée, actif)
+// ============================================================
+
+/**
+ * Update partiel d'une formation. Toutes les colonnes sont optionnelles,
+ * on ne met à jour que les champs fournis. Garde le slug et le mode
+ * inchangés (changer ces deux-là casserait les bookings existants).
+ *
+ * Note : changer le prix n'impacte PAS les bookings déjà créés. Les
+ * paiements en cours utilisent le prix au moment de la réservation
+ * (stocké côté payment provider via providerSessionId). Le nouveau prix
+ * ne s'applique qu'aux futures réservations.
+ */
+export async function adminUpdateFormationAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminUpdateFormationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const target = await db.query.formations.findFirst({
+    where: eq(formations.id, parsed.data.formationId),
+  });
+  if (!target) {
+    return { success: false, error: 'Formation introuvable' };
+  }
+
+  const before = {
+    title: target.title,
+    description: target.description,
+    priceEur: target.priceEur,
+    durationDays: target.durationDays,
+    active: target.active,
+  };
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
+  if (parsed.data.description !== undefined)
+    updates.description = parsed.data.description;
+  if (parsed.data.priceEur !== undefined)
+    updates.priceEur = String(parsed.data.priceEur);
+  if (parsed.data.durationDays !== undefined)
+    updates.durationDays = parsed.data.durationDays;
+  if (parsed.data.active !== undefined) updates.active = parsed.data.active;
+
+  await db
+    .update(formations)
+    .set(updates)
+    .where(eq(formations.id, parsed.data.formationId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'formation_update',
+    targetType: 'formation',
+    targetId: parsed.data.formationId,
+    before,
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/formations');
+  revalidatePath('/formation');
+  revalidatePath('/formation/reserver');
   return { success: true, data: undefined };
 }
 
