@@ -522,3 +522,76 @@
 .slide-in-from-top-full { animation: radix-slide-in-top 0.25s ease-out; }
 .slide-in-from-bottom-full { animation: radix-slide-in-bottom 0.25s ease-out; }
 .slide-out-to-right-full { animation: radix-slide-out-right 0.2s ease-in; }
+
+
+/* ===== FullCalendar (admin /admin/calendar) — match du theme ===== */
+.fc {
+  --fc-border-color: var(--color-border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--color-surface-tint);
+  --fc-neutral-text-color: var(--color-text-dim);
+  --fc-today-bg-color: rgba(99, 102, 241, 0.06);
+  --fc-button-text-color: var(--color-text);
+  --fc-button-bg-color: var(--color-surface-tint);
+  --fc-button-border-color: var(--color-border);
+  --fc-button-hover-bg-color: var(--color-surface-tint-strong);
+  --fc-button-hover-border-color: var(--color-border-strong);
+  --fc-button-active-bg-color: var(--color-accent);
+  --fc-button-active-border-color: var(--color-accent);
+  color: var(--color-text);
+  font-family: inherit;
+}
+.fc .fc-toolbar-title {
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.fc .fc-button {
+  font-size: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  text-transform: none;
+  box-shadow: none;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  color: white;
+}
+.fc .fc-col-header-cell-cushion {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-dim);
+  font-weight: 500;
+}
+.fc .fc-daygrid-day-number {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+.fc .fc-day-today .fc-daygrid-day-number {
+  color: var(--color-accent-hover);
+  font-weight: 600;
+}
+.fc .fc-daygrid-day-frame {
+  min-height: 70px;
+}
+.fc .fc-event {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.7rem;
+  margin: 1px 2px;
+}
+.fc .fc-event-main {
+  font-weight: 500;
+}
+.fc .fc-daygrid-event-dot {
+  display: none;
+}
+.fc .fc-daygrid-more-link {
+  font-size: 0.65rem;
+  color: var(--color-accent-hover);
+  font-weight: 500;
+}

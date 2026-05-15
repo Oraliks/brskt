@@ -8,6 +8,7 @@ import {
   ArrowLeftFromLine,
   Bot,
   CalendarCheck,
+  CalendarDays,
   LayoutDashboard,
   Menu,
   MessageSquare,
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils';
 
 const links = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
+  { href: '/admin/calendar', label: 'Calendrier', icon: CalendarDays },
   { href: '/admin/bookings', label: 'Réservations', icon: CalendarCheck },
   { href: '/admin/vip', label: 'VIP', icon: Sparkles },
   { href: '/admin/funnel', label: 'Funnel', icon: TrendingDown },
