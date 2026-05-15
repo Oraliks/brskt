@@ -1,27 +1,27 @@
 import {
-  Activity,
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-} from 'lucide-react';
-import {
   AdminContainer,
   AdminPageHeader,
 } from '@/components/admin/page-header';
-import { SectionCard } from '@/components/admin/section-card';
-import { StatCard, StatCardGrid } from '@/components/admin/stat-card';
-import { Badge } from '@/components/ui/badge';
+import {
+  DiagnosticsView,
+  type DiagnosticsCheck,
+} from '@/components/admin/diagnostics-view';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Diagnostics admin : vérifie la config Telegram bot + autres env vars
- * essentiels. Utile quand un user signale un problème de login.
+ * Diagnostics admin : vérifie la config Telegram bot + auth + env essentiels.
+ * Utile quand un user signale un problème de login ou que le bot semble HS.
+ *
+ * Server-side : on fetch l'état des intégrations puis on passe à un composant
+ * client qui gère l'auto-refresh (router.refresh() toutes les 30s) et les
+ * filtres par catégorie.
  */
 export default async function AdminDiagnosticsPage() {
-  const botInfo = await fetchBotInfo();
-  const webhookInfo = await fetchWebhookInfo();
+  const [botInfo, webhookInfo] = await Promise.all([
+    fetchBotInfo(),
+    fetchWebhookInfo(),
+  ]);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const botUsername = process.env.TELEGRAM_BOT_USERNAME;
@@ -30,19 +30,28 @@ export default async function AdminDiagnosticsPage() {
 
   const widgetOrigin = await checkWidgetOrigin(botUsername, appUrl);
 
-  const checks: Check[] = [
+  const checks: DiagnosticsCheck[] = [
     {
+      id: 'telegram-token',
       label: 'TELEGRAM_BOT_TOKEN valide',
+      sublabel: botInfo.ok ? `ID: ${botInfo.data.id}` : undefined,
+      category: 'telegram',
       status: botInfo.ok ? 'ok' : 'error',
-      detail: botInfo.ok
-        ? `${botInfo.data.first_name} (@${botInfo.data.username}) · ID ${botInfo.data.id}`
-        : botInfo.error,
+      detail: botInfo.ok ? 'Token présent et valide' : botInfo.error,
       action: !botInfo.ok
-        ? 'Vérifier TELEGRAM_BOT_TOKEN dans Vercel. Régénérer via @BotFather (/token) si compromis.'
+        ? 'Vérifier TELEGRAM_BOT_TOKEN dans Vercel → Environment Variables. Régénérer via @BotFather (/token) si compromis.'
         : undefined,
+      copyValue: botInfo.ok ? String(botInfo.data.id) : undefined,
+      recheckable: true,
     },
     {
+      id: 'telegram-username',
       label: 'TELEGRAM_BOT_USERNAME correspond',
+      sublabel:
+        botUsername && expectedUsername
+          ? `Config: @${botUsername} · Telegram: @${expectedUsername}`
+          : undefined,
+      category: 'telegram',
       status: !botUsername
         ? 'error'
         : !expectedUsername
@@ -53,7 +62,9 @@ export default async function AdminDiagnosticsPage() {
       detail: !botUsername
         ? 'Variable manquante.'
         : expectedUsername
-        ? `Config : @${botUsername} · Telegram : @${expectedUsername}`
+        ? botUsername.toLowerCase() === expectedUsername.toLowerCase()
+          ? 'Username correspond'
+          : 'Mismatch entre config et Telegram'
         : 'Telegram API inaccessible.',
       action:
         botUsername &&
@@ -61,54 +72,80 @@ export default async function AdminDiagnosticsPage() {
         botUsername.toLowerCase() !== expectedUsername.toLowerCase()
           ? `Mismatch : aligner sur @${expectedUsername} dans Vercel.`
           : undefined,
+      copyValue: expectedUsername ?? botUsername ?? undefined,
     },
     {
+      id: 'app-url-https',
       label: 'NEXT_PUBLIC_APP_URL en HTTPS',
+      sublabel: appUrl ?? undefined,
+      category: 'env',
       status: !appUrl ? 'error' : appUrl.startsWith('https://') ? 'ok' : 'warn',
-      detail: appUrl ?? 'manquant',
+      detail: !appUrl
+        ? 'manquant'
+        : appUrl.startsWith('https://')
+        ? 'HTTPS OK'
+        : 'HTTP non sécurisé',
       action: appUrl?.startsWith('http://')
-        ? 'Telegram widget refuse HTTP en prod. Forcer HTTPS.'
+        ? 'Telegram widget refuse HTTP en prod. Forcer HTTPS dans NEXT_PUBLIC_APP_URL.'
         : undefined,
+      copyValue: appUrl,
     },
     {
+      id: 'setdomain',
       label: 'BotFather /setdomain',
+      sublabel: widgetOrigin.hostname
+        ? `Telegram accepte "${widgetOrigin.hostname}" comme origin.`
+        : undefined,
+      category: 'telegram',
       status: widgetOrigin.status,
-      detail: widgetOrigin.detail,
+      detail:
+        widgetOrigin.status === 'ok'
+          ? 'Domaine configuré'
+          : widgetOrigin.detail,
       action: widgetOrigin.action,
+      docUrl: 'https://core.telegram.org/widgets/login#setting-up-a-widget',
     },
     {
+      id: 'webhook',
       label: 'Webhook Telegram configuré',
+      sublabel:
+        webhookInfo.ok && webhookInfo.data.url ? webhookInfo.data.url : undefined,
+      category: 'webhook',
       status: webhookInfo.ok && webhookInfo.data.url ? 'ok' : 'warn',
       detail: webhookInfo.ok
         ? webhookInfo.data.url
-          ? `${webhookInfo.data.url}${
-              webhookInfo.data.pending_update_count
-                ? ` · ${webhookInfo.data.pending_update_count} en attente`
-                : ''
-            }${
-              webhookInfo.data.last_error_message
-                ? ` · ⚠ ${webhookInfo.data.last_error_message}`
-                : ''
-            }`
+          ? webhookInfo.data.last_error_message
+            ? `Webhook actif · ⚠ ${webhookInfo.data.last_error_message}`
+            : webhookInfo.data.pending_update_count
+            ? `Webhook actif · ${webhookInfo.data.pending_update_count} en attente`
+            : 'Webhook actif'
           : 'Aucun webhook set.'
         : webhookInfo.error,
       action:
         webhookInfo.ok && !webhookInfo.data.url
           ? 'Lancer `pnpm telegram:setup` pour configurer le webhook.'
           : undefined,
+      recheckable: true,
     },
     {
+      id: 'magic-link-secret',
       label: 'Magic-link secret',
+      sublabel: process.env.MAGIC_LINK_SECRET?.trim()
+        ? 'MAGIC_LINK_SECRET set'
+        : process.env.BETTER_AUTH_SECRET?.trim()
+        ? 'BETTER_AUTH_SECRET (fallback)'
+        : undefined,
+      category: 'auth',
       status:
         process.env.MAGIC_LINK_SECRET?.trim() ||
         process.env.BETTER_AUTH_SECRET?.trim()
           ? 'ok'
           : 'error',
-      detail: process.env.MAGIC_LINK_SECRET?.trim()
-        ? 'MAGIC_LINK_SECRET set'
-        : process.env.BETTER_AUTH_SECRET?.trim()
-        ? 'BETTER_AUTH_SECRET (fallback)'
-        : 'Aucun secret — /login bot HS.',
+      detail:
+        process.env.MAGIC_LINK_SECRET?.trim() ||
+        process.env.BETTER_AUTH_SECRET?.trim()
+          ? 'Secret configuré'
+          : 'Aucun secret — /login bot HS.',
       action:
         !process.env.MAGIC_LINK_SECRET?.trim() &&
         !process.env.BETTER_AUTH_SECRET?.trim()
@@ -116,148 +153,41 @@ export default async function AdminDiagnosticsPage() {
           : undefined,
     },
     {
+      id: 'admin-ids',
       label: 'ADMIN_TELEGRAM_IDS',
+      sublabel: process.env.ADMIN_TELEGRAM_IDS
+        ? `${process.env.ADMIN_TELEGRAM_IDS.split(',').length} ID(s) déclarés`
+        : undefined,
+      category: 'auth',
       status: process.env.ADMIN_TELEGRAM_IDS?.trim() ? 'ok' : 'error',
       detail: process.env.ADMIN_TELEGRAM_IDS
-        ? `${process.env.ADMIN_TELEGRAM_IDS.split(',').length} ID(s) déclarés`
+        ? `${process.env.ADMIN_TELEGRAM_IDS.split(',').length} ID(s) configurés`
         : 'Manquant — aucun admin ne pourra accéder à /admin.',
+      action: !process.env.ADMIN_TELEGRAM_IDS?.trim()
+        ? 'Ajouter ADMIN_TELEGRAM_IDS=123,456 dans Vercel → Environment Variables.'
+        : undefined,
+      copyValue: process.env.ADMIN_TELEGRAM_IDS ?? undefined,
     },
   ];
-
-  const counts = {
-    ok: checks.filter((c) => c.status === 'ok').length,
-    warn: checks.filter((c) => c.status === 'warn').length,
-    error: checks.filter((c) => c.status === 'error').length,
-  };
 
   return (
     <AdminContainer>
       <AdminPageHeader
         title="Diagnostics"
         description="Vérification live de la configuration Telegram et auth."
-        actions={
-          <Badge variant="secondary">
-            <Activity className="h-3 w-3 mr-1" />
-            Live
-          </Badge>
-        }
       />
 
-      <StatCardGrid cols={3} className="mb-5">
-        <StatCard
-          label="OK"
-          value={counts.ok}
-          tone="success"
-          icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
-        />
-        <StatCard
-          label="Avertissements"
-          value={counts.warn}
-          tone={counts.warn > 0 ? 'warning' : 'default'}
-          icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
-        />
-        <StatCard
-          label="Erreurs"
-          value={counts.error}
-          tone={counts.error > 0 ? 'danger' : 'default'}
-          icon={<AlertCircle className="h-4 w-4 text-rose-400" />}
-        />
-      </StatCardGrid>
-
-      <SectionCard
-        title="Checks"
-        description="Cliquer sur une ligne en erreur pour voir l'action à effectuer."
-        icon={<Activity className="h-4 w-4" />}
-        bodyClassName="p-0"
-      >
-        <div className="divide-y divide-[var(--color-border)]">
-          {checks.map((c) => (
-            <CheckRow key={c.label} check={c} />
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Si un user n'arrive pas à se connecter"
-        icon={<HelpCircle className="h-4 w-4" />}
-        className="mt-4"
-      >
-        <ol className="list-decimal list-inside space-y-1.5 text-sm text-[var(--color-text-dim)]">
-          <li>
-            Vérifier que tous les checks sont au vert (surtout{' '}
-            <code>/setdomain</code> chez @BotFather).
-          </li>
-          <li>
-            Demander d&apos;envoyer <code>/start</code> au bot, puis revenir sur
-            la page de login.
-          </li>
-          <li>
-            En dernier recours : <code>/login</code> dans le bot DM — magic-link
-            valable 10 min.
-          </li>
-          <li>
-            Sur desktop : vérifier que la popup Telegram n&apos;est pas bloquée.
-          </li>
-        </ol>
-      </SectionCard>
+      <DiagnosticsView
+        checks={checks}
+        fetchedAt={new Date().toISOString()}
+      />
     </AdminContainer>
   );
 }
 
-interface Check {
-  label: string;
-  status: 'ok' | 'warn' | 'error' | 'manual';
-  detail: string;
-  action?: string;
-}
-
-function CheckRow({ check }: { check: Check }) {
-  const variants = {
-    ok: {
-      icon: CheckCircle2,
-      iconClass: 'text-emerald-400 light:text-emerald-700',
-      dotBg: 'bg-emerald-500/15',
-    },
-    warn: {
-      icon: AlertTriangle,
-      iconClass: 'text-amber-400 light:text-amber-700',
-      dotBg: 'bg-amber-500/15',
-    },
-    error: {
-      icon: AlertCircle,
-      iconClass: 'text-rose-400 light:text-rose-700',
-      dotBg: 'bg-rose-500/15',
-    },
-    manual: {
-      icon: Activity,
-      iconClass: 'text-sky-400 light:text-sky-700',
-      dotBg: 'bg-sky-500/15',
-    },
-  };
-  const v = variants[check.status];
-  const Icon = v.icon;
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 hover:bg-white/[0.02]">
-      <span
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-full flex-shrink-0 ${v.dotBg}`}
-      >
-        <Icon className={`h-3.5 w-3.5 ${v.iconClass}`} />
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium">{check.label}</div>
-        <div className="mt-0.5 text-xs text-[var(--color-text-dim)] break-words">
-          {check.detail}
-        </div>
-        {check.action && (
-          <div className="mt-1.5 text-xs text-[var(--color-text)] bg-[var(--color-surface-tint)] rounded-md px-2.5 py-1.5 border border-[var(--color-border)]">
-            <strong className="text-amber-300 light:text-amber-700">→</strong>{' '}
-            {check.action}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ============================================================
+// Fetchers Telegram (server-side, no-store)
+// ============================================================
 
 interface TgGetMeOk {
   ok: true;
@@ -308,7 +238,12 @@ interface TgWebhookErr {
 async function checkWidgetOrigin(
   botUsername: string | undefined,
   appUrl: string | undefined
-): Promise<{ status: Check['status']; detail: string; action?: string }> {
+): Promise<{
+  status: 'ok' | 'warn' | 'error';
+  detail: string;
+  action?: string;
+  hostname?: string;
+}> {
   if (!botUsername || !appUrl) {
     return {
       status: 'error',
@@ -325,7 +260,10 @@ async function checkWidgetOrigin(
   })();
 
   if (!hostname) {
-    return { status: 'error', detail: `NEXT_PUBLIC_APP_URL invalide : "${appUrl}"` };
+    return {
+      status: 'error',
+      detail: `NEXT_PUBLIC_APP_URL invalide : "${appUrl}"`,
+    };
   }
 
   try {
@@ -342,6 +280,7 @@ async function checkWidgetOrigin(
         status: 'warn',
         detail: `Telegram a répondu ${res.status}.`,
         action: `Test manuel : @BotFather /setdomain → @${botUsername} → "${hostname}".`,
+        hostname,
       };
     }
 
@@ -356,12 +295,14 @@ async function checkWidgetOrigin(
         status: 'error',
         detail: `Telegram REFUSE "${hostname}". Le /setdomain n'est PAS configuré.`,
         action: `@BotFather → /setdomain → @${botUsername} → envoie "${hostname}" (sans https:// ni path).`,
+        hostname,
       };
     }
 
     return {
       status: 'ok',
       detail: `Telegram accepte "${hostname}" comme origin.`,
+      hostname,
     };
   } catch (err) {
     return {
