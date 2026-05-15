@@ -12,15 +12,17 @@ export default async function AdminLayout({
   return (
     <>
       <BackgroundFX />
-      {/* min-h-screen + flex-row sur desktop : sidebar à gauche, main à droite.
-          Le main est flex-col avec content (flex-1) + Footer : ça pousse le
-          footer tout en bas du viewport même quand le contenu est court. */}
-      <div className="min-h-screen flex flex-col md:flex-row">
-        <AdminSidebar />
-        <main className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1">{children}</div>
-          <Footer />
-        </main>
+      {/* Structure : conteneur vertical (sidebar+main en haut, Footer pleine
+          largeur en bas). Le flex-1 sur le row du milieu pousse le Footer
+          tout en bas du viewport quand le contenu est court, et le footer
+          suit naturellement après le scroll quand le contenu est long.
+          Pattern cohérent avec le layout (app) côté user. */}
+      <div className="min-h-screen flex flex-col">
+        <div className="flex-1 flex flex-col md:flex-row">
+          <AdminSidebar />
+          <main className="flex-1 min-w-0">{children}</main>
+        </div>
+        <Footer />
       </div>
     </>
   );
