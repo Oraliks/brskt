@@ -372,6 +372,9 @@ export async function adminBookingAction(
   });
 
   revalidatePath('/admin/bookings');
+  revalidatePath('/admin/bookings/list');
+  revalidatePath('/admin/calendar');
+  revalidatePath('/admin');
   revalidatePath('/dashboard');
   return { success: true, data: undefined };
 }
