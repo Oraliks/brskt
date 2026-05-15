@@ -37,6 +37,7 @@ export default async function AdminFormationsPage() {
           description: f.description ?? '',
           priceEur: Number(f.priceEur),
           durationDays: f.durationDays,
+          dailyCapacity: f.dailyCapacity,
           active: f.active,
         }))}
       />

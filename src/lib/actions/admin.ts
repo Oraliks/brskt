@@ -1,6 +1,7 @@
 'use server';
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, count, eq, isNull, ne } from 'drizzle-orm';
 import { revalidatePath, updateTag } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
@@ -62,6 +63,49 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 // BOOKINGS
 // ============================================================
 
+/**
+ * Compte le nombre de bookings non-annulés déjà placés sur une date donnée
+ * pour une formation donnée. Sert au check de capacité au moment du
+ * confirm / propose_alternative.
+ *
+ * On match aussi bien `confirmedDate` que `adminProposedDate` car les deux
+ * occupent une "place" — un user qui a une date proposée peut l'accepter,
+ * il prend donc déjà un slot. `excludeBookingId` permet de ne pas se
+ * compter soi-même quand on déplace son propre booking.
+ */
+async function countDailySessionLoad(
+  formationId: string,
+  date: string,
+  excludeBookingId: string | null
+): Promise<number> {
+  const conditions = [
+    eq(bookings.formationId, formationId),
+    ne(bookings.status, 'cancelled'),
+  ];
+  if (excludeBookingId) {
+    conditions.push(ne(bookings.id, excludeBookingId));
+  }
+
+  const [confirmedCount, proposedCount] = await Promise.all([
+    db
+      .select({ c: count() })
+      .from(bookings)
+      .where(and(...conditions, eq(bookings.confirmedDate, date))),
+    db
+      .select({ c: count() })
+      .from(bookings)
+      .where(
+        and(
+          ...conditions,
+          isNull(bookings.confirmedDate),
+          eq(bookings.adminProposedDate, date)
+        )
+      ),
+  ]);
+
+  return (confirmedCount[0]?.c ?? 0) + (proposedCount[0]?.c ?? 0);
+}
+
 export async function adminBookingAction(
   input: unknown
 ): Promise<ActionResult> {
@@ -91,6 +135,24 @@ export async function adminBookingAction(
     booking.user.telegramFirstName ?? booking.user.name ?? '';
 
   if (data.action === 'confirm') {
+    // Check capacity sauf si l'admin force l'override (déjà vu le warning UI)
+    if (!data.overrideCapacity) {
+      const current = await countDailySessionLoad(
+        booking.formationId,
+        data.confirmedDate,
+        booking.id
+      );
+      const capacity = booking.formation.dailyCapacity;
+      if (current >= capacity) {
+        return {
+          success: false,
+          error: `Cette date a déjà ${current}/${capacity} participant(s) sur cette formation.`,
+          code: 'capacity_exceeded',
+          meta: { current, capacity, date: data.confirmedDate },
+        };
+      }
+    }
+
     await db
       .update(bookings)
       .set({
@@ -121,6 +183,23 @@ export async function adminBookingAction(
       })
     );
   } else if (data.action === 'propose_alternative') {
+    if (!data.overrideCapacity) {
+      const current = await countDailySessionLoad(
+        booking.formationId,
+        data.proposedDate,
+        booking.id
+      );
+      const capacity = booking.formation.dailyCapacity;
+      if (current >= capacity) {
+        return {
+          success: false,
+          error: `Cette date a déjà ${current}/${capacity} participant(s) sur cette formation.`,
+          code: 'capacity_exceeded',
+          meta: { current, capacity, date: data.proposedDate },
+        };
+      }
+    }
+
     await db
       .update(bookings)
       .set({
@@ -1066,6 +1145,7 @@ export async function adminUpdateFormationAction(
     description: target.description,
     priceEur: target.priceEur,
     durationDays: target.durationDays,
+    dailyCapacity: target.dailyCapacity,
     active: target.active,
   };
 
@@ -1077,6 +1157,8 @@ export async function adminUpdateFormationAction(
     updates.priceEur = String(parsed.data.priceEur);
   if (parsed.data.durationDays !== undefined)
     updates.durationDays = parsed.data.durationDays;
+  if (parsed.data.dailyCapacity !== undefined)
+    updates.dailyCapacity = parsed.data.dailyCapacity;
   if (parsed.data.active !== undefined) updates.active = parsed.data.active;
 
   await db
@@ -1373,6 +1455,62 @@ export async function adminDeleteOfflineCoachingAction(
   revalidatePath('/admin/coachings');
   revalidatePath('/admin/calendar');
   return { success: true, data: undefined };
+}
+
+// ============================================================
+// iCal feed token (sync Apple Calendar / Google / Outlook)
+// ============================================================
+
+/**
+ * Récupère le token iCal de l'admin courant, ou le génère si absent.
+ * Le token permet de construire l'URL `webcal://.../api/calendar/feed/{token}`
+ * à abonner dans n'importe quel client compatible iCal.
+ */
+export async function getOrCreateAdminIcalTokenAction(): Promise<
+  ActionResult<{ token: string }>
+> {
+  const session = await requireAdmin();
+  const fresh = await db.query.users.findFirst({
+    where: eq(users.id, session.user.id),
+    columns: { icalToken: true },
+  });
+  if (fresh?.icalToken) {
+    return { success: true, data: { token: fresh.icalToken } };
+  }
+  const token = randomUUID();
+  await db
+    .update(users)
+    .set({ icalToken: token, updatedAt: new Date() })
+    .where(eq(users.id, session.user.id));
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'ical_token_create',
+    targetType: 'user',
+    targetId: session.user.id,
+  });
+  return { success: true, data: { token } };
+}
+
+/**
+ * Régénère un nouveau token iCal — invalide l'ancienne URL.
+ * À utiliser quand l'admin pense que l'URL a fuité.
+ */
+export async function regenerateAdminIcalTokenAction(): Promise<
+  ActionResult<{ token: string }>
+> {
+  const session = await requireAdmin();
+  const token = randomUUID();
+  await db
+    .update(users)
+    .set({ icalToken: token, updatedAt: new Date() })
+    .where(eq(users.id, session.user.id));
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'ical_token_rotate',
+    targetType: 'user',
+    targetId: session.user.id,
+  });
+  return { success: true, data: { token } };
 }
 
 // ============================================================

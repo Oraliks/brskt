@@ -135,6 +135,15 @@ export const users = pgTable(
       .notNull()
       .default(true),
 
+    /**
+     * Token unique pour s'abonner au feed iCal personnel via Apple Calendar /
+     * Google Calendar / Outlook. Nullable : généré à la demande, révocable.
+     * Pour l'admin, ce feed contient toutes les sessions du système. Pour
+     * les users non-admin, il pourra contenir leurs propres bookings (TODO
+     * — pas utilisé pour l'instant côté user).
+     */
+    icalToken: uuid('ical_token').unique(),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -221,6 +230,13 @@ export const formations = pgTable('formations', {
   description: text('description'),
   priceEur: numeric('price_eur', { precision: 10, scale: 2 }).notNull(),
   durationDays: integer('duration_days').notNull().default(5),
+  /**
+   * Nombre max de participants pour cette formation, pour une même date
+   * donnée. La "session" est implicite : tout booking dont confirmedDate
+   * tombe sur ce jour compte pour la capacité.
+   * Default 3 — modifiable par l'admin (1 à 50).
+   */
+  dailyCapacity: integer('daily_capacity').notNull().default(3),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -990,3 +1006,4 @@ export type VipApplication = typeof vipApplications.$inferSelect;
 export type AppSetting = typeof appSettings.$inferSelect;
 export type ManualIronfxStatus = typeof manualIronfxStatus.$inferSelect;
 export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
+export type OfflineCoaching = typeof offlineCoachings.$inferSelect;

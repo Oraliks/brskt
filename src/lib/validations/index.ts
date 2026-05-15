@@ -48,12 +48,19 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
     action: z.literal('confirm'),
     bookingId: z.string().uuid(),
     confirmedDate: z.string(),
+    /**
+     * Permet de confirmer même si la date a déjà atteint la capacité max
+     * de la formation (vérifié côté serveur). L'UI affiche un dialog de
+     * confirmation avant de renvoyer avec ce flag à true.
+     */
+    overrideCapacity: z.boolean().optional(),
   }),
   z.object({
     action: z.literal('propose_alternative'),
     bookingId: z.string().uuid(),
     proposedDate: z.string(),
     notes: z.string().optional(),
+    overrideCapacity: z.boolean().optional(),
   }),
   z.object({
     action: z.literal('refuse'),
@@ -303,6 +310,12 @@ export const adminUpdateFormationSchema = z.object({
   description: z.string().max(2000).optional(),
   priceEur: z.number().min(0).max(1_000_000).optional(),
   durationDays: z.number().int().min(1).max(60).optional(),
+  dailyCapacity: z
+    .number()
+    .int()
+    .min(1, 'Minimum 1 personne par jour')
+    .max(50, 'Maximum 50 personnes par jour')
+    .optional(),
   active: z.boolean().optional(),
 });
 

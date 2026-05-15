@@ -127,6 +127,13 @@
       "when": 1778815389403,
       "tag": "0017_yielding_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778850454715,
+      "tag": "0018_stale_gambit",
+      "breakpoints": true
     }
   ]
 }

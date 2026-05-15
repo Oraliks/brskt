@@ -1,7 +1,7 @@
-import { and, desc, isNotNull, notInArray } from 'drizzle-orm';
+import { and, asc, desc, isNotNull, notInArray } from 'drizzle-orm';
 import { CalendarCheck } from 'lucide-react';
 import { db } from '@/lib/db';
-import { bookings, offlineCoachings } from '@/lib/db/schema';
+import { bookings, formations, offlineCoachings } from '@/lib/db/schema';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -11,14 +11,16 @@ import {
   BookingCalendar,
   type CalendarBooking,
   type CalendarOfflineCoaching,
+  type FormationCapacity,
 } from '@/components/admin/booking-calendar';
+import { getOrCreateAdminIcalTokenAction } from '@/lib/actions/admin';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminCalendarPage() {
   // Bookings online (site) non-cancelled + coachings offline non-cancelled
   // ayant une date planifiée (les autres restent invisibles du calendrier).
-  const [rows, offRows] = await Promise.all([
+  const [rows, offRows, formationRows, tokenResult] = await Promise.all([
     db.query.bookings.findMany({
       where: notInArray(bookings.status, ['cancelled']),
       orderBy: [desc(bookings.createdAt)],
@@ -40,6 +42,11 @@ export default async function AdminCalendarPage() {
       orderBy: [desc(offlineCoachings.scheduledDate)],
       limit: 500,
     }),
+    db.query.formations.findMany({
+      columns: { id: true, title: true, dailyCapacity: true },
+      orderBy: [asc(formations.title)],
+    }),
+    getOrCreateAdminIcalTokenAction(),
   ]);
 
   const items: CalendarBooking[] = rows.map((b) => ({
@@ -47,6 +54,7 @@ export default async function AdminCalendarPage() {
     userName: b.user.name,
     userEmail: b.user.email,
     userTelegramUsername: b.user.telegramUsername,
+    formationId: b.formationId,
     formationTitle: b.formation.title,
     formationMode: b.formation.mode,
     formationPriceEur: Number(b.formation.priceEur),
@@ -58,7 +66,16 @@ export default async function AdminCalendarPage() {
     adminNotes: b.adminNotes,
     installmentsPaid: b.installmentsPaid,
     installmentTotal: b.installmentTotal,
+    createdAt: b.createdAt.toISOString(),
   }));
+
+  const formationCapacities: FormationCapacity[] = formationRows.map((f) => ({
+    id: f.id,
+    title: f.title,
+    dailyCapacity: f.dailyCapacity,
+  }));
+
+  const icalToken = tokenResult.success ? tokenResult.data.token : null;
 
   const offlineItems: CalendarOfflineCoaching[] = offRows
     .filter((c) => c.scheduledDate)
@@ -87,7 +104,12 @@ export default async function AdminCalendarPage() {
           </Badge>
         }
       />
-      <BookingCalendar bookings={items} offlineCoachings={offlineItems} />
+      <BookingCalendar
+        bookings={items}
+        offlineCoachings={offlineItems}
+        formationCapacities={formationCapacities}
+        icalToken={icalToken}
+      />
     </AdminContainer>
   );
 }

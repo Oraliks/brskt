@@ -25,7 +25,19 @@ import {
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
-  | { success: false; error: string; fieldErrors?: Record<string, string[]> };
+  | {
+      success: false;
+      error: string;
+      fieldErrors?: Record<string, string[]>;
+      /**
+       * Code d'erreur structuré pour les cas que l'UI doit traiter spécialement
+       * (ex: `capacity_exceeded` → afficher un dialog "forcer quand même ?").
+       * Optionnel — la plupart des erreurs n'en ont pas besoin.
+       */
+      code?: string;
+      /** Métadonnées contextuelles associées au code (ex: { current, capacity }). */
+      meta?: Record<string, unknown>;
+    };
 
 /**
  * Crée une réservation ET lance immédiatement le paiement.

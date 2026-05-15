@@ -6,9 +6,20 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventClickArg, EventDropArg } from '@fullcalendar/core';
+import type {
+  EventClickArg,
+  EventDropArg,
+  EventMountArg,
+} from '@fullcalendar/core';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Clock, Loader2, X } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  Check,
+  Clock,
+  Loader2,
+  X,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import { adminBookingAction } from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
+import { IcalSubscribeButton } from './ical-subscribe-button';
 
 /**
  * Calendrier admin des réservations.
@@ -44,6 +56,7 @@ export interface CalendarBooking {
   userName: string;
   userEmail: string | null;
   userTelegramUsername: string | null;
+  formationId: string;
   formationTitle: string;
   formationMode: 'remote' | 'onsite';
   formationPriceEur: number;
@@ -62,6 +75,14 @@ export interface CalendarBooking {
   adminNotes: string | null;
   installmentsPaid: number;
   installmentTotal: number;
+  /** ISO string — sert au filtre "pending_payment ancien" (>3j). */
+  createdAt: string;
+}
+
+export interface FormationCapacity {
+  id: string;
+  title: string;
+  dailyCapacity: number;
 }
 
 interface CalendarEvent {
@@ -79,6 +100,10 @@ interface CalendarEvent {
   bookingId: string;
   /** 'online' = booking via le site / 'offline' = coaching manuel admin. */
   kind?: 'online' | 'offline';
+  /** Tooltip riche affiché au hover (texte multi-ligne séparé par \n). */
+  tooltip?: string;
+  /** Class CSS ajoutée à l'event quand sa date est saturée (capacité atteinte). */
+  isOverbooked?: boolean;
 }
 
 export interface CalendarOfflineCoaching {
@@ -97,10 +122,15 @@ export interface CalendarOfflineCoaching {
 interface Props {
   bookings: CalendarBooking[];
   offlineCoachings?: CalendarOfflineCoaching[];
+  formationCapacities?: FormationCapacity[];
+  /** Token iCal de l'admin — null si pas encore généré. */
+  icalToken?: string | null;
 }
 
 type SourceFilter = 'all' | 'online' | 'offline';
 type ModeFilter = 'all' | 'remote' | 'onsite';
+
+const PENDING_PAYMENT_STALE_DAYS = 3;
 
 const STATUS_LABEL: Record<CalendarBooking['status'], string> = {
   pending_admin: 'En attente',
@@ -128,6 +158,8 @@ const STATUS_VARIANT: Record<
 export function BookingCalendar({
   bookings,
   offlineCoachings = [],
+  formationCapacities = [],
+  icalToken = null,
 }: Props) {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
@@ -143,33 +175,81 @@ export function BookingCalendar({
     revert: () => void;
   } | null>(null);
   const [dropNotes, setDropNotes] = useState('');
+  /**
+   * Dialog "Capacité dépassée — forcer ?" : surgit quand une action est
+   * refusée par le serveur avec code='capacity_exceeded'. On y stocke la
+   * callback à rappeler avec overrideCapacity=true si l'admin confirme.
+   */
+  const [capacityDialog, setCapacityDialog] = useState<{
+    current: number;
+    capacity: number;
+    date: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Filtres
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+  const [actionRequiredOnly, setActionRequiredOnly] = useState(false);
+
+  /**
+   * Map { `${formationId}|${date}` → count } : combien de bookings non-annulés
+   * occupent déjà cette date pour cette formation (confirmed + proposed).
+   * Sert à afficher "2/3" dans les titres + le badge "saturé" sur events.
+   */
+  const dailyLoadMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of bookings) {
+      if (b.status === 'cancelled') continue;
+      const date = b.confirmedDate ?? b.adminProposedDate;
+      if (!date) continue;
+      const key = `${b.formationId}|${date}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [bookings]);
+
+  const capacityByFormation = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const f of formationCapacities) {
+      map.set(f.id, f.dailyCapacity);
+    }
+    return map;
+  }, [formationCapacities]);
+
+  const actionRequiredCount = useMemo(
+    () => bookings.filter((b) => isActionRequired(b)).length,
+    [bookings]
+  );
 
   const events: CalendarEvent[] = useMemo(() => {
+    const ctx = { dailyLoadMap, capacityByFormation };
     const onlineEvents = bookings.flatMap((b) => {
       if (modeFilter !== 'all' && b.formationMode !== modeFilter) return [];
-      return buildEventsForBooking(b);
+      if (actionRequiredOnly && !isActionRequired(b)) return [];
+      return buildEventsForBooking(b, ctx);
     });
+    // Le filtre "Action requise" est spécifique aux bookings online — on
+    // masque l'offline quand il est actif (l'offline n'a pas de pending_admin).
     const offlineEvents =
-      sourceFilter === 'online'
+      sourceFilter === 'online' || actionRequiredOnly
         ? []
         : offlineCoachings.flatMap((c) => {
-            if (
-              modeFilter !== 'all' &&
-              c.mode !== modeFilter &&
-              !(modeFilter === 'remote' && c.mode === 'remote') &&
-              !(modeFilter === 'onsite' && c.mode === 'onsite')
-            )
-              return [];
+            if (modeFilter !== 'all' && c.mode !== modeFilter) return [];
             return buildEventsForOffline(c);
           });
     const filtered =
       sourceFilter === 'offline' ? offlineEvents : [...onlineEvents, ...offlineEvents];
     return filtered;
-  }, [bookings, offlineCoachings, sourceFilter, modeFilter]);
+  }, [
+    bookings,
+    offlineCoachings,
+    sourceFilter,
+    modeFilter,
+    actionRequiredOnly,
+    dailyLoadMap,
+    capacityByFormation,
+  ]);
 
   function onEventClick(arg: EventClickArg) {
     const isOffline = arg.event.extendedProps.kind === 'offline';
@@ -217,7 +297,7 @@ export function BookingCalendar({
     setDropNotes('');
   }
 
-  function confirmProposeDate() {
+  function confirmProposeDate(overrideCapacity = false) {
     if (!dropDialog) return;
     const { booking, newDate, revert } = dropDialog;
     start(async () => {
@@ -226,6 +306,7 @@ export function BookingCalendar({
         bookingId: booking.id,
         proposedDate: newDate,
         notes: dropNotes.trim() || undefined,
+        overrideCapacity,
       });
       if (result.success) {
         toast({
@@ -234,7 +315,16 @@ export function BookingCalendar({
         });
         setDropDialog(null);
         setDropNotes('');
+        setCapacityDialog(null);
         router.refresh();
+      } else if (result.code === 'capacity_exceeded') {
+        const meta = result.meta as { current: number; capacity: number };
+        setCapacityDialog({
+          current: meta.current,
+          capacity: meta.capacity,
+          date: newDate,
+          onConfirm: () => confirmProposeDate(true),
+        });
       } else {
         toast({
           title: 'Erreur',
@@ -253,17 +343,31 @@ export function BookingCalendar({
     setDropNotes('');
   }
 
-  function confirmThisDate(booking: CalendarBooking, date: string) {
+  function confirmThisDate(
+    booking: CalendarBooking,
+    date: string,
+    overrideCapacity = false
+  ) {
     start(async () => {
       const result = await adminBookingAction({
         action: 'confirm',
         bookingId: booking.id,
         confirmedDate: date,
+        overrideCapacity,
       });
       if (result.success) {
         toast({ title: `✓ Confirmé ${booking.userName}` });
         setDetailDialog(null);
+        setCapacityDialog(null);
         router.refresh();
+      } else if (result.code === 'capacity_exceeded') {
+        const meta = result.meta as { current: number; capacity: number };
+        setCapacityDialog({
+          current: meta.current,
+          capacity: meta.capacity,
+          date,
+          onConfirm: () => confirmThisDate(booking, date, true),
+        });
       } else {
         toast({
           title: 'Erreur',
@@ -272,6 +376,26 @@ export function BookingCalendar({
         });
       }
     });
+  }
+
+  /**
+   * Hook FullCalendar : appelé après le mount de chaque event dans le DOM.
+   * On y attache le tooltip natif HTML (title=) — léger, accessible, pas
+   * de lib à installer. Pour un tooltip riche (carte au survol) on
+   * basculerait sur Radix Tooltip plus tard.
+   */
+  function onEventDidMount(arg: EventMountArg) {
+    const tooltip = arg.event.extendedProps.tooltip as string | undefined;
+    if (tooltip) {
+      arg.el.setAttribute('title', tooltip);
+    }
+    const overbooked = arg.event.extendedProps.isOverbooked as
+      | boolean
+      | undefined;
+    if (overbooked) {
+      arg.el.style.boxShadow = 'inset 0 0 0 2px rgb(239, 68, 68)';
+      arg.el.style.position = 'relative';
+    }
   }
 
   return (
@@ -283,13 +407,17 @@ export function BookingCalendar({
             setSourceFilter={setSourceFilter}
             modeFilter={modeFilter}
             setModeFilter={setModeFilter}
+            actionRequiredOnly={actionRequiredOnly}
+            setActionRequiredOnly={setActionRequiredOnly}
             counts={{
               online: bookings.length,
               offline: offlineCoachings.length,
+              actionRequired: actionRequiredCount,
             }}
           />
           <div className="flex-1" />
           <Legend />
+          <IcalSubscribeButton token={icalToken} />
         </div>
         <FullCalendar
           ref={calendarRef as React.MutableRefObject<FullCalendar | null>}
@@ -315,6 +443,7 @@ export function BookingCalendar({
           droppable={false}
           eventClick={onEventClick}
           eventDrop={onEventDrop}
+          eventDidMount={onEventDidMount}
           dayMaxEvents={3}
           displayEventTime={false}
           eventDisplay="block"
@@ -590,7 +719,7 @@ export function BookingCalendar({
                 <X className="h-4 w-4" />
                 Annuler
               </Button>
-              <Button onClick={confirmProposeDate} disabled={pending}>
+              <Button onClick={() => confirmProposeDate(false)} disabled={pending}>
                 {pending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -602,8 +731,63 @@ export function BookingCalendar({
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Dialog "Capacité dépassée — forcer ?" */}
+      <Dialog
+        open={!!capacityDialog}
+        onOpenChange={(o) => !o && setCapacityDialog(null)}
+      >
+        {capacityDialog && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-400" />
+                Jour saturé
+              </DialogTitle>
+              <DialogDescription>
+                Le {formatDate(capacityDialog.date)} a déjà{' '}
+                <strong>
+                  {capacityDialog.current}/{capacityDialog.capacity}
+                </strong>{' '}
+                participant(s) sur cette formation.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/25 p-3 text-xs text-amber-200 light:text-amber-700">
+              Tu peux forcer l&apos;ajout d&apos;un participant supplémentaire
+              si tu as la capacité d&apos;encadrer. Sinon, choisis une autre
+              date ou augmente la capacité par défaut dans /admin/formations.
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setCapacityDialog(null)}
+                disabled={pending}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={capacityDialog.onConfirm}
+                disabled={pending}
+                className="bg-amber-500/20 border border-amber-500/40 text-amber-100 hover:bg-amber-500/30"
+              >
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Forcer quand même
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
     </>
   );
+}
+
+interface BuildContext {
+  dailyLoadMap: Map<string, number>;
+  capacityByFormation: Map<string, number>;
 }
 
 /**
@@ -613,59 +797,119 @@ export function BookingCalendar({
  * - pending_admin sans dates → aucun event (skip ASAP)
  * - pending_admin avec preferredDates → 1 event ghost par créneau
  */
-function buildEventsForBooking(b: CalendarBooking): CalendarEvent[] {
-  // Cancelled / completed → ne pas afficher sur le calendrier (clutter)
+function buildEventsForBooking(
+  b: CalendarBooking,
+  ctx: BuildContext
+): CalendarEvent[] {
   if (b.status === 'cancelled') return [];
 
-  const title = `${b.userName} · ${
-    b.formationMode === 'onsite' ? 'Dubaï' : 'Distance'
-  }`;
+  const modeLabel = b.formationMode === 'onsite' ? 'Dubaï' : 'Distance';
+  const baseTitle = `${b.userName} · ${modeLabel}`;
+
+  function capacityInfo(date: string): {
+    label: string;
+    overbooked: boolean;
+    current: number;
+    capacity: number | null;
+  } {
+    const capacity = ctx.capacityByFormation.get(b.formationId) ?? null;
+    const current = ctx.dailyLoadMap.get(`${b.formationId}|${date}`) ?? 0;
+    return {
+      label: capacity !== null ? ` (${current}/${capacity})` : '',
+      overbooked: capacity !== null && current > capacity,
+      current,
+      capacity,
+    };
+  }
+
+  function tooltipFor(date: string, tag: string): string {
+    const cap = capacityInfo(date);
+    const lines = [
+      `${b.userName}${b.userEmail ? ` · ${b.userEmail}` : ''}`,
+      `${b.formationTitle} (${modeLabel})`,
+      `Statut : ${STATUS_LABEL[b.status]}${tag ? ` — ${tag}` : ''}`,
+    ];
+    if (cap.capacity !== null) {
+      lines.push(
+        `Capacité : ${cap.current}/${cap.capacity}${
+          cap.overbooked ? ' ⚠️ saturé' : ''
+        }`
+      );
+    }
+    if (b.installmentTotal > 1) {
+      lines.push(
+        `Paiement : ${b.installmentsPaid}/${b.installmentTotal} échéance(s)`
+      );
+    }
+    return lines.join('\n');
+  }
 
   if (b.confirmedDate) {
+    const cap = capacityInfo(b.confirmedDate);
     return [
       {
         id: `${b.id}-confirmed`,
         bookingId: b.id,
-        title,
+        title: `${baseTitle}${cap.label}`,
         start: b.confirmedDate,
         backgroundColor: colorFor(b.status).bg,
         borderColor: colorFor(b.status).border,
         textColor: colorFor(b.status).text,
         isGhost: false,
+        tooltip: tooltipFor(b.confirmedDate, ''),
+        isOverbooked: cap.overbooked,
       },
     ];
   }
 
   if (b.adminProposedDate) {
+    const cap = capacityInfo(b.adminProposedDate);
     return [
       {
         id: `${b.id}-proposed`,
         bookingId: b.id,
-        title: `${title} (proposé)`,
+        title: `${baseTitle} (proposé)${cap.label}`,
         start: b.adminProposedDate,
         backgroundColor: colorFor('date_proposed').bg,
         borderColor: colorFor('date_proposed').border,
         textColor: colorFor('date_proposed').text,
         isGhost: false,
+        tooltip: tooltipFor(b.adminProposedDate, 'proposé'),
+        isOverbooked: cap.overbooked,
       },
     ];
   }
 
-  // pending_admin : on visualise les créneaux préférés en "ghost"
   if (b.status === 'pending_admin' && b.preferredDates) {
     return b.preferredDates.slice(0, 3).map((d, i) => ({
       id: `${b.id}-pref-${i}`,
       bookingId: b.id,
-      title: `${title} ?`,
+      title: `${baseTitle} ?`,
       start: d.start,
       backgroundColor: colorFor('pending_admin').bg,
       borderColor: colorFor('pending_admin').border,
       textColor: colorFor('pending_admin').text,
       isGhost: true,
+      tooltip: tooltipFor(d.start, `créneau ${i + 1}/3 user`),
     }));
   }
 
   return [];
+}
+
+/**
+ * Détermine si un booking nécessite une action admin maintenant :
+ *  - pending_admin : créneaux user à valider
+ *  - pending_payment trop ancien (>3j) : user qui n'a pas payé
+ */
+function isActionRequired(b: CalendarBooking): boolean {
+  if (b.status === 'pending_admin') return true;
+  if (b.status === 'pending_payment') {
+    const ageDays =
+      (Date.now() - new Date(b.createdAt).getTime()) / (24 * 60 * 60 * 1000);
+    return ageDays > PENDING_PAYMENT_STALE_DAYS;
+  }
+  return false;
 }
 
 function colorFor(status: CalendarBooking['status']): {
@@ -744,6 +988,19 @@ const OFFLINE_COLOR = {
 
 function buildEventsForOffline(c: CalendarOfflineCoaching): CalendarEvent[] {
   if (c.status === 'cancelled') return [];
+  const remaining = Math.max(0, c.totalAmountEur - c.paidAmountEur);
+  const tooltip = [
+    `${c.fullName} (offline)`,
+    c.email ? c.email : null,
+    c.phone ? c.phone : null,
+    `Mode : ${c.mode}`,
+    `Payé ${c.paidAmountEur.toLocaleString('fr-FR')}€ / Total ${c.totalAmountEur.toLocaleString('fr-FR')}€`,
+    remaining > 0
+      ? `⚠️ Reste dû : ${remaining.toLocaleString('fr-FR')}€`
+      : '✓ Soldé',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return [
     {
       id: `offline-${c.id}`,
@@ -755,6 +1012,7 @@ function buildEventsForOffline(c: CalendarOfflineCoaching): CalendarEvent[] {
       textColor: OFFLINE_COLOR.text,
       isGhost: false,
       kind: 'offline',
+      tooltip,
     },
   ];
 }
@@ -764,16 +1022,33 @@ function Filters({
   setSourceFilter,
   modeFilter,
   setModeFilter,
+  actionRequiredOnly,
+  setActionRequiredOnly,
   counts,
 }: {
   sourceFilter: SourceFilter;
   setSourceFilter: (v: SourceFilter) => void;
   modeFilter: ModeFilter;
   setModeFilter: (v: ModeFilter) => void;
-  counts: { online: number; offline: number };
+  actionRequiredOnly: boolean;
+  setActionRequiredOnly: (v: boolean) => void;
+  counts: { online: number; offline: number; actionRequired: number };
 }) {
   return (
     <div className="flex flex-wrap gap-2 items-center">
+      <button
+        type="button"
+        onClick={() => setActionRequiredOnly(!actionRequiredOnly)}
+        className={
+          actionRequiredOnly
+            ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-amber-500/20 text-amber-200 light:text-amber-800 border border-amber-500/40'
+            : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] bg-transparent text-[var(--color-text-dim)] border border-[var(--color-border)] hover:bg-[var(--color-surface-tint)]'
+        }
+      >
+        <AlertCircle className="h-3 w-3" />
+        Action requise {counts.actionRequired}
+      </button>
+      <span className="text-[var(--color-text-faint)] mx-1">·</span>
       <FilterChip
         active={sourceFilter === 'all'}
         onClick={() => setSourceFilter('all')}

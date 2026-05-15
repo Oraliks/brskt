@@ -20,6 +20,7 @@ export interface FormationItem {
   description: string;
   priceEur: number;
   durationDays: number;
+  dailyCapacity: number;
   active: boolean;
 }
 
@@ -44,6 +45,7 @@ function FormationCard({ initial }: { initial: FormationItem }) {
   const [description, setDescription] = useState(initial.description);
   const [priceEur, setPriceEur] = useState(String(initial.priceEur));
   const [durationDays, setDurationDays] = useState(String(initial.durationDays));
+  const [dailyCapacity, setDailyCapacity] = useState(String(initial.dailyCapacity));
   const [active, setActive] = useState(initial.active);
 
   const Icon = initial.mode === 'onsite' ? MapPin : Wifi;
@@ -52,17 +54,23 @@ function FormationCard({ initial }: { initial: FormationItem }) {
     description !== initial.description ||
     Number(priceEur) !== initial.priceEur ||
     Number(durationDays) !== initial.durationDays ||
+    Number(dailyCapacity) !== initial.dailyCapacity ||
     active !== initial.active;
 
   function save() {
     const priceNum = Number(priceEur);
     const durNum = Number(durationDays);
+    const capNum = Number(dailyCapacity);
     if (!Number.isFinite(priceNum) || priceNum < 0) {
       toast({ title: 'Prix invalide', variant: 'destructive' });
       return;
     }
     if (!Number.isFinite(durNum) || durNum < 1 || durNum > 60) {
       toast({ title: 'Durée invalide (1-60 jours)', variant: 'destructive' });
+      return;
+    }
+    if (!Number.isFinite(capNum) || capNum < 1 || capNum > 50) {
+      toast({ title: 'Capacité invalide (1-50)', variant: 'destructive' });
       return;
     }
     start(async () => {
@@ -72,6 +80,7 @@ function FormationCard({ initial }: { initial: FormationItem }) {
         description,
         priceEur: priceNum,
         durationDays: durNum,
+        dailyCapacity: capNum,
         active,
       });
       if (result.success) {
@@ -145,7 +154,7 @@ function FormationCard({ initial }: { initial: FormationItem }) {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-[1fr_140px_140px] gap-3">
+      <div className="grid sm:grid-cols-[1fr_120px_120px_120px] gap-3">
         <div>
           <Label htmlFor={`title-${initial.id}`} className="text-xs">
             Titre
@@ -183,6 +192,21 @@ function FormationCard({ initial }: { initial: FormationItem }) {
             value={durationDays}
             onChange={(e) => setDurationDays(e.target.value)}
             className="mt-1.5 tabular-nums"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`cap-${initial.id}`} className="text-xs">
+            Places / jour
+          </Label>
+          <Input
+            id={`cap-${initial.id}`}
+            type="number"
+            min={1}
+            max={50}
+            value={dailyCapacity}
+            onChange={(e) => setDailyCapacity(e.target.value)}
+            className="mt-1.5 tabular-nums"
+            title="Capacité max de participants par jour. Au-delà, l'admin doit forcer."
           />
         </div>
       </div>
