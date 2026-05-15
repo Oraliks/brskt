@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   Bitcoin,
   CreditCard,
@@ -28,12 +28,14 @@ type PaymentPlan = 'full' | 'installments_3x';
 interface BookingFormProps {
   formations: Formation[];
   defaultMode?: string;
-  /** Render prop rendue juste après l'étape 2 (créneaux). Reçoit le mode
-   *  de la formation actuellement sélectionnée — permet d'éviter de
-   *  redemander Distance/Dubaï dans un sous-formulaire (ex. waitlist). */
-  slotAfterDates?: (ctx: {
-    mode: 'remote' | 'onsite' | null;
-  }) => React.ReactNode;
+  /** Slot statique rendu juste après l'étape 2 (créneaux). Toujours un
+   *  ReactNode sérialisable (pas une fonction) pour éviter les soucis de
+   *  cross-boundary Server→Client. */
+  slotAfterDates?: React.ReactNode;
+  /** Callback notifié quand la formation sélectionnée change. Permet à un
+   *  wrapper client de partager ce state avec d'autres composants (ex.
+   *  waitlist qui doit connaître le mode). */
+  onModeChange?: (mode: 'remote' | 'onsite' | null) => void;
 }
 
 type Slot = { start: string; end: string };
@@ -53,6 +55,7 @@ export function BookingForm({
   formations,
   defaultMode,
   slotAfterDates,
+  onModeChange,
 }: BookingFormProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -75,6 +78,17 @@ export function BookingForm({
 
   const selected = formations.find((f) => f.id === formationId);
   const fullPrice = selected ? Number(selected.priceEur) : 0;
+
+  // Notifie le parent (Client wrapper) du mode courant pour qu'il puisse
+  // brancher d'autres composants dépendants (ex. waitlist).
+  useEffect(() => {
+    if (!onModeChange) return;
+    const m =
+      selected?.mode === 'remote' || selected?.mode === 'onsite'
+        ? selected.mode
+        : null;
+    onModeChange(m);
+  }, [selected?.mode, onModeChange]);
   const installments = paymentPlan === 'installments_3x' ? 3 : 1;
   const firstAmount =
     installments === 1
@@ -267,12 +281,7 @@ export function BookingForm({
         </div>
       </fieldset>
 
-      {slotAfterDates?.({
-        mode:
-          selected?.mode === 'remote' || selected?.mode === 'onsite'
-            ? selected.mode
-            : null,
-      })}
+      {slotAfterDates}
 
       {/* 3. Notes */}
       <div className="space-y-2">
