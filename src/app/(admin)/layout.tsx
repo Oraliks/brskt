@@ -12,17 +12,19 @@ export default async function AdminLayout({
   return (
     <>
       <BackgroundFX />
-      {/* Structure : conteneur vertical (sidebar+main en haut, Footer pleine
-          largeur en bas). Le flex-1 sur le row du milieu pousse le Footer
-          tout en bas du viewport quand le contenu est court, et le footer
-          suit naturellement après le scroll quand le contenu est long.
-          Pattern cohérent avec le layout (app) côté user. */}
-      <div className="min-h-screen flex flex-col">
-        <div className="flex-1 flex flex-col md:flex-row">
-          <AdminSidebar />
-          <main className="flex-1 min-w-0">{children}</main>
-        </div>
-        <Footer />
+      {/* Structure : flex-row à la racine avec min-h-screen.
+          - Sidebar : h-[100dvh] + sticky top-0 → reste visible à 100vh du
+            viewport quel que soit le scroll. Pour que le sticky fonctionne,
+            son parent direct doit être au moins aussi haut que le viewport.
+            Ici le parent direct EST le wrapper min-h-screen donc OK.
+          - Main : flex-col avec content (flex-1) + Footer → footer toujours
+            en bas du contenu, jamais en plein milieu. */}
+      <div className="min-h-screen flex flex-col md:flex-row">
+        <AdminSidebar />
+        <main className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1">{children}</div>
+          <Footer />
+        </main>
       </div>
     </>
   );
