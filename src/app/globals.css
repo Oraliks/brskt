@@ -103,6 +103,16 @@
     overflow-x: clip;
   }
 
+  /* Fix contraste pour les <select> HTML natifs : par défaut le dropdown
+     ouvert hérite du browser et donne souvent un fond clair avec texte
+     clair (illisible en dark mode). On force explicitement les couleurs
+     d'option pour s'adapter au thème courant (les variables CSS bougent
+     entre dark et light). */
+  select option {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-text);
+  }
+
   ::selection {
     background: var(--color-accent);
     color: var(--color-bg);
