@@ -9,22 +9,35 @@ import { toast } from '@/components/ui/use-toast';
 import { joinWaitlistAuthAction } from '@/lib/actions/waitlist';
 
 /**
- * Variante "auth" du formulaire waitlist : pour les utilisateurs déjà
- * connectés sur /formation/reserver. On ne demande que :
- *  - le format (select Distance/Dubaï)
- *  - une note libre (optionnelle, contraintes calendrier)
+ * Variante "auth" du formulaire waitlist pour /formation/reserver.
+ *
+ * Le format (`mode`) est passé en prop — il vient du BookingForm parent
+ * (déduit de la formation sélectionnée à l'étape 1). Pas de double sélection.
  *
  * Le prénom + email + telegram_id sont récupérés via la session côté serveur.
- * Quand un créneau s'ouvre, l'admin notifie par DM Telegram (pas email).
+ * Quand un créneau s'ouvre, l'admin notifie par DM Telegram.
  */
-export function WaitlistFormAuth() {
-  const [mode, setMode] = useState<'remote' | 'onsite'>('remote');
+interface Props {
+  /** Mode déduit de la formation choisie dans le BookingForm parent.
+   *  null = aucune formation sélectionnée, on affiche un état "choisis d'abord". */
+  mode: 'remote' | 'onsite' | null;
+}
+
+export function WaitlistFormAuth({ mode }: Props) {
   const [notes, setNotes] = useState('');
   const [pending, start] = useTransition();
   const [done, setDone] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!mode) {
+      toast({
+        title: 'Choisis d\'abord un format',
+        description: 'Sélectionne Distance ou Dubaï dans l\'étape 1.',
+        variant: 'destructive',
+      });
+      return;
+    }
     start(async () => {
       const result = await joinWaitlistAuthAction({
         mode,
@@ -45,39 +58,46 @@ export function WaitlistFormAuth() {
 
   if (done) {
     return (
-      <div className="rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/30 p-4 flex items-start gap-3">
-        <CheckCircle2 className="h-5 w-5 text-emerald-300 light:text-emerald-700 flex-shrink-0 mt-0.5" />
+      <div className="rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/30 p-3 flex items-start gap-3">
+        <CheckCircle2 className="h-4 w-4 text-emerald-300 light:text-emerald-700 flex-shrink-0 mt-0.5" />
         <div className="text-sm">
-          <strong>Tu es inscrit·e</strong> à la liste d&apos;attente pour la
-          formation{' '}
-          {mode === 'onsite' ? 'présentiel à Dubaï' : 'à distance'}. On t&apos;envoie
-          un message sur Telegram dès qu&apos;une place se libère.
+          <strong>Tu es inscrit·e</strong> à la liste d&apos;attente
+          {mode === 'onsite'
+            ? ' (présentiel à Dubaï)'
+            : mode === 'remote'
+            ? ' (formation à distance)'
+            : ''}
+          . On t&apos;envoie un message sur Telegram dès qu&apos;une place se
+          libère.
         </div>
       </div>
     );
   }
 
+  if (!mode) {
+    return (
+      <p className="text-xs text-[var(--color-text-dim)]">
+        Choisis d&apos;abord un format dans l&apos;étape 1, puis reviens ici.
+      </p>
+    );
+  }
+
+  const modeLabel =
+    mode === 'onsite' ? 'Dubaï · 3500€' : 'Distance · 1500€';
+
   return (
     <form onSubmit={submit} className="space-y-3">
-      <div>
-        <Label htmlFor="wl-mode" className="text-xs">
-          Format souhaité
-        </Label>
-        <div className="mt-1.5 grid grid-cols-2 gap-2">
-          <ModeButton
-            active={mode === 'remote'}
-            onClick={() => setMode('remote')}
-            label="Distance"
-            sub="1500€"
-          />
-          <ModeButton
-            active={mode === 'onsite'}
-            onClick={() => setMode('onsite')}
-            label="Dubaï"
-            sub="3500€"
-            tone="amber"
-          />
-        </div>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-[var(--color-text-dim)]">Liste d&apos;attente :</span>
+        <span
+          className={
+            mode === 'onsite'
+              ? 'inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 light:text-amber-700 text-xs font-medium'
+              : 'inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--color-accent)]/15 border border-[var(--color-accent)]/30 text-[var(--color-accent-hover)] text-xs font-medium'
+          }
+        >
+          {modeLabel}
+        </span>
       </div>
 
       <div>
@@ -99,7 +119,7 @@ export function WaitlistFormAuth() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[11px] text-[var(--color-text-faint)] leading-relaxed flex items-center gap-1.5">
           <MessageCircle className="h-3 w-3" />
-          On te DM via le bot Telegram dès qu&apos;une place se libère.
+          On te DM dès qu&apos;une place se libère.
         </p>
         <Button type="submit" size="sm" disabled={pending}>
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -107,38 +127,5 @@ export function WaitlistFormAuth() {
         </Button>
       </div>
     </form>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  label,
-  sub,
-  tone = 'default',
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  sub: string;
-  tone?: 'default' | 'amber';
-}) {
-  const activeClass =
-    tone === 'amber'
-      ? 'border-amber-500/50 bg-amber-500/10'
-      : 'border-[var(--color-accent)] bg-[var(--color-accent)]/10';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? `rounded-[var(--radius-md)] border ${activeClass} px-3 py-2 text-left transition-all`
-          : 'rounded-[var(--radius-md)] border border-[var(--color-border)] bg-transparent px-3 py-2 text-left hover:bg-[var(--color-surface-tint)] transition-all'
-      }
-    >
-      <div className="text-sm font-medium">{label}</div>
-      <div className="text-[10px] text-[var(--color-text-dim)]">{sub}</div>
-    </button>
   );
 }

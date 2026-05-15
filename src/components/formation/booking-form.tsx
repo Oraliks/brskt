@@ -28,9 +28,12 @@ type PaymentPlan = 'full' | 'installments_3x';
 interface BookingFormProps {
   formations: Formation[];
   defaultMode?: string;
-  /** Slot optionnel rendu juste après l'étape 2 (créneaux) — typiquement
-   *  l'accordéon waitlist sur /formation/reserver. */
-  slotAfterDates?: React.ReactNode;
+  /** Render prop rendue juste après l'étape 2 (créneaux). Reçoit le mode
+   *  de la formation actuellement sélectionnée — permet d'éviter de
+   *  redemander Distance/Dubaï dans un sous-formulaire (ex. waitlist). */
+  slotAfterDates?: (ctx: {
+    mode: 'remote' | 'onsite' | null;
+  }) => React.ReactNode;
 }
 
 type Slot = { start: string; end: string };
@@ -264,7 +267,12 @@ export function BookingForm({
         </div>
       </fieldset>
 
-      {slotAfterDates}
+      {slotAfterDates?.({
+        mode:
+          selected?.mode === 'remote' || selected?.mode === 'onsite'
+            ? selected.mode
+            : null,
+      })}
 
       {/* 3. Notes */}
       <div className="space-y-2">
