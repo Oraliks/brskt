@@ -119,7 +119,10 @@ export default async function DashboardPage() {
   const reservationsToShow = visibleBookings.slice(0, 3);
 
   return (
-    <Section className="pt-6 md:pt-8 pb-10 space-y-10 md:space-y-14">
+    <Section
+      className="pt-6 md:pt-8 pb-10"
+      containerClassName="space-y-10 md:space-y-14"
+    >
       {/* HERO "Mon espace" */}
       <HeroBlock
         firstName={firstName}
