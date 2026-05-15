@@ -68,7 +68,37 @@ export default async function AdminOverview() {
   const twoDaysAgo = new Date(now);
   twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-  // Une grosse Promise.all pour paralléliser toutes les queries
+  // Helper : wrap chaque query pour qu'une erreur OU un hang ne fasse pas
+  // crasher toute la page. Timeout à 8s par query — si une query Drizzle
+  // ou un appel externe (Telegram) dépasse, on récupère le fallback.
+  //
+  // Pourquoi Promise.race avec timeout : `Promise.all` n'a pas de timeout
+  // implicite, si UNE query hang, le runtime Vercel attend jusqu'à son
+  // propre timeout (300s ici) → 504 et page jamais rendue. Le timeout
+  // par-query garantit que la page render en max ~8s peu importe l'état
+  // de la DB / API externes.
+  async function safe<T>(
+    p: Promise<T>,
+    fallback: T,
+    name: string,
+    timeoutMs = 8000
+  ): Promise<T> {
+    try {
+      return await Promise.race<T>([
+        p,
+        new Promise<T>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`timeout after ${timeoutMs}ms`)),
+            timeoutMs
+          )
+        ),
+      ]);
+    } catch (err) {
+      console.error(`[admin/overview] "${name}" failed:`, err);
+      return fallback;
+    }
+  }
+
   const [
     usersTotalRow,
     usersThisMonthRow,
@@ -95,130 +125,223 @@ export default async function AdminOverview() {
     channelCount,
     features,
   ] = await Promise.all([
-    db.select({ c: count() }).from(users),
-    db
-      .select({ c: count() })
-      .from(users)
-      .where(gte(users.createdAt, startOfMonth)),
-    db
-      .select({ c: count() })
-      .from(users)
-      .where(
-        and(
-          gte(users.createdAt, startOfPrevMonth),
-          lt(users.createdAt, startOfMonth)
-        )
-      ),
-    db.select({ c: count() }).from(bookings),
-    db
-      .select({ c: count() })
-      .from(bookings)
-      .where(gte(bookings.createdAt, startOfMonth)),
-    db
-      .select({ c: count() })
-      .from(payments)
-      .where(eq(payments.status, 'completed')),
-    db.execute(sql`
-      SELECT COALESCE(SUM(amount_eur::numeric), 0)::float AS total
-      FROM payments
-      WHERE status = 'completed' AND created_at >= ${startOfMonth.toISOString()}
-    `),
-    db.execute(sql`
-      SELECT COALESCE(SUM(amount_eur::numeric), 0)::float AS total
-      FROM payments
-      WHERE status = 'completed'
-    `),
-    db.execute(sql`
-      SELECT
-        COALESCE(SUM(amount_eur::numeric), 0)::float AS total,
-        COUNT(*)::int AS c
-      FROM payments
-      WHERE status = 'completed'
-    `),
-    db
-      .select({ c: count() })
-      .from(vipApplications)
-      .where(eq(vipApplications.step, 'in_group')),
-    db
-      .select({ c: count() })
-      .from(vipApplications)
-      .where(
-        and(
-          eq(vipApplications.step, 'in_group'),
-          eq(vipApplications.cpaQualified, true)
-        )
-      ),
-    db
-      .select({ step: vipApplications.step, c: count() })
-      .from(vipApplications)
-      .groupBy(vipApplications.step),
-    db
-      .select({ c: count() })
-      .from(offlineCoachings)
-      .where(eq(offlineCoachings.status, 'active')),
-    db.execute(sql`
-      SELECT COALESCE(SUM((total_amount_eur::numeric - paid_amount_eur::numeric)), 0)::float AS total
-      FROM offline_coachings
-      WHERE status != 'cancelled'
-        AND total_amount_eur::numeric > paid_amount_eur::numeric
-    `),
-    db
-      .select({ c: count() })
-      .from(testimonials)
-      .where(eq(testimonials.status, 'pending')),
-    db
-      .select({ c: count() })
-      .from(bookings)
-      .where(eq(bookings.status, 'pending_admin')),
-    db
-      .select({ c: count() })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.status, 'pending_payment'),
-          lt(bookings.createdAt, threeDaysAgo)
-        )
-      ),
-    db
-      .select({ c: count() })
-      .from(vipApplications)
-      .where(
-        and(
-          eq(vipApplications.step, 'deposit_pending'),
-          lt(vipApplications.currentStepEnteredAt, twoDaysAgo)
-        )
-      ),
-    db.query.bookings.findMany({
-      orderBy: [desc(bookings.createdAt)],
-      limit: 6,
-      with: { formation: true, user: true },
-    }),
-    db.query.payments.findMany({
-      where: eq(payments.status, 'completed'),
-      orderBy: [desc(payments.createdAt)],
-      limit: 6,
-      with: { user: { columns: { name: true } } },
-    }),
-    db.query.vipApplications.findMany({
-      where: ne(vipApplications.step, 'link_generated'),
-      orderBy: [desc(vipApplications.currentStepEnteredAt)],
-      limit: 6,
-      with: { user: { columns: { name: true } } },
-    }),
-    db.query.bookings.findMany({
-      where: and(
-        isNotNull(bookings.confirmedDate),
-        gte(
-          bookings.confirmedDate,
-          now.toISOString().slice(0, 10) as unknown as string
-        )
-      ),
-      orderBy: [bookings.confirmedDate],
-      limit: 5,
-      with: { formation: true, user: true },
-    }),
-    getChannelMemberCount(),
-    getBotFeatures(),
+    safe(db.select({ c: count() }).from(users), [{ c: 0 }], 'usersTotal'),
+    safe(
+      db
+        .select({ c: count() })
+        .from(users)
+        .where(gte(users.createdAt, startOfMonth)),
+      [{ c: 0 }],
+      'usersThisMonth'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(users)
+        .where(
+          and(
+            gte(users.createdAt, startOfPrevMonth),
+            lt(users.createdAt, startOfMonth)
+          )
+        ),
+      [{ c: 0 }],
+      'usersPrevMonth'
+    ),
+    safe(db.select({ c: count() }).from(bookings), [{ c: 0 }], 'bookingsTotal'),
+    safe(
+      db
+        .select({ c: count() })
+        .from(bookings)
+        .where(gte(bookings.createdAt, startOfMonth)),
+      [{ c: 0 }],
+      'bookingsThisMonth'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(payments)
+        .where(eq(payments.status, 'completed')),
+      [{ c: 0 }],
+      'paidPayments'
+    ),
+    safe(
+      db.execute(sql`
+        SELECT COALESCE(SUM(amount_eur::numeric), 0)::float AS total
+        FROM payments
+        WHERE status = 'completed' AND created_at >= ${startOfMonth.toISOString()}
+      `),
+      [{ total: 0 }] as unknown as Awaited<ReturnType<typeof db.execute>>,
+      'revenueThisMonth'
+    ),
+    safe(
+      db.execute(sql`
+        SELECT COALESCE(SUM(amount_eur::numeric), 0)::float AS total
+        FROM payments
+        WHERE status = 'completed'
+      `),
+      [{ total: 0 }] as unknown as Awaited<ReturnType<typeof db.execute>>,
+      'revenueTotal'
+    ),
+    safe(
+      db.execute(sql`
+        SELECT
+          COALESCE(SUM(amount_eur::numeric), 0)::float AS total,
+          COUNT(*)::int AS c
+        FROM payments
+        WHERE status = 'completed'
+      `),
+      [{ total: 0, c: 0 }] as unknown as Awaited<ReturnType<typeof db.execute>>,
+      'avgTicket'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(vipApplications)
+        .where(eq(vipApplications.step, 'in_group')),
+      [{ c: 0 }],
+      'vipInGroup'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(vipApplications)
+        .where(
+          and(
+            eq(vipApplications.step, 'in_group'),
+            eq(vipApplications.cpaQualified, true)
+          )
+        ),
+      [{ c: 0 }],
+      'vipQualified'
+    ),
+    safe(
+      db
+        .select({ step: vipApplications.step, c: count() })
+        .from(vipApplications)
+        .groupBy(vipApplications.step),
+      [] as Array<{ step: string; c: number }>,
+      'vipStepCounts'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(offlineCoachings)
+        .where(eq(offlineCoachings.status, 'active')),
+      [{ c: 0 }],
+      'coachingsActive'
+    ),
+    safe(
+      db.execute(sql`
+        SELECT COALESCE(SUM((total_amount_eur::numeric - paid_amount_eur::numeric)), 0)::float AS total
+        FROM offline_coachings
+        WHERE status != 'cancelled'
+          AND total_amount_eur::numeric > paid_amount_eur::numeric
+      `),
+      [{ total: 0 }] as unknown as Awaited<ReturnType<typeof db.execute>>,
+      'coachingsRemaining'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(testimonials)
+        .where(eq(testimonials.status, 'pending')),
+      [{ c: 0 }],
+      'testimonialsPending'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(bookings)
+        .where(eq(bookings.status, 'pending_admin')),
+      [{ c: 0 }],
+      'pendingAdmin'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.status, 'pending_payment'),
+            lt(bookings.createdAt, threeDaysAgo)
+          )
+        ),
+      [{ c: 0 }],
+      'pendingPaymentStale'
+    ),
+    safe(
+      db
+        .select({ c: count() })
+        .from(vipApplications)
+        .where(
+          and(
+            eq(vipApplications.step, 'deposit_pending'),
+            lt(vipApplications.currentStepEnteredAt, twoDaysAgo)
+          )
+        ),
+      [{ c: 0 }],
+      'vipDepositPending'
+    ),
+    safe(
+      db.query.bookings.findMany({
+        orderBy: [desc(bookings.createdAt)],
+        limit: 6,
+        with: { formation: true, user: true },
+      }),
+      [],
+      'recentBookings'
+    ),
+    safe(
+      db.query.payments.findMany({
+        where: eq(payments.status, 'completed'),
+        orderBy: [desc(payments.createdAt)],
+        limit: 6,
+        with: { user: { columns: { name: true } } },
+      }),
+      [],
+      'recentPayments'
+    ),
+    safe(
+      db.query.vipApplications.findMany({
+        where: ne(vipApplications.step, 'link_generated'),
+        orderBy: [desc(vipApplications.currentStepEnteredAt)],
+        limit: 6,
+        with: { user: { columns: { name: true } } },
+      }),
+      [],
+      'recentVipTransitions'
+    ),
+    safe(
+      db.query.bookings.findMany({
+        where: and(
+          isNotNull(bookings.confirmedDate),
+          gte(
+            bookings.confirmedDate,
+            now.toISOString().slice(0, 10) as unknown as string
+          )
+        ),
+        orderBy: [bookings.confirmedDate],
+        limit: 5,
+        with: { formation: true, user: true },
+      }),
+      [],
+      'upcomingBookings'
+    ),
+    safe(getChannelMemberCount(), null, 'channelCount'),
+    safe(
+      getBotFeatures(),
+      {
+        quiz: true,
+        economicAlerts: true,
+        priceAlerts: true,
+        referral: true,
+        inline: true,
+        calculators: true,
+        streak: true,
+        qualify: true,
+      },
+      'features'
+    ),
   ]);
 
   // ============ DERIVED STATS ============

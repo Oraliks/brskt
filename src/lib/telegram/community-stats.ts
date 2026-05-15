@@ -74,7 +74,19 @@ export async function getChannelMemberCount(): Promise<number | null> {
 
   try {
     const bot = getBot();
-    const count = await bot.api.getChatMemberCount(target);
+    // Hard timeout 4s : si Telegram ne répond pas (channel invalide, bot pas
+    // membre, network slow), on bail rapidement plutôt que de bloquer la
+    // Vercel function. grammY peut retry indéfiniment en interne, donc on
+    // race contre un setTimeout pour garantir un retour rapide.
+    const count = await Promise.race<number>([
+      bot.api.getChatMemberCount(target),
+      new Promise<number>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('getChatMemberCount timeout (4s)')),
+          4000
+        )
+      ),
+    ]);
     cache = { value: count, cachedAt: now };
     return count;
   } catch (err) {
