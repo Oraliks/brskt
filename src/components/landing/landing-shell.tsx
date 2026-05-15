@@ -45,11 +45,16 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
 
-  // Détecter desktop vs mobile (largeur ≥ 768px ET souris/trackpad)
+  // Détecter desktop vs mobile (largeur ≥ 768px ET souris/trackpad).
+  // Set aussi `data-mounted` sur le container pour faire céder le CSS
+  // pre-mount qui pré-positionne le layout desktop (cf. globals.css —
+  // évite le flash où les 4 sections apparaissent empilées avant que
+  // React hydrate et bascule en mode fullpage).
   useEffect(() => {
     const mq = window.matchMedia(DESKTOP_QUERY);
     const update = () => setIsDesktop(mq.matches);
     update();
+    containerRef.current?.setAttribute('data-mounted', 'true');
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
   }, []);
@@ -176,6 +181,7 @@ export function LandingShell({ labels, nav, children }: LandingShellProps) {
     <LandingContext.Provider value={{ active, total, goTo }}>
       <div
         ref={containerRef}
+        data-landing-shell
         className={cn(
           'relative',
           isDesktop ? 'h-[100dvh] w-screen overflow-hidden' : 'min-h-screen'

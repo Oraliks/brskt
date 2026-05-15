@@ -595,3 +595,37 @@
   color: var(--color-accent-hover);
   font-weight: 500;
 }
+
+/* ===========================================================
+   LANDING SHELL — pre-mount fix anti-flash desktop
+   ===========================================================
+   Le composant LandingShell rend les sections en flow vertical au SSR
+   (mode "mobile safe par défaut" — voir le commentaire dans le composant
+   sur pourquoi). En desktop, le useEffect détecte matchMedia et bascule
+   en mode "fullpage absolu" (sections superposées, 1 visible à la fois).
+
+   Entre le first paint SSR et l'hydration React, l'utilisateur desktop
+   voit donc brièvement les 4 sections empilées (mode mobile) avant que
+   React n'applique le mode desktop.
+
+   Ce CSS pre-positionne le layout desktop tant que React n'a pas marqué
+   le container `data-mounted="true"` via useEffect. Une fois mounted,
+   le selecteur :not([data-mounted]) ne match plus, React reprend le
+   contrôle via les classes Tailwind. */
+@media (min-width: 768px) and (pointer: fine) {
+  [data-landing-shell]:not([data-mounted]) {
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+  [data-landing-shell]:not([data-mounted]) [data-section] {
+    position: absolute;
+    inset: 0;
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+  }
+  [data-landing-shell]:not([data-mounted]) [data-section]:not([data-section="0"]) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
