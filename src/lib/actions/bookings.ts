@@ -127,7 +127,36 @@ export async function createBookingAction(
     };
   }
 
-  const fullPrice = Number(formation.priceEur);
+  const catalogPrice = Number(formation.priceEur);
+
+  // Si un code promo est fourni : on valide + on retient le discount.
+  // Si invalide, on ignore silencieusement (le user a déjà été informé
+  // au moment de la saisie front via validatePromoForBookingAction).
+  // Pas de fail-hard ici pour ne pas bloquer la résa si le code expire
+  // entre la saisie et le submit.
+  let appliedPromo: {
+    promoId: string;
+    discountEur: number;
+  } | null = null;
+  if (parsed.data.promoCode) {
+    const { validatePromoCode } = await import('@/lib/promos');
+    const result = await validatePromoCode(
+      parsed.data.promoCode,
+      formation.mode,
+      catalogPrice
+    );
+    if (result.valid) {
+      appliedPromo = {
+        promoId: result.promoId,
+        discountEur: result.discountEur,
+      };
+    }
+  }
+
+  const fullPrice = appliedPromo
+    ? Math.max(0, catalogPrice - appliedPromo.discountEur)
+    : catalogPrice;
+
   // Montant de la PREMIÈRE échéance — en 3x, c'est 1/3, sinon le total
   // (arrondi au centime près pour éviter les écarts d'arrondi : la dernière
   // échéance absorbe le résidu côté requestNextInstallmentAction).
@@ -180,6 +209,16 @@ export async function createBookingAction(
       .update(bookings)
       .set({ paymentId: payment.id, updatedAt: new Date() })
       .where(eq(bookings.id, booking.id));
+  }
+
+  // Persiste le promo applied + incrémente usedCount (atomique sous le hood)
+  if (appliedPromo) {
+    const { applyPromoToBooking } = await import('@/lib/promos');
+    await applyPromoToBooking({
+      bookingId: booking.id,
+      promoId: appliedPromo.promoId,
+      discountEur: appliedPromo.discountEur,
+    });
   }
 
   if (!paymentSession.redirectUrl) {

@@ -601,6 +601,71 @@ export const testimonials = pgTable(
 );
 
 // ============================================================
+// PROMO CODES — réductions applicables au checkout
+// ============================================================
+
+export const promoDiscountTypeEnum = pgEnum('promo_discount_type', [
+  'percent',
+  'fixed',
+]);
+
+/**
+ * Codes promo applicables sur le checkout d'une formation.
+ *
+ * 2 modes :
+ *  - `percent` : discountValue est un % (ex. 10 = -10%)
+ *  - `fixed` : discountValue est un montant en euros (ex. 200 = -200€)
+ *
+ * Restrictions optionnelles : validFrom/validUntil, maxUses, applicableMode.
+ */
+export const promoCodes = pgTable(
+  'promo_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    discountType: promoDiscountTypeEnum('discount_type').notNull(),
+    discountValue: numeric('discount_value', {
+      precision: 10,
+      scale: 2,
+    }).notNull(),
+    validFrom: timestamp('valid_from'),
+    validUntil: timestamp('valid_until'),
+    maxUses: integer('max_uses'),
+    usedCount: integer('used_count').notNull().default(0),
+    applicableMode: formationModeEnum('applicable_mode'),
+    active: boolean('active').notNull().default(true),
+    notes: text('notes'),
+    createdBy: uuid('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    codeIdx: index('promo_codes_code_idx').on(t.code),
+  })
+);
+
+/**
+ * Lien booking ↔ promo code utilisé (1 booking peut avoir 1 code max).
+ * Snapshot du discount appliqué pour audit/réconciliation (le taux du
+ * code peut changer après, on garde la valeur historique).
+ */
+export const bookingPromoCodes = pgTable('booking_promo_codes', {
+  bookingId: uuid('booking_id')
+    .primaryKey()
+    .references(() => bookings.id, { onDelete: 'cascade' }),
+  promoCodeId: uuid('promo_code_id')
+    .notNull()
+    .references(() => promoCodes.id, { onDelete: 'restrict' }),
+  appliedDiscountEur: numeric('applied_discount_eur', {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ============================================================
 // USER BANS — historique de modération
 // ============================================================
 

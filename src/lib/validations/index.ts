@@ -23,6 +23,8 @@ export const bookingFormSchema = z
      *  - `installments_3x` : 3 mensualités égales sans frais
      */
     paymentPlan: z.enum(['full', 'installments_3x']).default('full'),
+    /** Code promo optionnel — validé côté server avant création du booking. */
+    promoCode: z.string().max(40).optional(),
   })
   .refine((data) => data.preferredDates.length > 0 || data.preferredAsap, {
     message: 'Choisis au moins un créneau ou coche "Dès que possible"',
@@ -302,6 +304,44 @@ export const adminUpdateFormationSchema = z.object({
   priceEur: z.number().min(0).max(1_000_000).optional(),
   durationDays: z.number().int().min(1).max(60).optional(),
   active: z.boolean().optional(),
+});
+
+// ============================================================
+// ADMIN PROMO CODES
+// ============================================================
+
+export const adminCreatePromoSchema = z
+  .object({
+    code: z
+      .string()
+      .min(3, 'Code trop court (3 chars min)')
+      .max(40, 'Code trop long')
+      .regex(/^[A-Z0-9_-]+$/, 'Lettres maj, chiffres, - et _ uniquement'),
+    discountType: z.enum(['percent', 'fixed']),
+    discountValue: z.number().min(0).max(100_000),
+    validFrom: z.string().optional(),
+    validUntil: z.string().optional(),
+    maxUses: z.number().int().min(1).max(100_000).optional(),
+    applicableMode: z.enum(['remote', 'onsite']).optional(),
+    active: z.boolean().default(true),
+    notes: z.string().max(500).optional(),
+  })
+  .refine((v) => v.discountType !== 'percent' || v.discountValue <= 100, {
+    message: 'Pour un % le discount doit être <= 100',
+    path: ['discountValue'],
+  });
+
+export const adminUpdatePromoSchema = z.object({
+  promoId: z.string().uuid(),
+  active: z.boolean().optional(),
+  discountValue: z.number().min(0).max(100_000).optional(),
+  validUntil: z.string().optional().nullable(),
+  maxUses: z.number().int().min(1).max(100_000).optional().nullable(),
+  notes: z.string().max(500).optional(),
+});
+
+export const adminDeletePromoSchema = z.object({
+  promoId: z.string().uuid(),
 });
 
 // ============================================================

@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { createBookingAction } from '@/lib/actions/bookings';
 import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
+import { PromoCodeField } from '@/components/formation/promo-code-field';
 import { formatPrice, cn } from '@/lib/utils';
 import type { Formation } from '@/lib/db/schema';
 import type { PaymentMethodType } from '@/lib/payments/types';
@@ -75,6 +76,7 @@ export function BookingForm({
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('card');
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>('full');
+  const [promoCode, setPromoCode] = useState('');
 
   const selected = formations.find((f) => f.id === formationId);
   const fullPrice = selected ? Number(selected.priceEur) : 0;
@@ -135,6 +137,7 @@ export function BookingForm({
         preferredAsap: asap,
         paymentMethod,
         paymentPlan,
+        promoCode: promoCode.trim() || undefined,
       });
 
       if (result.success) {
@@ -421,6 +424,11 @@ export function BookingForm({
           </button>
         </div>
       </fieldset>
+
+      {/* Code promo (collapsible) */}
+      {selected && (
+        <PromoCodeField value={promoCode} onChange={setPromoCode} />
+      )}
 
       {/* Disclaimer no-refund + conditions */}
       <PaymentDisclaimer variant="full" tone="amber" />

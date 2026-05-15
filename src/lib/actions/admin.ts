@@ -8,6 +8,7 @@ import {
   bookings,
   formations,
   manualIronfxStatus,
+  promoCodes,
   testimonials,
   userBans,
   users,
@@ -16,10 +17,13 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminCreatePromoSchema,
+  adminDeletePromoSchema,
   adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
   adminUpdateFormationSchema,
+  adminUpdatePromoSchema,
   adminVipOverrideSchema,
   automationsPatchSchema,
   botFeaturesSchema,
@@ -1087,6 +1091,124 @@ export async function adminUpdateFormationAction(
   revalidatePath('/admin/formations');
   revalidatePath('/formation');
   revalidatePath('/formation/reserver');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// PROMO CODES
+// ============================================================
+
+export async function adminCreatePromoAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminCreatePromoSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const data = parsed.data;
+  const code = data.code.toUpperCase();
+
+  // Check unicité — gère gracieusement la collision (l'index unique le
+  // rattraperait sinon mais avec un message Postgres opaque).
+  const existing = await db.query.promoCodes.findFirst({
+    where: eq(promoCodes.code, code),
+  });
+  if (existing) {
+    return { success: false, error: `Le code "${code}" existe déjà.` };
+  }
+
+  await db.insert(promoCodes).values({
+    code,
+    discountType: data.discountType,
+    discountValue: String(data.discountValue),
+    validFrom: data.validFrom ? new Date(data.validFrom) : null,
+    validUntil: data.validUntil ? new Date(data.validUntil) : null,
+    maxUses: data.maxUses ?? null,
+    applicableMode: data.applicableMode ?? null,
+    active: data.active,
+    notes: data.notes ?? null,
+    createdBy: session.user.id,
+  });
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'promo_create',
+    targetType: 'promo',
+    targetId: code,
+    after: data,
+  });
+
+  revalidatePath('/admin/promos');
+  return { success: true, data: undefined };
+}
+
+export async function adminUpdatePromoAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminUpdatePromoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (parsed.data.active !== undefined) updates.active = parsed.data.active;
+  if (parsed.data.discountValue !== undefined)
+    updates.discountValue = String(parsed.data.discountValue);
+  if (parsed.data.validUntil !== undefined)
+    updates.validUntil = parsed.data.validUntil
+      ? new Date(parsed.data.validUntil)
+      : null;
+  if (parsed.data.maxUses !== undefined) updates.maxUses = parsed.data.maxUses;
+  if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes;
+
+  await db
+    .update(promoCodes)
+    .set(updates)
+    .where(eq(promoCodes.id, parsed.data.promoId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'promo_update',
+    targetType: 'promo',
+    targetId: parsed.data.promoId,
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/promos');
+  return { success: true, data: undefined };
+}
+
+export async function adminDeletePromoAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminDeletePromoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  // Soft delete via active=false plutôt que vraie suppression : si un
+  // booking référence ce code via booking_promo_codes, on perd la trace.
+  await db
+    .update(promoCodes)
+    .set({ active: false, updatedAt: new Date() })
+    .where(eq(promoCodes.id, parsed.data.promoId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'promo_delete',
+    targetType: 'promo',
+    targetId: parsed.data.promoId,
+  });
+
+  revalidatePath('/admin/promos');
   return { success: true, data: undefined };
 }
 
