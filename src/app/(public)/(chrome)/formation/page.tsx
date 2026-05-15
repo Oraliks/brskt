@@ -169,32 +169,7 @@ export default async function FormationPage() {
         </div>
       </Section>
 
-      {/* CTA Réserver — la waitlist est désormais dans /formation/reserver */}
       <Section className="py-6">
-        <div className="glass-strong rounded-[var(--radius-lg)] p-6 md:p-8 text-center">
-          <h2 className="font-serif text-2xl md:text-3xl text-gradient">
-            Tu choisis tes dates.
-          </h2>
-          <p className="mt-2 text-sm text-[var(--color-text-dim)] max-w-xl mx-auto">
-            Tu proposes jusqu&apos;à 3 créneaux préférés. On valide sous 24h.{' '}
-            <strong className="text-[var(--color-text)]">
-              Paiement en 1 fois ou en 3 fois sans frais.
-            </strong>{' '}
-            Aucun créneau qui te convient ? Tu peux t&apos;inscrire à la liste
-            d&apos;attente depuis la page de réservation.
-          </p>
-          <div className="mt-5 flex justify-center">
-            <Button asChild size="lg" variant="glow">
-              <Link href="/formation/reserver">
-                Réserver maintenant
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </Section>
-
-      <Section className="pt-2 pb-12">
         <PaymentDisclaimer variant="full" tone="neutral" />
       </Section>
     </>

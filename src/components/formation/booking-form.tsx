@@ -28,6 +28,9 @@ type PaymentPlan = 'full' | 'installments_3x';
 interface BookingFormProps {
   formations: Formation[];
   defaultMode?: string;
+  /** Slot optionnel rendu juste après l'étape 2 (créneaux) — typiquement
+   *  l'accordéon waitlist sur /formation/reserver. */
+  slotAfterDates?: React.ReactNode;
 }
 
 type Slot = { start: string; end: string };
@@ -43,7 +46,11 @@ const PAYMENT_METHODS: Array<{
   { id: 'crypto', label: 'Crypto', sub: 'USDT, USDC, BTC, ETH', icon: Bitcoin },
 ];
 
-export function BookingForm({ formations, defaultMode }: BookingFormProps) {
+export function BookingForm({
+  formations,
+  defaultMode,
+  slotAfterDates,
+}: BookingFormProps) {
   const [isPending, startTransition] = useTransition();
 
   const initialFormation =
@@ -256,6 +263,8 @@ export function BookingForm({ formations, defaultMode }: BookingFormProps) {
           />
         </div>
       </fieldset>
+
+      {slotAfterDates}
 
       {/* 3. Notes */}
       <div className="space-y-2">
