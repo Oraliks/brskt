@@ -7,6 +7,9 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type {
+  DateClickArg,
+} from '@fullcalendar/interaction';
+import type {
   EventClickArg,
   EventDropArg,
   EventMountArg,
@@ -35,6 +38,7 @@ import { toast } from '@/components/ui/use-toast';
 import { adminBookingAction } from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
 import { IcalSubscribeButton } from './ical-subscribe-button';
+import { DayDetailDialog } from './day-detail-dialog';
 
 /**
  * Calendrier admin des réservations.
@@ -175,6 +179,10 @@ export function BookingCalendar({
     revert: () => void;
   } | null>(null);
   const [dropNotes, setDropNotes] = useState('');
+  // Modale "Agenda du jour/semaine" — { from, to } inclusives ; null = fermée
+  const [dayRange, setDayRange] = useState<{ from: string; to: string } | null>(
+    null
+  );
   /**
    * Dialog "Capacité dépassée — forcer ?" : surgit quand une action est
    * refusée par le serveur avec code='capacity_exceeded'. On y stocke la
@@ -379,6 +387,38 @@ export function BookingCalendar({
   }
 
   /**
+   * Click sur une case jour : ouvre l'agenda du jour (toutes les sessions
+   * + bouton quick-add coaching offline pour ce jour).
+   * On stoppe la propagation si on a cliqué sur un event (sinon ça déclenche
+   * aussi onEventClick).
+   */
+  function onDateClick(arg: DateClickArg) {
+    const target = arg.jsEvent.target as HTMLElement | null;
+    if (target?.closest('.fc-event')) return;
+    setDayRange({ from: arg.dateStr, to: arg.dateStr });
+  }
+
+  /**
+   * Bouton "Agenda semaine" : ouvre l'agenda sur la plage [activeStart,
+   * activeEnd-1] de la vue courante. En vue Semaine FullCalendar, c'est
+   * naturellement les 7 jours visibles. En vue Mois, on prend le mois
+   * complet visible.
+   */
+  function onOpenRangeAgenda() {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    const view = api.view;
+    const start = view.activeStart;
+    const endExclusive = view.activeEnd;
+    const endInclusive = new Date(endExclusive);
+    endInclusive.setDate(endInclusive.getDate() - 1);
+    setDayRange({
+      from: start.toISOString().slice(0, 10),
+      to: endInclusive.toISOString().slice(0, 10),
+    });
+  }
+
+  /**
    * Hook FullCalendar : appelé après le mount de chaque event dans le DOM.
    * On y attache le tooltip natif HTML (title=) — léger, accessible, pas
    * de lib à installer. Pour un tooltip riche (carte au survol) on
@@ -427,7 +467,7 @@ export function BookingCalendar({
           locale="fr"
           height="auto"
           headerToolbar={{
-            left: 'prev,next today',
+            left: 'prev,next today rangeAgenda',
             center: 'title',
             right: 'dayGridMonth,timeGridWeek',
           }}
@@ -435,6 +475,12 @@ export function BookingCalendar({
             today: "Aujourd'hui",
             month: 'Mois',
             week: 'Semaine',
+          }}
+          customButtons={{
+            rangeAgenda: {
+              text: 'Voir agenda',
+              click: onOpenRangeAgenda,
+            },
           }}
           events={events}
           editable
@@ -444,6 +490,7 @@ export function BookingCalendar({
           eventClick={onEventClick}
           eventDrop={onEventDrop}
           eventDidMount={onEventDidMount}
+          dateClick={onDateClick}
           dayMaxEvents={3}
           displayEventTime={false}
           eventDisplay="block"
@@ -781,6 +828,14 @@ export function BookingCalendar({
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Modale "Agenda du jour / Agenda de la semaine" */}
+      <DayDetailDialog
+        range={dayRange}
+        bookings={bookings}
+        offlineCoachings={offlineCoachings}
+        onClose={() => setDayRange(null)}
+      />
     </>
   );
 }
