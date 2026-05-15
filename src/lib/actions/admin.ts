@@ -27,6 +27,7 @@ import {
   adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
+  adminCreateFormationSchema,
   adminUpdateFormationSchema,
   adminUpdateOfflineCoachingSchema,
   adminUpdatePromoSchema,
@@ -1106,8 +1107,116 @@ export async function adminModerateTestimonialAction(
 }
 
 // ============================================================
-// FORMATIONS (édition admin : prix, titre, desc, durée, actif)
+// FORMATIONS (création / édition / suppression admin)
 // ============================================================
+
+/**
+ * Crée une nouvelle formation. Vérifie l'unicité du slug avant insert pour
+ * remonter un message lisible (l'index unique remonterait sinon une erreur
+ * Postgres opaque).
+ */
+export async function adminCreateFormationAction(
+  input: unknown
+): Promise<ActionResult<{ id: string }>> {
+  const session = await requireAdmin();
+  const parsed = adminCreateFormationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const data = parsed.data;
+
+  const existing = await db.query.formations.findFirst({
+    where: eq(formations.slug, data.slug),
+    columns: { id: true },
+  });
+  if (existing) {
+    return {
+      success: false,
+      error: `Le slug "${data.slug}" est déjà utilisé.`,
+      fieldErrors: { slug: ['Slug déjà pris'] },
+    };
+  }
+
+  const [inserted] = await db
+    .insert(formations)
+    .values({
+      title: data.title,
+      slug: data.slug,
+      mode: data.mode,
+      description: data.description ?? null,
+      priceEur: String(data.priceEur),
+      durationDays: data.durationDays,
+      dailyCapacity: data.dailyCapacity,
+      active: data.active,
+    })
+    .returning({ id: formations.id });
+
+  if (!inserted) {
+    return { success: false, error: 'Insertion échouée' };
+  }
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'formation_create',
+    targetType: 'formation',
+    targetId: inserted.id,
+    after: data,
+  });
+
+  revalidatePath('/admin/formations');
+  revalidatePath('/formation');
+  revalidatePath('/formation/reserver');
+  return { success: true, data: { id: inserted.id } };
+}
+
+/**
+ * Supprime une formation. Bloque si des bookings la référencent (FK
+ * onDelete par défaut = restrict). On désactive (active=false) plutôt
+ * que supprimer si tu veux la cacher du site sans perdre l'historique.
+ */
+export async function adminDeleteFormationAction(
+  formationId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+
+  const target = await db.query.formations.findFirst({
+    where: eq(formations.id, formationId),
+  });
+  if (!target) {
+    return { success: false, error: 'Formation introuvable' };
+  }
+
+  // Check bookings référençant — empêche la suppression si historique
+  const [bookingRefs] = await db
+    .select({ c: count() })
+    .from(bookings)
+    .where(eq(bookings.formationId, formationId));
+  if ((bookingRefs?.c ?? 0) > 0) {
+    return {
+      success: false,
+      error: `${bookingRefs?.c} réservation(s) référencent cette formation. Désactive-la plutôt que la supprimer pour garder l'historique.`,
+    };
+  }
+
+  await db.delete(formations).where(eq(formations.id, formationId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'formation_delete',
+    targetType: 'formation',
+    targetId: formationId,
+    before: { title: target.title, slug: target.slug },
+  });
+
+  revalidatePath('/admin/formations');
+  revalidatePath('/formation');
+  return { success: true, data: undefined };
+}
 
 /**
  * Update partiel d'une formation. Toutes les colonnes sont optionnelles,

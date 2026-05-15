@@ -304,6 +304,29 @@ export const adminSetUserBannedSchema = z.object({
 // ADMIN FORMATIONS (édition prix, titre, etc.)
 // ============================================================
 
+/**
+ * Schema de création d'une formation. Slug obligatoire, lowercase + tirets
+ * uniquement (URL-safe). Mode immuable une fois créé pour éviter de casser
+ * les bookings existants.
+ */
+export const adminCreateFormationSchema = z.object({
+  title: z.string().min(3, 'Titre trop court').max(120),
+  slug: z
+    .string()
+    .min(2, 'Slug trop court')
+    .max(80)
+    .regex(
+      /^[a-z0-9-]+$/,
+      'Slug : minuscules, chiffres et tirets uniquement (ex: trading-distance)'
+    ),
+  mode: z.enum(['remote', 'onsite']),
+  description: z.string().max(2000).optional(),
+  priceEur: z.number().min(0).max(1_000_000),
+  durationDays: z.number().int().min(1).max(60).default(5),
+  dailyCapacity: z.number().int().min(1).max(50).default(3),
+  active: z.boolean().default(true),
+});
+
 export const adminUpdateFormationSchema = z.object({
   formationId: z.string().uuid(),
   title: z.string().min(3, 'Titre trop court').max(120).optional(),
