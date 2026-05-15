@@ -5,11 +5,24 @@ import { TelegramLoginButton } from '@/components/auth/telegram-login-button';
 import { MessageCircle, ShieldCheck, Zap } from 'lucide-react';
 
 interface PageProps {
-  searchParams: Promise<{ redirectTo?: string }>;
+  searchParams: Promise<{ redirectTo?: string; error?: string }>;
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  missing_token: 'Lien invalide : token manquant.',
+  malformed: 'Lien malformé. Demande-en un nouveau via /login dans le bot.',
+  invalid_signature:
+    'Lien invalide ou modifié. Demande-en un nouveau via /login dans le bot.',
+  expired:
+    'Lien expiré (10 min max). Renvoie /login dans le bot pour en obtenir un nouveau.',
+  rate_limited:
+    'Trop de tentatives. Réessaye dans 10 minutes.',
+  user_create_failed:
+    'Erreur création du compte. Contacte l\'équipe sur Telegram.',
+};
+
 export default async function LoginPage({ searchParams }: PageProps) {
-  const { redirectTo } = await searchParams;
+  const { redirectTo, error } = await searchParams;
   const session = await getSession().catch(() => null);
 
   if (session?.user) {
@@ -17,6 +30,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
   }
 
   const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? '';
+  const errorMessage = error ? ERROR_MESSAGES[error] ?? error : null;
 
   return (
     <div className="space-y-6">
@@ -28,6 +42,13 @@ export default async function LoginPage({ searchParams }: PageProps) {
           Identification via Telegram — un clic, aucun mot de passe.
         </p>
       </div>
+
+      {/* Banner d'erreur si redirection depuis /login/magic avec ?error=... */}
+      {errorMessage && (
+        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 px-4 py-3 text-sm text-rose-200 light:text-rose-700">
+          <strong>Connexion magic-link échouée :</strong> {errorMessage}
+        </div>
+      )}
 
       {/* Astuce mobile bien visible (le widget Telegram bug souvent sur mobile) */}
       {botUsername && (
