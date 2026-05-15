@@ -861,6 +861,59 @@ export function getBot(): Bot<Context> {
     );
   });
 
+  // Callback NPS : "nps:{bookingId}:{score}" (cf. /api/cron/nps-request)
+  bot.callbackQuery(/^nps:([0-9a-f-]+):(\d+)$/, async (ctx) => {
+    const [, bookingId, scoreStr] = ctx.match ?? [];
+    if (!bookingId || !scoreStr) return;
+    const score = Number(scoreStr);
+    if (!Number.isFinite(score) || score < 0 || score > 10) return;
+
+    try {
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('@/lib/db');
+      const { bookingAutomationState } = await import('@/lib/db/schema');
+      const now = new Date();
+
+      await db
+        .insert(bookingAutomationState)
+        .values({
+          bookingId,
+          npsScore: score,
+          npsAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: bookingAutomationState.bookingId,
+          set: { npsScore: score, npsAt: now, updatedAt: now },
+        });
+
+      // Réponse contextuelle selon le score
+      const reply =
+        score >= 9
+          ? '🎉 Merci ! Tu es un promoteur, ça fait plaisir. Si tu veux partager publiquement, /temoignage.'
+          : score >= 7
+          ? '🙏 Merci pour ton retour. Si tu as un point d\'amélioration en tête, dis-le moi en privé.'
+          : '🙏 Merci pour ta franchise. On va s\'améliorer — si tu veux partager ce qui a coincé, je suis tout ouïe.';
+
+      await ctx.answerCallbackQuery({ text: `Note envoyée : ${score}/10` });
+      // Edite le message original pour cacher les boutons et afficher le merci
+      try {
+        await ctx.editMessageReplyMarkup(undefined);
+      } catch {
+        // Ignore si déjà edité ou trop vieux
+      }
+      await ctx.reply(reply, {
+        link_preview_options: { is_disabled: true },
+      });
+    } catch (err) {
+      console.error('[bot] nps callback failed', err);
+      await ctx.answerCallbackQuery({
+        text: 'Erreur, réessaye plus tard.',
+        show_alert: true,
+      });
+    }
+  });
+
   // Callback pour les réponses au quiz
   bot.callbackQuery(/^quiz:([0-9a-f-]+):(\d+)$/, async (ctx) => {
     const [, qid, idxStr] = ctx.match ?? [];
