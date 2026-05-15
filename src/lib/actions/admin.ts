@@ -294,6 +294,52 @@ export async function adminBookingAction(
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, data.bookingId));
+  } else if (data.action === 'mark_paid') {
+    // Skip le paiement online : passe direct à pending_admin pour validation
+    // de date par l'admin. La note explique méthode + référence (audit).
+    if (booking.status !== 'pending_payment') {
+      return {
+        success: false,
+        error: `Action réservée aux résas pending_payment (actuel : ${booking.status})`,
+      };
+    }
+    await db
+      .update(bookings)
+      .set({
+        status: 'pending_admin',
+        adminNotes: data.notes,
+        // Marque comme entièrement payé puisque c'est hors-site
+        installmentsPaid: booking.installmentTotal,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, data.bookingId));
+
+    after(() =>
+      notifyUser(booking.user, {
+        telegram:
+          `✅ <b>Paiement enregistré</b>\n\n` +
+          `<b>${escapeHtml(booking.formation.title)}</b>\n\n` +
+          `On a enregistré ton paiement côté admin. ` +
+          `On valide ta date sous 24h.\n\n` +
+          `Voir : ${APP_URL}/dashboard`,
+      })
+    );
+  } else if (data.action === 'mark_completed') {
+    if (booking.status !== 'confirmed' && booking.status !== 'paid') {
+      return {
+        success: false,
+        error: `Action réservée aux résas confirmed/paid (actuel : ${booking.status})`,
+      };
+    }
+    await db
+      .update(bookings)
+      .set({
+        status: 'completed',
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, data.bookingId));
+    // Pas de notification user : on attend que le CRON NPS le contacte
+    // automatiquement avec sa demande de feedback.
   }
 
   // Audit log
@@ -318,6 +364,10 @@ export async function adminBookingAction(
           }
         : data.action === 'update_notes'
         ? { notes: data.notes }
+        : data.action === 'mark_paid'
+        ? { status: 'pending_admin', notes: data.notes }
+        : data.action === 'mark_completed'
+        ? { status: 'completed' }
         : { status: 'cancelled', notes: data.notes },
   });
 

@@ -4,8 +4,11 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Ban,
+  BadgeCheck,
   Check,
+  CheckCircle2,
   Clock,
+  CreditCard,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -68,7 +71,9 @@ type DialogState =
   | { type: 'propose'; row: Row }
   | { type: 'refuse'; row: Row }
   | { type: 'force_cancel'; row: Row }
-  | { type: 'update_notes'; row: Row };
+  | { type: 'update_notes'; row: Row }
+  | { type: 'mark_paid'; row: Row }
+  | { type: 'mark_completed'; row: Row };
 
 export function BookingsTable({ bookings }: Props) {
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -154,6 +159,16 @@ export function BookingsTable({ bookings }: Props) {
               </TableCell>
               <TableCell className="text-right">
                 <div className="inline-flex items-center gap-1.5 justify-end">
+                  {b.status === 'pending_payment' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setDialog({ type: 'mark_paid', row: b })}
+                    >
+                      <BadgeCheck className="h-3 w-3" />
+                      Marquer payé
+                    </Button>
+                  )}
                   {(b.status === 'pending_admin' ||
                     b.status === 'date_proposed') && (
                     <>
@@ -175,6 +190,18 @@ export function BookingsTable({ bookings }: Props) {
                       </Button>
                     </>
                   )}
+                  {(b.status === 'confirmed' || b.status === 'paid') && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        setDialog({ type: 'mark_completed', row: b })
+                      }
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Marquer terminée
+                    </Button>
+                  )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button size="icon" variant="ghost" className="h-8 w-8">
@@ -192,6 +219,16 @@ export function BookingsTable({ bookings }: Props) {
                         <Pencil className="h-4 w-4" />
                         Modifier la note admin
                       </DropdownMenuItem>
+                      {b.status === 'pending_payment' && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setDialog({ type: 'mark_paid', row: b })
+                          }
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          Marquer comme payé (hors-site)
+                        </DropdownMenuItem>
+                      )}
                       {(b.status === 'pending_admin' ||
                         b.status === 'date_proposed') && (
                         <DropdownMenuItem
@@ -251,6 +288,8 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
     refuse: 'Refuser cette réservation',
     force_cancel: 'Annuler la réservation (force)',
     update_notes: 'Modifier la note admin',
+    mark_paid: 'Marquer comme payé (hors-site)',
+    mark_completed: 'Marquer la formation comme terminée',
   };
 
   function submit() {
@@ -301,6 +340,25 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
           bookingId: dialog.row.id,
           notes,
         };
+      } else if (dialog.type === 'mark_paid') {
+        if (notes.trim().length < 3) {
+          toast({
+            title: 'Note requise',
+            description: 'Précise la méthode de paiement + référence.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        payload = {
+          action: 'mark_paid',
+          bookingId: dialog.row.id,
+          notes,
+        };
+      } else if (dialog.type === 'mark_completed') {
+        payload = {
+          action: 'mark_completed',
+          bookingId: dialog.row.id,
+        };
       } else {
         payload = {
           action: 'update_notes',
@@ -329,7 +387,8 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
     dialog.type === 'propose' ||
     dialog.type === 'refuse' ||
     dialog.type === 'force_cancel' ||
-    dialog.type === 'update_notes';
+    dialog.type === 'update_notes' ||
+    dialog.type === 'mark_paid';
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -349,6 +408,22 @@ function ActionDialog({ dialog, onClose }: ActionDialogProps) {
               actuel ({dialog.row.status}). Le user est notifié sur Telegram.
               Si des paiements existent, le remboursement est à organiser
               séparément.
+            </div>
+          )}
+
+          {dialog.type === 'mark_paid' && (
+            <div className="rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs text-emerald-200 light:text-emerald-800">
+              💰 Confirme que le client a payé hors-site (cash, virement,
+              etc.). La résa passera à <code>pending_admin</code> pour validation
+              de date. Le user est notifié sur Telegram.
+            </div>
+          )}
+
+          {dialog.type === 'mark_completed' && (
+            <div className="rounded-[var(--radius-md)] bg-indigo-500/10 border border-indigo-500/30 p-3 text-xs text-indigo-200 light:text-indigo-800">
+              ✓ Marque la formation comme terminée. Si l&apos;automation NPS
+              est activée, le client recevra automatiquement une demande de
+              feedback après {dialog.row.formation.title}.
             </div>
           )}
 

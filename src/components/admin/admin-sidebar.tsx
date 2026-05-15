@@ -12,6 +12,8 @@ import {
   CalendarCheck,
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   GraduationCap,
   LayoutDashboard,
   Tag,
@@ -32,6 +34,11 @@ import { Logo } from '@/components/shared/logo';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { logoutAction } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
+
+interface AdminSidebarProps {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}
 
 interface NavLink {
   href: string;
@@ -133,7 +140,10 @@ function getInitialOpenGroups(pathname: string): Set<string> {
   return fromActive;
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({
+  collapsed,
+  onToggleCollapse,
+}: AdminSidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<string>>(
@@ -236,27 +246,46 @@ export function AdminSidebar() {
         />
       )}
 
-      {/* Sidebar — desktop persistante, mobile drawer */}
+      {/* Sidebar — desktop fixed (toujours visible), mobile drawer */}
       <aside
         className={cn(
           'flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 md:bg-[var(--color-bg-elevated)]/40 backdrop-blur-md',
-          // Desktop : sticky + self-start pour empêcher le flex-stretch de
-          // pousser la hauteur au-delà du viewport (sinon sticky casse).
-          // h-[100dvh] = dynamic viewport height (gère mieux mobile)
-          'md:sticky md:top-0 md:self-start md:h-[100dvh] md:max-h-screen md:w-64 md:translate-x-0 md:flex',
+          // Desktop fixed : la sidebar est sortie du flow normal, le main
+          // a un margin-left équivalent dans AdminShell. Garantit qu'elle
+          // reste toujours en place quel que soit le scroll, sans dépendre
+          // de sticky (capricieux selon les overflow ancêtres).
+          'md:fixed md:top-0 md:left-0 md:h-[100dvh] md:z-40 md:flex md:translate-x-0',
+          'md:transition-[width] md:duration-200',
+          collapsed ? 'md:w-16' : 'md:w-64',
           // Mobile drawer
-          'fixed md:relative inset-y-0 left-0 z-50 w-72 transition-transform duration-300',
+          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-300',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         )}
       >
-        <div className="px-6 py-6 border-b border-[var(--color-border)] flex items-center justify-between">
-          <div>
-            <Logo />
-            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-amber-300">
-              <Shield className="h-3 w-3" />
-              Back-office
+        {/* Header sidebar : Logo + bouton collapse (desktop) + close (mobile) */}
+        <div
+          className={cn(
+            'border-b border-[var(--color-border)] flex items-center justify-between',
+            collapsed ? 'md:px-2 md:py-4' : 'px-6 py-6',
+            'px-6 py-6'
+          )}
+        >
+          {!collapsed && (
+            <div className="md:block">
+              <Logo />
+              <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-amber-300">
+                <Shield className="h-3 w-3" />
+                Back-office
+              </div>
             </div>
-          </div>
+          )}
+          {collapsed && (
+            <div className="hidden md:flex w-full justify-center">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                <Shield className="h-4 w-4" />
+              </span>
+            </div>
+          )}
           <button
             onClick={() => setOpen(false)}
             aria-label="Fermer le menu"
@@ -266,7 +295,12 @@ export function AdminSidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 min-h-0 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav
+          className={cn(
+            'flex-1 min-h-0 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden',
+            collapsed ? 'md:px-2' : 'px-3'
+          )}
+        >
           {NAV.map((item) => {
             if (!isGroup(item)) {
               const active = activeHref === item.href;
@@ -274,15 +308,19 @@ export function AdminSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  title={collapsed ? item.label : undefined}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                    'flex items-center gap-3 rounded-md text-sm transition-colors',
+                    collapsed ? 'md:justify-center md:px-2 px-3 py-2' : 'px-3 py-2',
                     active
                       ? 'bg-white/8 text-[var(--color-text)]'
                       : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]'
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className={cn(collapsed && 'md:hidden')}>
+                    {item.label}
+                  </span>
                 </Link>
               );
             }
@@ -291,6 +329,27 @@ export function AdminSidebar() {
             const hasActiveChild = item.items.some(
               (sub) => activeHref === sub.href
             );
+
+            // Quand collapsed sur desktop : on affiche juste l'icône du
+            // groupe sans pouvoir l'expand (sinon ça déborde). Les enfants
+            // restent accessibles via click direct sur un sous-lien actif.
+            // En mobile/expanded normal, on garde le comportement initial.
+            if (collapsed) {
+              return (
+                <div
+                  key={item.id}
+                  title={item.label}
+                  className={cn(
+                    'hidden md:flex items-center justify-center rounded-md py-2',
+                    hasActiveChild
+                      ? 'text-[var(--color-text)] bg-white/8'
+                      : 'text-[var(--color-text-dim)]'
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                </div>
+              );
+            }
 
             return (
               <div key={item.id} className="pt-1">
@@ -314,13 +373,6 @@ export function AdminSidebar() {
                     )}
                   />
                 </button>
-                {/*
-                  Trick CSS grid-template-rows pour animer la hauteur sans
-                  connaître la valeur en pixels. L'enfant DOIT avoir min-h-0
-                  + overflow-hidden, sinon le contenu déborde au lieu de
-                  s'effondrer. Plus simple et plus performant qu'une
-                  transition sur max-height avec une valeur arbitraire.
-                */}
                 <div
                   className={cn(
                     'grid transition-[grid-template-rows] duration-200 ease-out',
@@ -355,24 +407,69 @@ export function AdminSidebar() {
           })}
         </nav>
 
-        <div className="border-t border-[var(--color-border)] p-3 space-y-1">
-          <div className="flex items-center justify-between px-1">
+        <div
+          className={cn(
+            'border-t border-[var(--color-border)] space-y-1',
+            collapsed ? 'md:p-2 p-3' : 'p-3'
+          )}
+        >
+          {/* Bouton collapse — desktop uniquement */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'Étendre la sidebar' : 'Réduire la sidebar'}
+            title={collapsed ? 'Étendre' : 'Réduire'}
+            className={cn(
+              'hidden md:flex items-center gap-3 w-full rounded-md text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] transition-colors',
+              collapsed ? 'justify-center px-2 py-2' : 'px-3 py-2'
+            )}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span>Réduire</span>
+              </>
+            )}
+          </button>
+
+          <div
+            className={cn(
+              'flex items-center',
+              collapsed ? 'md:flex-col md:gap-1' : 'justify-between px-1'
+            )}
+          >
             <Link
               href="/dashboard"
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] flex-1"
+              title={collapsed ? 'Retour côté user' : undefined}
+              className={cn(
+                'flex items-center gap-3 rounded-md text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]',
+                collapsed
+                  ? 'md:justify-center md:w-full md:px-2 md:py-2 flex-1 px-3 py-2'
+                  : 'px-3 py-2 flex-1'
+              )}
             >
-              <ArrowLeftFromLine className="h-4 w-4" />
-              Retour côté user
+              <ArrowLeftFromLine className="h-4 w-4 flex-shrink-0" />
+              <span className={cn(collapsed && 'md:hidden')}>
+                Retour côté user
+              </span>
             </Link>
-            <ThemeToggle variant="ghost" />
+            <div className={cn(collapsed && 'md:w-full md:flex md:justify-center')}>
+              <ThemeToggle variant="ghost" />
+            </div>
           </div>
           <form action={logoutAction}>
             <button
               type="submit"
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-rose-400 light:text-rose-600 hover:bg-rose-500/10"
+              title={collapsed ? 'Déconnexion' : undefined}
+              className={cn(
+                'w-full flex items-center gap-3 rounded-md text-sm text-rose-400 light:text-rose-600 hover:bg-rose-500/10',
+                collapsed ? 'md:justify-center md:px-2 md:py-2 px-3 py-2' : 'px-3 py-2'
+              )}
             >
-              <ArrowLeftFromLine className="h-4 w-4 rotate-180" />
-              Déconnexion
+              <ArrowLeftFromLine className="h-4 w-4 rotate-180 flex-shrink-0" />
+              <span className={cn(collapsed && 'md:hidden')}>Déconnexion</span>
             </button>
           </form>
         </div>

@@ -81,6 +81,22 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
     bookingId: z.string().uuid(),
     notes: z.string().max(2000),
   }),
+  // Skip le paiement online et passe directement à pending_admin.
+  // Utilisé quand le client a payé hors-site (cash, virement, autre).
+  // Note obligatoire avec méthode + référence pour l'audit.
+  z.object({
+    action: z.literal('mark_paid'),
+    bookingId: z.string().uuid(),
+    notes: z
+      .string()
+      .min(3, 'Note requise : méthode de paiement + référence'),
+  }),
+  // Marque la formation comme terminée (post-session). Déclenche le NPS auto
+  // si l'automation est activée. Status confirmed/paid → completed.
+  z.object({
+    action: z.literal('mark_completed'),
+    bookingId: z.string().uuid(),
+  }),
 ]);
 
 export type AdminBookingActionInput = z.infer<typeof adminBookingActionSchema>;
