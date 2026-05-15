@@ -121,7 +121,7 @@ export default async function DashboardPage() {
   return (
     <Section
       className="pt-6 md:pt-8 pb-10"
-      containerClassName="space-y-10 md:space-y-14"
+      containerClassName="space-y-5 md:space-y-7"
     >
       {/* HERO "Mon espace" */}
       <HeroBlock

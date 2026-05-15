@@ -93,9 +93,14 @@
 
   /* overflow-x sur body uniquement (pas html) : empêche le scroll horizontal
      parasite sans bloquer le scroll vertical sur iOS Safari, qui a un bug
-     connu quand on met overflow sur html. */
+     connu quand on met overflow sur html.
+     `clip` au lieu de `hidden` : `overflow: hidden` casse `position: sticky`
+     pour tous les descendants (bug WebKit/Firefox bien connu). `clip` a le
+     même effet visuel mais ne crée pas de scroll container, donc les
+     enfants sticky continuent de fonctionner. Support : Chrome 90+,
+     Firefox 81+, Safari 16+. */
   body {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   ::selection {
