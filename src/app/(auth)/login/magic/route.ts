@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { db } from '@/lib/db';
 import { sessions, users } from '@/lib/db/schema';
 import { verifyMagicToken } from '@/lib/auth/magic-link';
@@ -40,17 +40,30 @@ export async function GET(request: Request) {
     return redirectWithError('missing_token');
   }
 
-  // Rate limit anti-bruteforce HMAC
+  // Rate limit anti-bruteforce HMAC sur deux dimensions :
+  //  - par IP (20/10min) : barrière contre un attaquant unique
+  //  - par hash du token (5/10min) : barrière contre un attaquant qui
+  //    distribue ses tentatives sur plusieurs IPs (botnet) pour brute-forcer
+  //    la signature HMAC d'un token capturé. Le hash évite de stocker le
+  //    token en clair dans rate_limits.
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
     request.headers.get('x-real-ip') ??
     '0.0.0.0';
-  const rl = await checkRateLimit({
-    key: `magic_login:ip:${ip}`,
-    limit: 20,
-    windowSec: 600,
-  });
-  if (!rl.allowed) {
+  const tokenHash = createHash('sha256').update(token).digest('hex').slice(0, 16);
+  const [rlIp, rlToken] = await Promise.all([
+    checkRateLimit({
+      key: `magic_login:ip:${ip}`,
+      limit: 20,
+      windowSec: 600,
+    }),
+    checkRateLimit({
+      key: `magic_login:token:${tokenHash}`,
+      limit: 5,
+      windowSec: 600,
+    }),
+  ]);
+  if (!rlIp.allowed || !rlToken.allowed) {
     return redirectWithError('rate_limited');
   }
 

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { priceAlerts, users } from '@/lib/db/schema';
 import { lookupQuote } from '@/lib/bot/inline-quotes';

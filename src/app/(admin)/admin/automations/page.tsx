@@ -5,7 +5,6 @@ import {
 } from '@/components/admin/page-header';
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';

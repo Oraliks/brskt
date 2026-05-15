@@ -41,33 +41,6 @@ const STEP_ORDER: Step[] = [
   'in_group',
 ];
 
-const STEP_LABELS: Record<Step, { title: string; sub: string }> = {
-  link_generated: { title: 'Lien généré', sub: 'Tu as ton lien partenaire' },
-  clicked: { title: 'Lien cliqué', sub: 'Inscription en cours' },
-  signup_pending: {
-    title: 'Inscription envoyée',
-    sub: 'En attente de validation',
-  },
-  signup_validated: {
-    title: 'Inscription validée',
-    sub: 'Tu peux déposer',
-  },
-  deposit_pending: {
-    title: 'Dépôt déclaré',
-    sub: 'En attente de validation',
-  },
-  deposit_validated: {
-    title: 'Dépôt validé',
-    sub: 'Génère ton lien Telegram',
-  },
-  telegram_invited: {
-    title: 'Invitation Telegram',
-    sub: 'Clique pour rejoindre',
-  },
-  in_group: { title: 'Membre VIP', sub: '🎉 Tu es dans le groupe' },
-  ejected: { title: 'Éjecté', sub: 'Voir conditions de réintégration' },
-};
-
 interface VipWizardProps {
   application: VipApplication | null;
   /** Progression de trading 0-100 — pertinente quand step = in_group */
@@ -343,7 +316,7 @@ function BrokerAccountStep({
   );
 }
 
-function DepositStep({ application }: { application: VipApplication }) {
+function DepositStep(_props: { application: VipApplication }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [amount, setAmount] = useState('');

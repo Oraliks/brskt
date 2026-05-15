@@ -12,7 +12,6 @@ import {
   index,
   uniqueIndex,
   date,
-  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 

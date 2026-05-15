@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { and, eq } from 'drizzle-orm';
 import { MapPin, Wifi } from 'lucide-react';
 import { db } from '@/lib/db';
-import { bookings, formations } from '@/lib/db/schema';
+import { bookings } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/server';
 import { Badge } from '@/components/ui/badge';
 import { Section } from '@/components/shared/section';

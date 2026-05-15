@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { vipApplications } from '@/lib/db/schema';
 import { getIronFXAdapter } from '@/lib/ironfx';
@@ -34,9 +35,9 @@ export const maxDuration = 60; // 60s sur Vercel Pro
 
 const WARNING_GRACE_HOURS = 12; // Délai mini entre warning et éjection
 export async function GET(request: Request) {
-  // Sécurité : seul Vercel Cron ou un appelant authentifié peut hit
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Sécurité : seul Vercel Cron ou un appelant authentifié peut hit.
+  // timingSafeEqual évite les timing-attacks sur le secret.
+  if (!verifyCronAuth(request.headers.get('authorization'))) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
@@ -100,11 +101,25 @@ export async function GET(request: Request) {
             results.errors++;
           }
         } else if (!warnedAt) {
-          // 1er passage → warning, set ejectionWarnedAt, notif user
-          await db
+          // 1er passage → set ejectionWarnedAt + notif. CAS pattern (WHERE
+          // ejection_warned_at IS NULL) : si un autre process / webhook a
+          // déjà set le warning entre la lecture et l'update, l'UPDATE ne
+          // touche rien et on skip la notif (évite les doublons d'email).
+          const claimed = await db
             .update(vipApplications)
             .set({ ejectionWarnedAt: new Date(), updatedAt: new Date() })
-            .where(eq(vipApplications.id, app.id));
+            .where(
+              and(
+                eq(vipApplications.id, app.id),
+                isNull(vipApplications.ejectionWarnedAt)
+              )
+            )
+            .returning({ id: vipApplications.id });
+
+          if (claimed.length === 0) {
+            results.skipped++;
+            continue;
+          }
 
           const firstName =
             app.user.telegramFirstName ?? app.user.name ?? '';
@@ -177,4 +192,20 @@ export async function GET(request: Request) {
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Compare le header Authorization avec `Bearer ${CRON_SECRET}` en temps
+ * constant. Évite les timing-attacks où un attaquant pourrait deviner le
+ * secret octet par octet en mesurant la latence des comparaisons `!==`.
+ */
+function verifyCronAuth(authHeader: string | null): boolean {
+  if (!authHeader) return false;
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const expected = `Bearer ${secret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }

@@ -869,7 +869,6 @@ export function getBot(): Bot<Context> {
     if (!Number.isFinite(score) || score < 0 || score > 10) return;
 
     try {
-      const { eq } = await import('drizzle-orm');
       const { db } = await import('@/lib/db');
       const { bookingAutomationState } = await import('@/lib/db/schema');
       const now = new Date();
