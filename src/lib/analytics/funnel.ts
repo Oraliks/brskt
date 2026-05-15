@@ -33,7 +33,9 @@ export type FunnelEventName =
   | 'bot_deeplink'
   // Formation
   | 'formation_booking_created'
-  | 'formation_payment_completed';
+  | 'formation_payment_completed'
+  // Automations
+  | 'testimonial_asked';
 
 export async function emitFunnelEvent(opts: {
   /** UUID de l'utilisateur (null si anonyme). */
