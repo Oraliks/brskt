@@ -1,18 +1,16 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ArrowUpRight,
   Bell,
   Calculator,
   Calendar,
+  Check,
   Flame,
   Gift,
   HelpCircle,
   Loader2,
-  MessageSquare,
   Send,
   Trophy,
 } from 'lucide-react';
@@ -24,7 +22,6 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   initial: BotFeatures;
-  briefingEnabled: boolean;
 }
 
 interface FeatureMeta {
@@ -102,11 +99,22 @@ const FEATURES: FeatureMeta[] = [
   },
 ];
 
-export function BotFeaturesForm({ initial, briefingEnabled }: Props) {
+export function BotFeaturesForm({ initial }: Props) {
   const router = useRouter();
   const [features, setFeatures] = useState<BotFeatures>(initial);
   const [pending, start] = useTransition();
   const [dirty, setDirty] = useState(false);
+  /**
+   * "✓ Enregistré" reste visible 3s après chaque save réussi puis disparaît.
+   * Sert d'indicateur visuel passif quand l'admin clique sur Enregistrer.
+   */
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 3000);
+    return () => clearTimeout(t);
+  }, [justSaved]);
 
   function toggle(key: keyof BotFeatures) {
     setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -115,7 +123,6 @@ export function BotFeaturesForm({ initial, briefingEnabled }: Props) {
 
   function save() {
     start(async () => {
-      // Diff vs initial pour n'envoyer que ce qui a changé
       const updates: Partial<BotFeatures> = {};
       for (const key of Object.keys(features) as (keyof BotFeatures)[]) {
         if (features[key] !== initial[key]) {
@@ -130,6 +137,7 @@ export function BotFeaturesForm({ initial, briefingEnabled }: Props) {
       if (result.success) {
         toast({ title: '✓ Toggles mis à jour' });
         setDirty(false);
+        setJustSaved(true);
         router.refresh();
       } else {
         toast({
@@ -142,7 +150,7 @@ export function BotFeaturesForm({ initial, briefingEnabled }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="space-y-2">
         {FEATURES.map((f) => (
           <FeatureRow
@@ -154,70 +162,22 @@ export function BotFeaturesForm({ initial, briefingEnabled }: Props) {
         ))}
       </div>
 
-      {/* Daily briefing : géré ailleurs, on affiche juste le statut + link */}
-      <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-tint)] p-4">
-        <div className="flex items-start gap-3">
-          <span
-            className={cn(
-              'inline-flex h-9 w-9 items-center justify-center rounded-md flex-shrink-0 border',
-              briefingEnabled
-                ? 'bg-emerald-500/15 border-emerald-500/30'
-                : 'bg-[var(--color-surface-tint-strong)] border-[var(--color-border)]'
-            )}
-          >
-            <MessageSquare
-              className={cn(
-                'h-4 w-4',
-                briefingEnabled
-                  ? 'text-emerald-400 light:text-emerald-700'
-                  : 'text-[var(--color-text-faint)]'
-              )}
-            />
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <strong>Daily briefing matinal</strong>
-              <span
-                className={cn(
-                  'text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded',
-                  briefingEnabled
-                    ? 'bg-emerald-500/15 text-emerald-300 light:text-emerald-700'
-                    : 'bg-[var(--color-surface-tint-strong)] text-[var(--color-text-dim)]'
-                )}
-              >
-                {briefingEnabled ? 'Actif' : 'Désactivé'}
-              </span>
-            </div>
-            <p className="text-xs text-[var(--color-text-dim)] mt-1">
-              Push CRON à 7h UTC selon le template configuré. Le toggle + le
-              contenu du template se gèrent depuis la page Paramètres.
-            </p>
-            <Link
-              href="/admin/settings"
-              className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-[var(--color-accent-hover)] hover:underline"
-            >
-              Gérer le briefing
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Save button */}
-      <div className="sticky bottom-4 flex items-center justify-between rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)]/95 backdrop-blur border border-[var(--color-border-strong)] px-4 py-3 shadow-lg">
-        <div className="text-sm text-[var(--color-text-dim)]">
-          {dirty ? (
-            <span className="text-amber-300 light:text-amber-700">
-              Modifications non sauvegardées
-            </span>
-          ) : (
-            'Aucune modification en attente'
-          )}
-        </div>
+      <div className="flex items-center gap-3 pt-2">
         <Button onClick={save} disabled={!dirty || pending}>
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Sauvegarder
+          Enregistrer les changements
         </Button>
+        {justSaved && !dirty && (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-300 light:text-emerald-700">
+            <Check className="h-3.5 w-3.5" />
+            Enregistré
+          </span>
+        )}
+        {dirty && (
+          <span className="text-xs text-amber-300 light:text-amber-700">
+            Modifications en attente
+          </span>
+        )}
       </div>
     </div>
   );
