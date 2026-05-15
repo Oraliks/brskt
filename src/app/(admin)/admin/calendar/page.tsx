@@ -1,7 +1,7 @@
-import { desc, notInArray } from 'drizzle-orm';
+import { and, desc, isNotNull, notInArray } from 'drizzle-orm';
 import { CalendarCheck } from 'lucide-react';
 import { db } from '@/lib/db';
-import { bookings } from '@/lib/db/schema';
+import { bookings, offlineCoachings } from '@/lib/db/schema';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -10,23 +10,37 @@ import { Badge } from '@/components/ui/badge';
 import {
   BookingCalendar,
   type CalendarBooking,
+  type CalendarOfflineCoaching,
 } from '@/components/admin/booking-calendar';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminCalendarPage() {
-  // On charge tous les bookings non-cancelled — on ne veut pas polluer
-  // le calendrier avec des annulations. Limite haute (500) car la vue
-  // mois peut s'étendre sur 6 semaines = ~50 events visibles max.
-  const rows = await db.query.bookings.findMany({
-    where: notInArray(bookings.status, ['cancelled']),
-    orderBy: [desc(bookings.createdAt)],
-    with: {
-      user: { columns: { name: true, email: true, telegramUsername: true } },
-      formation: { columns: { title: true, mode: true, priceEur: true } },
-    },
-    limit: 500,
-  });
+  // Bookings online (site) non-cancelled + coachings offline non-cancelled
+  // ayant une date planifiée (les autres restent invisibles du calendrier).
+  const [rows, offRows] = await Promise.all([
+    db.query.bookings.findMany({
+      where: notInArray(bookings.status, ['cancelled']),
+      orderBy: [desc(bookings.createdAt)],
+      with: {
+        user: {
+          columns: { name: true, email: true, telegramUsername: true },
+        },
+        formation: {
+          columns: { title: true, mode: true, priceEur: true },
+        },
+      },
+      limit: 500,
+    }),
+    db.query.offlineCoachings.findMany({
+      where: and(
+        notInArray(offlineCoachings.status, ['cancelled']),
+        isNotNull(offlineCoachings.scheduledDate)
+      ),
+      orderBy: [desc(offlineCoachings.scheduledDate)],
+      limit: 500,
+    }),
+  ]);
 
   const items: CalendarBooking[] = rows.map((b) => ({
     id: b.id,
@@ -46,19 +60,34 @@ export default async function AdminCalendarPage() {
     installmentTotal: b.installmentTotal,
   }));
 
+  const offlineItems: CalendarOfflineCoaching[] = offRows
+    .filter((c) => c.scheduledDate)
+    .map((c) => ({
+      id: c.id,
+      fullName: c.fullName,
+      mode: c.mode,
+      scheduledDate: c.scheduledDate!,
+      totalAmountEur: Number(c.totalAmountEur),
+      paidAmountEur: Number(c.paidAmountEur),
+      status: c.status,
+      email: c.email,
+      phone: c.phone,
+      notes: c.notes,
+    }));
+
   return (
     <AdminContainer>
       <AdminPageHeader
         title="Calendrier"
-        description="Vue mois des réservations. Clic sur un event pour les détails, drag pour proposer une autre date."
+        description="Vue mois ou semaine — sessions site + coachings offline. Drag un event site pour proposer une autre date. Offline éditable depuis /admin/coachings."
         actions={
           <Badge variant="secondary">
             <CalendarCheck className="h-3 w-3 mr-1" />
-            {items.length} actives
+            {items.length + offlineItems.length} sessions
           </Badge>
         }
       />
-      <BookingCalendar bookings={items} />
+      <BookingCalendar bookings={items} offlineCoachings={offlineItems} />
     </AdminContainer>
   );
 }

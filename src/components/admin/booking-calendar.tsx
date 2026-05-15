@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventClickArg, EventDropArg } from '@fullcalendar/core';
 import Link from 'next/link';
@@ -74,13 +75,32 @@ interface CalendarEvent {
   /** Si true, ce n'est pas la "vraie" date du booking — c'est une suggestion
    *  user qu'on visualise. Pas drag-droppable. */
   isGhost: boolean;
-  /** Booking original pour les actions */
+  /** ID du booking ou du coaching offline pour les actions */
   bookingId: string;
+  /** 'online' = booking via le site / 'offline' = coaching manuel admin. */
+  kind?: 'online' | 'offline';
+}
+
+export interface CalendarOfflineCoaching {
+  id: string;
+  fullName: string;
+  mode: string;
+  scheduledDate: string;
+  totalAmountEur: number;
+  paidAmountEur: number;
+  status: 'active' | 'completed' | 'cancelled';
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
 }
 
 interface Props {
   bookings: CalendarBooking[];
+  offlineCoachings?: CalendarOfflineCoaching[];
 }
+
+type SourceFilter = 'all' | 'online' | 'offline';
+type ModeFilter = 'all' | 'remote' | 'onsite';
 
 const STATUS_LABEL: Record<CalendarBooking['status'], string> = {
   pending_admin: 'En attente',
@@ -105,13 +125,18 @@ const STATUS_VARIANT: Record<
   cancelled: 'danger',
 };
 
-export function BookingCalendar({ bookings }: Props) {
+export function BookingCalendar({
+  bookings,
+  offlineCoachings = [],
+}: Props) {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
   const [pending, start] = useTransition();
   const [detailDialog, setDetailDialog] = useState<CalendarBooking | null>(
     null
   );
+  const [offlineDetail, setOfflineDetail] =
+    useState<CalendarOfflineCoaching | null>(null);
   const [dropDialog, setDropDialog] = useState<{
     booking: CalendarBooking;
     newDate: string;
@@ -119,17 +144,58 @@ export function BookingCalendar({ bookings }: Props) {
   } | null>(null);
   const [dropNotes, setDropNotes] = useState('');
 
-  const events: CalendarEvent[] = bookings.flatMap((b) =>
-    buildEventsForBooking(b)
-  );
+  // Filtres
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+
+  const events: CalendarEvent[] = useMemo(() => {
+    const onlineEvents = bookings.flatMap((b) => {
+      if (modeFilter !== 'all' && b.formationMode !== modeFilter) return [];
+      return buildEventsForBooking(b);
+    });
+    const offlineEvents =
+      sourceFilter === 'online'
+        ? []
+        : offlineCoachings.flatMap((c) => {
+            if (
+              modeFilter !== 'all' &&
+              c.mode !== modeFilter &&
+              !(modeFilter === 'remote' && c.mode === 'remote') &&
+              !(modeFilter === 'onsite' && c.mode === 'onsite')
+            )
+              return [];
+            return buildEventsForOffline(c);
+          });
+    const filtered =
+      sourceFilter === 'offline' ? offlineEvents : [...onlineEvents, ...offlineEvents];
+    return filtered;
+  }, [bookings, offlineCoachings, sourceFilter, modeFilter]);
 
   function onEventClick(arg: EventClickArg) {
+    const isOffline = arg.event.extendedProps.kind === 'offline';
     const id = arg.event.extendedProps.bookingId as string;
+    if (isOffline) {
+      const c = offlineCoachings.find((o) => o.id === id);
+      if (c) setOfflineDetail(c);
+      return;
+    }
     const booking = bookings.find((b) => b.id === id);
     if (booking) setDetailDialog(booking);
   }
 
   function onEventDrop(arg: EventDropArg) {
+    const isOffline = arg.event.extendedProps.kind === 'offline';
+    if (isOffline) {
+      // Offline coachings : drag = reschedule. On affichera plus tard un
+      // dialog dédié — pour l'instant on revert (changement via /admin/coachings).
+      toast({
+        title: 'Reprogrammation offline',
+        description:
+          "Modifie la date depuis /admin/coachings (Édition). Drag pas encore actif pour l'offline.",
+      });
+      arg.revert();
+      return;
+    }
     const id = arg.event.extendedProps.bookingId as string;
     const booking = bookings.find((b) => b.id === id);
     if (!booking || !arg.event.start) {
@@ -211,36 +277,49 @@ export function BookingCalendar({ bookings }: Props) {
   return (
     <>
       <div className="glass rounded-[var(--radius-lg)] p-3 md:p-4">
-        <Legend />
-        <div className="mt-3">
-          <FullCalendar
-            ref={calendarRef as React.MutableRefObject<FullCalendar | null>}
-            plugins={[dayGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            firstDay={1}
-            locale="fr"
-            height="auto"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: '',
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <Filters
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
+            modeFilter={modeFilter}
+            setModeFilter={setModeFilter}
+            counts={{
+              online: bookings.length,
+              offline: offlineCoachings.length,
             }}
-            buttonText={{
-              today: "Aujourd'hui",
-              month: 'Mois',
-            }}
-            events={events}
-            editable
-            eventDurationEditable={false}
-            eventStartEditable
-            droppable={false}
-            eventClick={onEventClick}
-            eventDrop={onEventDrop}
-            dayMaxEvents={3}
-            displayEventTime={false}
-            eventDisplay="block"
           />
+          <div className="flex-1" />
+          <Legend />
         </div>
+        <FullCalendar
+          ref={calendarRef as React.MutableRefObject<FullCalendar | null>}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          firstDay={1}
+          locale="fr"
+          height="auto"
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek',
+          }}
+          buttonText={{
+            today: "Aujourd'hui",
+            month: 'Mois',
+            week: 'Semaine',
+          }}
+          events={events}
+          editable
+          eventDurationEditable={false}
+          eventStartEditable
+          droppable={false}
+          eventClick={onEventClick}
+          eventDrop={onEventDrop}
+          dayMaxEvents={3}
+          displayEventTime={false}
+          eventDisplay="block"
+          allDaySlot
+        />
       </div>
 
       {/* Dialog détails event */}
@@ -387,6 +466,92 @@ export function BookingCalendar({ bookings }: Props) {
       </Dialog>
 
       {/* Dialog drop (proposer une nouvelle date) */}
+      {/* Dialog détail offline coaching */}
+      <Dialog
+        open={!!offlineDetail}
+        onOpenChange={(o) => !o && setOfflineDetail(null)}
+      >
+        {offlineDetail && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 flex-wrap">
+                📋 {offlineDetail.fullName}
+                <Badge variant="secondary">Offline</Badge>
+              </DialogTitle>
+              <DialogDescription>
+                Coaching importé hors-site · {offlineDetail.mode}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              {(offlineDetail.email || offlineDetail.phone) && (
+                <DetailRow
+                  label="Contact"
+                  value={
+                    <>
+                      {offlineDetail.email}
+                      {offlineDetail.email && offlineDetail.phone && ' · '}
+                      {offlineDetail.phone}
+                    </>
+                  }
+                />
+              )}
+              <DetailRow
+                label="Date"
+                value={<strong>{formatDate(offlineDetail.scheduledDate)}</strong>}
+              />
+              <DetailRow
+                label="Total / Payé"
+                value={
+                  <>
+                    {offlineDetail.paidAmountEur.toLocaleString('fr-FR')} /{' '}
+                    {offlineDetail.totalAmountEur.toLocaleString('fr-FR')}€
+                  </>
+                }
+              />
+              <DetailRow
+                label="Reste dû"
+                value={
+                  <span
+                    className={
+                      offlineDetail.totalAmountEur -
+                        offlineDetail.paidAmountEur >
+                      0
+                        ? 'text-amber-300 light:text-amber-700 font-semibold'
+                        : 'text-emerald-300 light:text-emerald-700 font-semibold'
+                    }
+                  >
+                    {Math.max(
+                      0,
+                      offlineDetail.totalAmountEur -
+                        offlineDetail.paidAmountEur
+                    ).toLocaleString('fr-FR')}
+                    €
+                  </span>
+                }
+              />
+              {offlineDetail.notes && (
+                <DetailRow
+                  label="Notes"
+                  value={
+                    <span className="italic text-[var(--color-text-dim)]">
+                      «{offlineDetail.notes}»
+                    </span>
+                  }
+                />
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" asChild>
+                <Link href="/admin/coachings">
+                  <ArrowUpRight className="h-4 w-4" />
+                  Éditer dans /admin/coachings
+                </Link>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
       <Dialog open={!!dropDialog} onOpenChange={(o) => !o && cancelDrop()}>
         {dropDialog && (
           <DialogContent>
@@ -544,28 +709,133 @@ function colorFor(status: CalendarBooking['status']): {
 }
 
 function Legend() {
-  const items: Array<{ status: CalendarBooking['status']; label: string }> = [
-    { status: 'pending_admin', label: 'En attente (créneaux user)' },
-    { status: 'date_proposed', label: 'Date proposée' },
-    { status: 'confirmed', label: 'Confirmé / Payé' },
-    { status: 'completed', label: 'Terminée' },
+  const items: Array<{
+    color: { bg: string; border: string; text: string };
+    label: string;
+  }> = [
+    { color: colorFor('pending_admin'), label: 'Créneaux user' },
+    { color: colorFor('date_proposed'), label: 'Date proposée' },
+    { color: colorFor('confirmed'), label: 'Confirmé' },
+    { color: OFFLINE_COLOR, label: 'Coaching offline' },
   ];
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5 items-center text-[11px] text-[var(--color-text-dim)]">
-      <span>Légende :</span>
-      {items.map((i) => {
-        const c = colorFor(i.status);
-        return (
-          <span key={i.status} className="inline-flex items-center gap-1.5">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm border"
-              style={{ backgroundColor: c.bg, borderColor: c.border }}
-            />
-            {i.label}
-          </span>
-        );
-      })}
+    <div className="flex flex-wrap gap-x-3 gap-y-1 items-center text-[10px] text-[var(--color-text-dim)]">
+      {items.map((i, idx) => (
+        <span key={idx} className="inline-flex items-center gap-1">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-sm border"
+            style={{
+              backgroundColor: i.color.bg,
+              borderColor: i.color.border,
+            }}
+          />
+          {i.label}
+        </span>
+      ))}
     </div>
+  );
+}
+
+const OFFLINE_COLOR = {
+  bg: 'rgba(168, 85, 247, 0.20)',
+  border: 'rgb(168, 85, 247)',
+  text: 'rgb(216, 180, 254)',
+};
+
+function buildEventsForOffline(c: CalendarOfflineCoaching): CalendarEvent[] {
+  if (c.status === 'cancelled') return [];
+  return [
+    {
+      id: `offline-${c.id}`,
+      bookingId: c.id,
+      title: `📋 ${c.fullName} · ${c.mode}`,
+      start: c.scheduledDate,
+      backgroundColor: OFFLINE_COLOR.bg,
+      borderColor: OFFLINE_COLOR.border,
+      textColor: OFFLINE_COLOR.text,
+      isGhost: false,
+      kind: 'offline',
+    },
+  ];
+}
+
+function Filters({
+  sourceFilter,
+  setSourceFilter,
+  modeFilter,
+  setModeFilter,
+  counts,
+}: {
+  sourceFilter: SourceFilter;
+  setSourceFilter: (v: SourceFilter) => void;
+  modeFilter: ModeFilter;
+  setModeFilter: (v: ModeFilter) => void;
+  counts: { online: number; offline: number };
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      <FilterChip
+        active={sourceFilter === 'all'}
+        onClick={() => setSourceFilter('all')}
+      >
+        Tout {counts.online + counts.offline}
+      </FilterChip>
+      <FilterChip
+        active={sourceFilter === 'online'}
+        onClick={() => setSourceFilter('online')}
+      >
+        Site {counts.online}
+      </FilterChip>
+      <FilterChip
+        active={sourceFilter === 'offline'}
+        onClick={() => setSourceFilter('offline')}
+      >
+        Offline {counts.offline}
+      </FilterChip>
+      <span className="text-[var(--color-text-faint)] mx-1">·</span>
+      <FilterChip
+        active={modeFilter === 'all'}
+        onClick={() => setModeFilter('all')}
+      >
+        Tous formats
+      </FilterChip>
+      <FilterChip
+        active={modeFilter === 'remote'}
+        onClick={() => setModeFilter('remote')}
+      >
+        Distance
+      </FilterChip>
+      <FilterChip
+        active={modeFilter === 'onsite'}
+        onClick={() => setModeFilter('onsite')}
+      >
+        Dubaï
+      </FilterChip>
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? 'inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-medium bg-white/10 text-[var(--color-text)] border border-[var(--color-border-strong)]'
+          : 'inline-flex items-center px-2.5 py-1 rounded-md text-[11px] bg-transparent text-[var(--color-text-dim)] border border-[var(--color-border)] hover:bg-[var(--color-surface-tint)]'
+      }
+    >
+      {children}
+    </button>
   );
 }
 
