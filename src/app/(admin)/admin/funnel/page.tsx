@@ -649,10 +649,10 @@ function DonutChart({ percent }: { percent: number }) {
         </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-sm font-semibold tabular-nums leading-none">
+        <div className="text-[11px] font-semibold tabular-nums leading-none">
           {percent.toFixed(1)}%
         </div>
-        <div className="mt-0.5 text-[8px] uppercase tracking-wider text-[var(--color-text-dim)]">
+        <div className="mt-0.5 text-[7px] uppercase tracking-wider text-[var(--color-text-dim)]">
           E2E
         </div>
       </div>
