@@ -8,6 +8,7 @@ import {
   bookings,
   formations,
   manualIronfxStatus,
+  offlineCoachings,
   promoCodes,
   testimonials,
   userBans,
@@ -17,12 +18,16 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminBulkImportOfflineCoachingSchema,
+  adminCreateOfflineCoachingSchema,
   adminCreatePromoSchema,
   adminDeletePromoSchema,
+  adminDeleteOfflineCoachingSchema,
   adminModerateTestimonialSchema,
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
   adminUpdateFormationSchema,
+  adminUpdateOfflineCoachingSchema,
   adminUpdatePromoSchema,
   adminVipOverrideSchema,
   automationsPatchSchema,
@@ -1209,6 +1214,164 @@ export async function adminDeletePromoAction(
   });
 
   revalidatePath('/admin/promos');
+  return { success: true, data: undefined };
+}
+
+// ============================================================
+// OFFLINE COACHINGS
+// ============================================================
+
+export async function adminCreateOfflineCoachingAction(
+  input: unknown
+): Promise<ActionResult<{ coachingId: string }>> {
+  const session = await requireAdmin();
+  const parsed = adminCreateOfflineCoachingSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const [inserted] = await db
+    .insert(offlineCoachings)
+    .values({
+      fullName: parsed.data.fullName,
+      email: parsed.data.email ?? null,
+      phone: parsed.data.phone ?? null,
+      mode: parsed.data.mode,
+      totalAmountEur: String(parsed.data.totalAmountEur),
+      paidAmountEur: String(parsed.data.paidAmountEur),
+      scheduledDate: parsed.data.scheduledDate ?? null,
+      notes: parsed.data.notes ?? null,
+    })
+    .returning({ id: offlineCoachings.id });
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'offline_coaching_create',
+    targetType: 'offline_coaching',
+    targetId: inserted?.id ?? '',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/coachings');
+  revalidatePath('/admin/calendar');
+  return inserted
+    ? { success: true, data: { coachingId: inserted.id } }
+    : { success: false, error: 'Création échouée' };
+}
+
+/**
+ * Import bulk depuis paste Excel. Insert en transaction — tout ou rien.
+ * Renvoie le nombre de lignes insérées.
+ */
+export async function adminBulkImportOfflineCoachingsAction(
+  input: unknown
+): Promise<ActionResult<{ inserted: number }>> {
+  const session = await requireAdmin();
+  const parsed = adminBulkImportOfflineCoachingSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const rows = parsed.data.items.map((item) => ({
+    fullName: item.fullName,
+    email: item.email ?? null,
+    phone: item.phone ?? null,
+    mode: item.mode,
+    totalAmountEur: String(item.totalAmountEur),
+    paidAmountEur: String(item.paidAmountEur),
+    scheduledDate: item.scheduledDate ?? null,
+    notes: item.notes ?? null,
+  }));
+
+  await db.insert(offlineCoachings).values(rows);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'offline_coaching_bulk_import',
+    targetType: 'offline_coaching',
+    targetId: 'bulk',
+    after: { count: rows.length },
+  });
+
+  revalidatePath('/admin/coachings');
+  revalidatePath('/admin/calendar');
+  return { success: true, data: { inserted: rows.length } };
+}
+
+export async function adminUpdateOfflineCoachingAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminUpdateOfflineCoachingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  for (const k of [
+    'fullName',
+    'email',
+    'phone',
+    'mode',
+    'scheduledDate',
+    'notes',
+    'status',
+  ] as const) {
+    if (parsed.data[k] !== undefined) updates[k] = parsed.data[k];
+  }
+  if (parsed.data.totalAmountEur !== undefined)
+    updates.totalAmountEur = String(parsed.data.totalAmountEur);
+  if (parsed.data.paidAmountEur !== undefined)
+    updates.paidAmountEur = String(parsed.data.paidAmountEur);
+
+  await db
+    .update(offlineCoachings)
+    .set(updates)
+    .where(eq(offlineCoachings.id, parsed.data.coachingId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'offline_coaching_update',
+    targetType: 'offline_coaching',
+    targetId: parsed.data.coachingId,
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/coachings');
+  revalidatePath('/admin/calendar');
+  return { success: true, data: undefined };
+}
+
+export async function adminDeleteOfflineCoachingAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = adminDeleteOfflineCoachingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Données invalides' };
+  }
+
+  await db
+    .delete(offlineCoachings)
+    .where(eq(offlineCoachings.id, parsed.data.coachingId));
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'offline_coaching_delete',
+    targetType: 'offline_coaching',
+    targetId: parsed.data.coachingId,
+  });
+
+  revalidatePath('/admin/coachings');
+  revalidatePath('/admin/calendar');
   return { success: true, data: undefined };
 }
 

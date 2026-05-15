@@ -120,6 +120,13 @@
       "when": 1778814745558,
       "tag": "0016_powerful_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778815389403,
+      "tag": "0017_yielding_firestar",
+      "breakpoints": true
     }
   ]
 }

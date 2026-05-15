@@ -601,6 +601,55 @@ export const testimonials = pgTable(
 );
 
 // ============================================================
+// OFFLINE COACHINGS — clients hors-site, importés depuis Excel
+// ============================================================
+
+export const offlineCoachingStatusEnum = pgEnum('offline_coaching_status', [
+  'active',
+  'completed',
+  'cancelled',
+]);
+
+/**
+ * Clients coachés hors plateforme. Pas de FK vers users — volontaire.
+ * Si le client crée plus tard un compte, l'admin peut le lier via
+ * `linkedUserId` (optionnel) pour fusionner historiques.
+ */
+export const offlineCoachings = pgTable(
+  'offline_coachings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fullName: text('full_name').notNull(),
+    email: text('email'),
+    phone: text('phone'),
+    /** 'remote' | 'onsite' | 'custom' (libre). */
+    mode: text('mode').notNull().default('remote'),
+    totalAmountEur: numeric('total_amount_eur', {
+      precision: 10,
+      scale: 2,
+    }).notNull(),
+    paidAmountEur: numeric('paid_amount_eur', {
+      precision: 10,
+      scale: 2,
+    })
+      .notNull()
+      .default('0'),
+    scheduledDate: date('scheduled_date'),
+    notes: text('notes'),
+    status: offlineCoachingStatusEnum('status').notNull().default('active'),
+    linkedUserId: uuid('linked_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index('offline_coachings_status_idx').on(t.status),
+    scheduledIdx: index('offline_coachings_scheduled_idx').on(t.scheduledDate),
+  })
+);
+
+// ============================================================
 // PROMO CODES — réductions applicables au checkout
 // ============================================================
 

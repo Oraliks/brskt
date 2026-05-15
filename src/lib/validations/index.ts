@@ -345,6 +345,52 @@ export const adminDeletePromoSchema = z.object({
 });
 
 // ============================================================
+// OFFLINE COACHINGS (clients hors-site historiques)
+// ============================================================
+
+export const offlineCoachingItemSchema = z.object({
+  fullName: z.string().min(2, 'Nom requis').max(120),
+  email: z
+    .string()
+    .email('Email invalide')
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => (v ? v : undefined)),
+  phone: z.string().max(40).optional(),
+  mode: z.string().max(40).default('remote'),
+  totalAmountEur: z.number().min(0).max(1_000_000),
+  paidAmountEur: z.number().min(0).max(1_000_000).default(0),
+  scheduledDate: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional(),
+});
+
+export const adminCreateOfflineCoachingSchema = offlineCoachingItemSchema;
+
+export const adminBulkImportOfflineCoachingSchema = z.object({
+  items: z
+    .array(offlineCoachingItemSchema)
+    .min(1, 'Au moins une ligne requise')
+    .max(500, 'Max 500 lignes par import'),
+});
+
+export const adminUpdateOfflineCoachingSchema = z.object({
+  coachingId: z.string().uuid(),
+  fullName: z.string().min(2).max(120).optional(),
+  email: z.string().optional(),
+  phone: z.string().max(40).optional(),
+  mode: z.string().max(40).optional(),
+  totalAmountEur: z.number().min(0).max(1_000_000).optional(),
+  paidAmountEur: z.number().min(0).max(1_000_000).optional(),
+  scheduledDate: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional(),
+  status: z.enum(['active', 'completed', 'cancelled']).optional(),
+});
+
+export const adminDeleteOfflineCoachingSchema = z.object({
+  coachingId: z.string().uuid(),
+});
+
+// ============================================================
 // TESTIMONIALS
 // ============================================================
 
