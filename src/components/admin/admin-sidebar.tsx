@@ -18,6 +18,7 @@ import {
   TrendingDown,
   Users,
   X,
+  Zap,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/logo';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -32,6 +33,7 @@ const links = [
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
   { href: '/admin/testimonials', label: 'Témoignages', icon: MessageSquare },
   { href: '/admin/bot', label: 'Bot Telegram', icon: Bot },
+  { href: '/admin/automations', label: 'Automatisations', icon: Zap },
   { href: '/admin/audit', label: 'Audit log', icon: ShieldCheck },
   { href: '/admin/diagnostics', label: 'Diagnostics', icon: Activity },
   { href: '/admin/settings', label: 'Paramètres', icon: Settings },

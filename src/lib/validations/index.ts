@@ -216,6 +216,66 @@ export const communityCountOverrideSchema = z.object({
   value: z.number().int().min(0).max(10_000_000),
 });
 
+/**
+ * Patch partiel des automatisations CRON — toutes les sections sont optionnelles.
+ * Validation minimale, le form admin contraint déjà les ranges.
+ */
+export const automationsPatchSchema = z
+  .object({
+    paymentReminder: z
+      .object({
+        enabled: z.boolean().optional(),
+        firstNudgeHours: z.number().int().min(1).max(720).optional(),
+        secondNudgeHours: z.number().int().min(1).max(720).optional(),
+        autoCancelDays: z.number().int().min(1).max(90).optional(),
+        template1: z.string().min(20).max(2000).optional(),
+        template2: z.string().min(20).max(2000).optional(),
+        templateCancel: z.string().min(20).max(2000).optional(),
+      })
+      .optional(),
+    vipDropoff: z
+      .object({
+        enabled: z.boolean().optional(),
+        firstNudgeDays: z.number().int().min(1).max(90).optional(),
+        secondNudgeDays: z.number().int().min(1).max(180).optional(),
+        template1: z.string().min(20).max(2000).optional(),
+        template2: z.string().min(20).max(2000).optional(),
+      })
+      .optional(),
+    testimonialRequest: z
+      .object({
+        enabled: z.boolean().optional(),
+        delayDays: z.number().int().min(1).max(180).optional(),
+        template: z.string().min(20).max(2000).optional(),
+      })
+      .optional(),
+    weeklyAdminStats: z
+      .object({
+        enabled: z.boolean().optional(),
+        dayOfWeek: z.number().int().min(0).max(6).optional(),
+        hourUtc: z.number().int().min(0).max(23).optional(),
+      })
+      .optional(),
+    formationReminders: z
+      .object({
+        enabled: z.boolean().optional(),
+        daysBefore: z.array(z.number().int().min(0).max(60)).max(5).optional(),
+        template: z.string().min(20).max(2000).optional(),
+      })
+      .optional(),
+    npsRequest: z
+      .object({
+        enabled: z.boolean().optional(),
+        delayDays: z.number().int().min(1).max(180).optional(),
+        question: z.string().min(20).max(2000).optional(),
+      })
+      .optional(),
+    briefingMode: z.enum(['auto', 'manual']).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: 'Au moins une section requise',
+  });
+
 // ============================================================
 // ADMIN USERS
 // ============================================================

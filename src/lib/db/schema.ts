@@ -274,6 +274,49 @@ export const bookings = pgTable(
 );
 
 // ============================================================
+// BOOKING AUTOMATION STATE — séparé de bookings pour ne pas casser
+// les queries existantes si la migration n'est pas appliquée.
+// ============================================================
+
+/**
+ * État des automatisations par booking (relances paiement, reminders
+ * formation, NPS). Table séparée volontaire : ajouter ces colonnes à
+ * `bookings` casserait toutes les queries Drizzle existantes tant que
+ * la migration ne serait pas push (cf. incident avec users.banned_at).
+ *
+ * 1 row par booking, créé paresseusement par les CRONs au 1er besoin.
+ */
+export const bookingAutomationState = pgTable(
+  'booking_automation_state',
+  {
+    bookingId: uuid('booking_id')
+      .primaryKey()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+
+    // Relances paiement (CRON payment-reminders)
+    // 0 = jamais relancé · 1 = 1er DM envoyé · 2 = 2e DM envoyé · 3 = auto-cancelled
+    paymentNudgeCount: integer('payment_nudge_count').notNull().default(0),
+    paymentNudgeAt: timestamp('payment_nudge_at'),
+
+    // Reminders pré-formation : bitmask
+    // 1<<0 = J-7 envoyé · 1<<1 = J-1 envoyé · 1<<2 = J-3 envoyé (futur)
+    formationRemindersSent: integer('formation_reminders_sent').notNull().default(0),
+
+    // NPS post-formation : 0-10 via inline keyboard du bot
+    npsAskedAt: timestamp('nps_asked_at'),
+    npsScore: integer('nps_score'),
+    npsAt: timestamp('nps_at'),
+
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    paymentNudgeIdx: index('booking_auto_payment_nudge_idx').on(
+      t.paymentNudgeCount
+    ),
+  })
+);
+
+// ============================================================
 // PAYMENTS
 // ============================================================
 

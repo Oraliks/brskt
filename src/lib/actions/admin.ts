@@ -19,6 +19,7 @@ import {
   adminProgressUpdateSchema,
   adminSetUserBannedSchema,
   adminVipOverrideSchema,
+  automationsPatchSchema,
   botFeaturesSchema,
   communityCountOverrideSchema,
   dailyBriefingSchema,
@@ -31,6 +32,7 @@ import { setWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { setBotFeatures } from '@/lib/settings/bot-features';
 import { setDailyBriefing } from '@/lib/settings/daily-briefing';
 import { setCommunityCountOverride } from '@/lib/settings/community-count';
+import { setAutomations } from '@/lib/settings/automations';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -908,6 +910,38 @@ export async function adminSetCommunityCountAction(
   revalidatePath('/admin');
   revalidatePath('/admin/settings');
   revalidatePath('/dashboard');
+  return { success: true, data: undefined };
+}
+
+/**
+ * Update partiel des toggles / délais / templates pour les automatisations CRON.
+ * Lu par chaque CRON au début de son run via getAutomations().
+ */
+export async function adminSetAutomationsAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = automationsPatchSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  await setAutomations(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'automations_update',
+    targetType: 'settings',
+    targetId: 'automations',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/automations');
   return { success: true, data: undefined };
 }
 
