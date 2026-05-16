@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { users, xpEvents } from '@/lib/db/schema';
+import { userXpStates, users, xpEvents } from '@/lib/db/schema';
 import { LEVELS, type Level } from './xp';
 
 export type LeaderboardWindow = 'week' | 'month' | 'all_time';
@@ -39,11 +39,12 @@ export async function getLeaderboard(
           firstName: users.telegramFirstName,
           username: users.telegramUsername,
           photoUrl: users.telegramPhotoUrl,
-          xp: users.xpTotal,
+          xp: userXpStates.xpTotal,
         })
-        .from(users)
-        .where(sql`${users.xpTotal} > 0`)
-        .orderBy(desc(users.xpTotal))
+        .from(userXpStates)
+        .innerJoin(users, eq(users.id, userXpStates.userId))
+        .where(sql`${userXpStates.xpTotal} > 0`)
+        .orderBy(desc(userXpStates.xpTotal))
         .limit(limit);
 
       return rows.map((r, i) => ({
@@ -68,18 +69,18 @@ export async function getLeaderboard(
         username: users.telegramUsername,
         photoUrl: users.telegramPhotoUrl,
         xp: sql<number>`coalesce(sum(${xpEvents.amount}), 0)::int`,
-        total: users.xpTotal,
+        total: sql<number>`coalesce(max(${userXpStates.xpTotal}), 0)::int`,
       })
       .from(xpEvents)
       .innerJoin(users, eq(users.id, xpEvents.userId))
+      .leftJoin(userXpStates, eq(userXpStates.userId, xpEvents.userId))
       .where(gte(xpEvents.createdAt, since))
       .groupBy(
         xpEvents.userId,
         users.name,
         users.telegramFirstName,
         users.telegramUsername,
-        users.telegramPhotoUrl,
-        users.xpTotal
+        users.telegramPhotoUrl
       )
       .orderBy(desc(sql`sum(${xpEvents.amount})`))
       .limit(limit);
@@ -126,21 +127,22 @@ async function getUserRankImpl(
 ): Promise<{ rank: number; xp: number } | null> {
   if (window === 'all_time') {
     const [me] = await db
-      .select({ xp: users.xpTotal })
-      .from(users)
-      .where(eq(users.id, userId))
+      .select({ xp: userXpStates.xpTotal })
+      .from(userXpStates)
+      .where(eq(userXpStates.userId, userId))
       .limit(1);
-    if (!me) return null;
+    const myXp = me?.xp ?? 0;
+    if (myXp === 0) return { rank: 0, xp: 0 };
 
     const rows = await db
       .select({
         count: sql<number>`count(*)::int`,
       })
-      .from(users)
-      .where(sql`${users.xpTotal} > ${me.xp}`);
+      .from(userXpStates)
+      .where(sql`${userXpStates.xpTotal} > ${myXp}`);
     const count = rows[0]?.count ?? 0;
 
-    return { rank: count + 1, xp: me.xp };
+    return { rank: count + 1, xp: myXp };
   }
 
   const days = window === 'week' ? 7 : 30;

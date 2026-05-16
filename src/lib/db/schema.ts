@@ -144,28 +144,9 @@ export const users = pgTable(
      */
     icalToken: uuid('ical_token').unique(),
 
-    /**
-     * Système XP & jeux (pronostic chandelier, roue, etc.).
-     *
-     *  - `xpTotal` : XP cumulé, jamais décrémenté en usage normal. Sert au
-     *    niveau (cf. LEVELS dans lib/games/xp.ts) et au leaderboard all-time.
-     *  - `predictionStreakCount` : nombre de jours consécutifs avec au
-     *    moins un pronostic. Reset à 1 si un jour est sauté.
-     *  - `predictionStreakLongest` : record perso (jamais reset).
-     *  - `predictionLastDate` : date du dernier jour avec un pronostic (en
-     *    Paris time). Utilisé pour décider si continuer / reset.
-     *  - `lastWheelSpunAt` : timestamp du dernier spin de la roue. La roue
-     *    est dispo 1×/semaine, on compare à NOW().
-     */
-    xpTotal: integer('xp_total').notNull().default(0),
-    predictionStreakCount: integer('prediction_streak_count')
-      .notNull()
-      .default(0),
-    predictionStreakLongest: integer('prediction_streak_longest')
-      .notNull()
-      .default(0),
-    predictionLastDate: date('prediction_last_date'),
-    lastWheelSpunAt: timestamp('last_wheel_spun_at'),
+    // L'état XP & jeux est dans la table `user_xp_states` (1-1) pour
+    // que les requêtes sur `users` ne dépendent pas de la migration des
+    // jeux. Voir `userXpStates` plus bas.
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -920,6 +901,38 @@ export const quizResponses = pgTable(
 // ============================================================
 // GAMES — pronostic chandelier journalier, roue, XP events
 // ============================================================
+
+/**
+ * État XP & jeux par user. 1 row / user, créé paresseusement au 1er
+ * gain d'XP. Séparé de la table `users` pour que les requêtes sur
+ * `users` (auth, dashboard, etc.) ne dépendent pas de l'application
+ * de la migration des jeux : si la migration n'est pas appliquée, la
+ * table `users` reste fonctionnelle, seules les pages /jeux échouent.
+ */
+export const userXpStates = pgTable(
+  'user_xp_states',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** XP cumulé. Jamais décrémenté en usage normal, sert au niveau & leaderboard. */
+    xpTotal: integer('xp_total').notNull().default(0),
+    /** Jours consécutifs avec au moins un pronostic. Reset à 1 si gap. */
+    predictionStreakCount: integer('prediction_streak_count').notNull().default(0),
+    /** Record perso (jamais reset). */
+    predictionStreakLongest: integer('prediction_streak_longest')
+      .notNull()
+      .default(0),
+    /** Date Paris du dernier pronostic (utilisé pour décider streak). */
+    predictionLastDate: date('prediction_last_date'),
+    /** Timestamp du dernier spin de la roue. Cooldown 7 jours côté serveur. */
+    lastWheelSpunAt: timestamp('last_wheel_spun_at'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    xpIdx: index('user_xp_states_xp_idx').on(t.xpTotal),
+  })
+);
 
 /**
  * Marchés disponibles pour le mini-jeu de pronostic chandelier journalier.

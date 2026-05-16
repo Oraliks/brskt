@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import {
   gameMarketCandles,
   gamePredictions,
-  users,
+  userXpStates,
 } from '@/lib/db/schema';
 import { addXp, XP_REWARDS } from './xp';
 import {
@@ -187,39 +187,53 @@ export async function updateStreak(userId: string): Promise<{
   const today = getParisDate();
   const yesterday = getYesterdayParisDate();
 
-  const [user] = await db
+  const [existing] = await db
     .select({
-      currentStreak: users.predictionStreakCount,
-      longest: users.predictionStreakLongest,
-      last: users.predictionLastDate,
+      currentStreak: userXpStates.predictionStreakCount,
+      longest: userXpStates.predictionStreakLongest,
+      last: userXpStates.predictionLastDate,
     })
-    .from(users)
-    .where(eq(users.id, userId))
+    .from(userXpStates)
+    .where(eq(userXpStates.userId, userId))
     .limit(1);
 
-  if (!user) return { streak: 0, bonusAwarded: 0 };
+  const current = existing ?? {
+    currentStreak: 0,
+    longest: 0,
+    last: null as string | null,
+  };
 
-  let newStreak = user.currentStreak;
-  if (user.last === today) {
+  let newStreak = current.currentStreak;
+  if (current.last === today) {
     // Already counted today
     return { streak: newStreak, bonusAwarded: 0 };
-  } else if (user.last === yesterday) {
+  } else if (current.last === yesterday) {
     newStreak += 1;
   } else {
     newStreak = 1;
   }
 
-  const newLongest = Math.max(user.longest, newStreak);
+  const newLongest = Math.max(current.longest, newStreak);
 
+  // Upsert : crée la row si premier pronostic du user, sinon update.
   await db
-    .update(users)
-    .set({
+    .insert(userXpStates)
+    .values({
+      userId,
       predictionStreakCount: newStreak,
       predictionStreakLongest: newLongest,
       predictionLastDate: today,
       updatedAt: new Date(),
     })
-    .where(eq(users.id, userId));
+    .onConflictDoUpdate({
+      target: userXpStates.userId,
+      set: {
+        predictionStreakCount: newStreak,
+        predictionStreakLongest: newLongest,
+        predictionLastDate: today,
+        updatedAt: new Date(),
+      },
+    });
 
   const milestone = XP_REWARDS.STREAK_MILESTONES[newStreak];
   let bonusAwarded = 0;

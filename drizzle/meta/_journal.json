@@ -141,6 +141,13 @@
       "when": 1778902569766,
       "tag": "0019_free_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778948240045,
+      "tag": "0020_faulty_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

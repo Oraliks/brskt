@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import {
   gameWheelSpins,
   promoCodes,
-  users,
+  userXpStates,
 } from '@/lib/db/schema';
 import { addXp } from './xp';
 
@@ -53,17 +53,16 @@ export interface WheelStatus {
 /**
  * Renvoie si l'user peut spinner aujourd'hui et si non, quand il pourra.
  *
- * Tolérant à l'absence de la colonne `last_wheel_spun_at` (migration 0019
- * pas encore appliquée) : on renvoie "peut spinner" plutôt que de planter
- * la page.
+ * Tolérant à l'absence de la table `user_xp_states` (migration pas
+ * encore appliquée) : on renvoie "peut spinner" plutôt que de planter.
  */
 export async function getWheelStatus(userId: string): Promise<WheelStatus> {
   let last: Date | null = null;
   try {
     const [u] = await db
-      .select({ last: users.lastWheelSpunAt })
-      .from(users)
-      .where(eq(users.id, userId))
+      .select({ last: userXpStates.lastWheelSpunAt })
+      .from(userXpStates)
+      .where(eq(userXpStates.userId, userId))
       .limit(1);
     last = u?.last ?? null;
   } catch (err) {
@@ -108,16 +107,23 @@ export type SpinResult =
  *    inséré dans promo_codes. Le code est de la forme `ROUE-<XXXXX>`.
  */
 export async function spinWheel(userId: string): Promise<SpinResult> {
-  // Recheck eligibility + bump atomique. Si lastWheelSpunAt est < cooldown,
-  // l'UPDATE n'updatera rien (where clause) et on saura via affected rows.
+  // Recheck eligibility + bump atomique via upsert. Si la row existait
+  // déjà et que `last_wheel_spun_at` est encore en cooldown, le UPDATE
+  // n'updatera rien (where clause) → on détecte l'échec via returning.
   const cooldownAgo = new Date(Date.now() - WHEEL_COOLDOWN_MS);
+  const now = new Date();
+
+  // 1) On tente d'insérer (premier spin du user) ; ON CONFLICT update
+  //    seulement si le cooldown est passé.
   const [bumped] = await db
-    .update(users)
-    .set({ lastWheelSpunAt: new Date(), updatedAt: new Date() })
-    .where(
-      sql`${users.id} = ${userId} AND (${users.lastWheelSpunAt} IS NULL OR ${users.lastWheelSpunAt} <= ${cooldownAgo})`
-    )
-    .returning({ id: users.id, last: users.lastWheelSpunAt });
+    .insert(userXpStates)
+    .values({ userId, lastWheelSpunAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: userXpStates.userId,
+      set: { lastWheelSpunAt: now, updatedAt: now },
+      setWhere: sql`${userXpStates.lastWheelSpunAt} IS NULL OR ${userXpStates.lastWheelSpunAt} <= ${cooldownAgo}`,
+    })
+    .returning({ last: userXpStates.lastWheelSpunAt });
 
   if (!bumped) {
     const status = await getWheelStatus(userId);
@@ -153,12 +159,12 @@ export async function spinWheel(userId: string): Promise<SpinResult> {
       metadata: { segmentIndex: index, label: segment.label },
     });
   } else {
-    // Pour les promos on log juste un xp_event "0" pour traçabilité.
-    // (Pas d'XP attribué.)
+    // Promo : pas d'XP gagné mais on récupère le total courant pour
+    // l'afficher au toast.
     const [u] = await db
-      .select({ xp: users.xpTotal })
-      .from(users)
-      .where(eq(users.id, userId))
+      .select({ xp: userXpStates.xpTotal })
+      .from(userXpStates)
+      .where(eq(userXpStates.userId, userId))
       .limit(1);
     newXpTotal = u?.xp ?? 0;
   }

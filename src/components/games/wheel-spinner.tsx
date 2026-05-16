@@ -113,32 +113,41 @@ export function WheelSpinner({ segments, canSpin, nextSpinAt }: Props) {
           <svg
             viewBox="-100 -100 200 200"
             className="w-full h-full"
-            style={{ overflow: 'visible' }}
           >
             {segments.map((seg, i) => {
               const startAngle = (i * 360) / segmentCount - 90;
               const endAngle = ((i + 1) * 360) / segmentCount - 90;
-              const path = describeArc(0, 0, 95, startAngle, endAngle);
-              const fill = SEGMENT_COLORS[i % SEGMENT_COLORS.length];
+              const path = describeArc(0, 0, 92, startAngle, endAngle);
+              const fill = pickSegmentFill(seg);
               const midAngle = (startAngle + endAngle) / 2;
               const midRad = (midAngle * Math.PI) / 180;
-              const labelR = 60;
+              // Label radial — placé à r=55 (entre centre et bord) avec
+              // une rotation perpendiculaire au rayon pour rester
+              // lisible dans la portion du segment.
+              const labelR = 58;
               const lx = Math.cos(midRad) * labelR;
               const ly = Math.sin(midRad) * labelR;
+              const shortLabel = shortSegmentLabel(seg);
               return (
                 <g key={i}>
-                  <path d={path} fill={fill} stroke="#1a1a25" strokeWidth="1" />
+                  <path d={path} fill={fill} stroke="#1a1a25" strokeWidth="1.5" />
                   <text
                     x={lx}
                     y={ly}
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fill="#fff"
-                    fontSize="9"
-                    fontWeight="600"
+                    fontSize="14"
+                    fontWeight="700"
                     transform={`rotate(${midAngle + 90}, ${lx}, ${ly})`}
+                    style={{
+                      paintOrder: 'stroke',
+                      stroke: 'rgba(0,0,0,0.4)',
+                      strokeWidth: 2,
+                      strokeLinejoin: 'round',
+                    }}
                   >
-                    {seg.label.replace('🎉 ', '').slice(0, 14)}
+                    {shortLabel}
                   </text>
                 </g>
               );
@@ -204,15 +213,32 @@ export function WheelSpinner({ segments, canSpin, nextSpinAt }: Props) {
   );
 }
 
-const SEGMENT_COLORS = [
-  '#312e81', // indigo-900
-  '#7c2d12', // amber-900
-  '#1e3a8a', // blue-900
-  '#581c87', // purple-900
-  '#7f1d1d', // red-900
-  '#064e3b', // emerald-900
-  '#a16207', // amber-700 (jackpot)
-];
+/**
+ * Couleur du segment selon le type de récompense.
+ *  - XP standard : palette indigo/violet (calme, mais distinct)
+ *  - XP gros (≥500) : doré (rare, eye-catching)
+ *  - Promo : rose (gain physique, distinct des XP)
+ */
+function pickSegmentFill(seg: Segment): string {
+  if (seg.rewardType === 'promo') {
+    return seg.value >= 10 ? '#9f1239' /* rose-800 */ : '#be185d' /* pink-700 */;
+  }
+  if (seg.value >= 1000) return '#b45309'; // amber-700 (jackpot)
+  if (seg.value >= 500) return '#7c2d12'; // orange-900
+  if (seg.value >= 200) return '#3730a3'; // indigo-800
+  if (seg.value >= 100) return '#4338ca'; // indigo-700
+  return '#312e81'; // indigo-900 (baseline)
+}
+
+/**
+ * Label court adapté à la place dispo dans un segment de roue.
+ * Garantit ≤ 5 caractères pour rester lisible à font-size 14.
+ */
+function shortSegmentLabel(seg: Segment): string {
+  if (seg.rewardType === 'promo') return `-${seg.value}%`;
+  if (seg.value >= 1000) return '🎉';
+  return `+${seg.value}`;
+}
 
 /** Renvoie un path SVG pour un arc de cercle entre 2 angles (degrés). */
 function describeArc(
