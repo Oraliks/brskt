@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Flame,
   LineChart,
+  MousePointer2,
   Trophy,
   Disc,
   Sparkles,
@@ -113,6 +114,14 @@ export default async function JeuxPage() {
             description="1 spin par semaine. XP, jackpot 1000 XP, ou codes promo formation. Garantit toujours quelque chose."
             cta={wheelStatus.canSpin ? 'Tourner la roue' : 'Voir le compteur'}
             note={wheelStatus.canSpin ? 'Disponible maintenant' : 'En cooldown'}
+          />
+          <GameCard
+            href="/jeux/clic"
+            icon={MousePointer2}
+            badge="Réflexes"
+            title="Combo de clic"
+            description="Enchaîne les clics sans casser la barre de combo. 5 paliers, plus tu montes haut plus c'est serré. 3 runs par jour."
+            cta="Tester mes réflexes"
           />
           <GameCard
             href="/jeux/classement"

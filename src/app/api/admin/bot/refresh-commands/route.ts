@@ -39,6 +39,7 @@ export async function POST() {
     { command: 'jouer', description: 'Hub des jeux & XP' },
     { command: 'predict', description: 'Pronostic chandelier du jour' },
     { command: 'roue', description: 'Roue de la fortune (1×/semaine)' },
+    { command: 'clic', description: 'Combo de clic (3×/jour)' },
     { command: 'classement', description: 'Top traders Boursikotons' },
 
     // Calculatrices trading

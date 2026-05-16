@@ -7,6 +7,7 @@ import {
   type PredictionDirection,
 } from '@/lib/games/predictions';
 import { spinWheel } from '@/lib/games/wheel';
+import { submitTapRun } from '@/lib/games/tap';
 import { MARKET_IDS, type MarketId } from '@/lib/games/markets';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -127,6 +128,62 @@ export async function spinWheelAction(): Promise<
       promoCode: result.promoCode,
       segmentIndex: result.segmentIndex,
       newXpTotal: result.newXpTotal,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run du mini-jeu de clic.
+ *
+ *  - Client envoie {taps, durationMs} après que le combo soit cassé
+ *  - Serveur valide (anti-cheat) + calcule XP + persiste
+ *  - Rate-limit accessoire : 6 soumissions / 5 min / user
+ */
+export async function submitTapRunAction(input: {
+  taps: number;
+  durationMs: number;
+}): Promise<
+  ActionResult<{
+    xpAwarded: number;
+    levelReached: number;
+    newTotal: number;
+    runsLeftToday: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `game_tap:user:${user.id}`,
+    limit: 6,
+    windowSec: 300,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  const result = await submitTapRun(user.id, input);
+  if (!result.ok) {
+    const msg =
+      result.error === 'daily_limit'
+        ? 'Tu as utilisé tes 3 essais du jour. Reviens demain.'
+        : result.error === 'too_fast'
+        ? 'Vitesse de clic anormale — run rejeté.'
+        : result.error === 'invalid_run'
+        ? 'Run invalide.'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/clic');
+  revalidatePath('/jeux');
+
+  return {
+    success: true,
+    data: {
+      xpAwarded: result.xpAwarded,
+      levelReached: result.levelReached,
+      newTotal: result.newTotal,
+      runsLeftToday: result.runsLeftToday,
     },
   };
 }

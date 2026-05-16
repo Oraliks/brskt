@@ -315,6 +315,7 @@ export function getBot(): Bot<Context> {
         `/jouer — Hub des jeux\n` +
         `/predict — Pronostic chandelier du jour\n` +
         `/roue — Roue de la fortune (1×/sem)\n` +
+        `/clic — Combo de clic (3×/jour)\n` +
         `/classement — Top XP semaine/mois/all-time\n\n` +
         `<b>🎓 Formations</b>\n` +
         `/formation — Réserver distance ou Dubaï\n` +
@@ -433,6 +434,23 @@ export function getBot(): Bot<Context> {
     await ctx.reply(
       `🎰 <b>Roue de la fortune</b>\n\n` +
         `1 spin par semaine. Aucune case vide — tu gagnes toujours quelque chose : XP, jackpot 1000 XP, ou code promo formation.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['clic', 'click', 'tap'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '👆 Lancer un run',
+      `${appUrl}/mini?goto=clic`
+    );
+    await ctx.reply(
+      `👆 <b>Combo de clic</b>\n\n` +
+        `Tape sans laisser passer la barre de combo. 5 paliers (10/25/50/100/200 taps), jusqu'à 200 XP par run.\n\n` +
+        `3 runs par jour — fais-les compter.`,
       {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },

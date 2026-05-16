@@ -1078,6 +1078,39 @@ export const xpEvents = pgTable(
 );
 
 /**
+ * Mini-jeu de clic combo. Une row par "run".
+ *
+ * Mécanique côté client : on tape sur un bouton, chaque clic enchaîné
+ * dans la fenêtre temps fait monter le combo. Si on attend trop, combo
+ * cassé → le run est soumis avec les stats finales.
+ *
+ *  - `taps` : total de clics dans le run
+ *  - `maxLevel` : niveau max atteint (1-5 selon paliers 10/25/50/100/200)
+ *  - `durationMs` : durée totale du run (1er tap → dernier tap)
+ *  - `xpAwarded` : XP attribué (avec cap + bonus paliers)
+ *
+ * Anti-cheat : server vérifie ratio taps/duration plausible (max ~20/s).
+ * Limite : 3 runs / jour / user.
+ */
+export const gameTapRuns = pgTable(
+  'game_tap_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    taps: integer('taps').notNull(),
+    maxLevel: integer('max_level').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('game_tap_runs_user_idx').on(t.userId, t.createdAt),
+  })
+);
+
+/**
  * Spins de la roue de la fortune. Une row par spin.
  *
  *  - `rewardType` = 'xp' → `rewardValue` est un montant ("100"), XP déjà
