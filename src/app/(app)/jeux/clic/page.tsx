@@ -1,14 +1,25 @@
 import Link from 'next/link';
-import { ArrowLeft, Flame, Info, Trophy } from 'lucide-react';
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Flame,
+  Info,
+  Lock,
+  Trophy,
+} from 'lucide-react';
 import { requireAuth } from '@/lib/auth/server';
 import { Section, SectionHeader } from '@/components/shared/section';
+import { Badge } from '@/components/ui/badge';
 import { TapGame } from '@/components/games/tap-game';
+import { TapUpgradeButton } from '@/components/games/tap-upgrade-button';
 import { TelegramBackButton } from '@/components/mini/telegram-controls';
 import {
+  getTapMeta,
   getTapRunHistory,
-  getTapState,
   TAP_DAILY_LIMIT,
   TAP_LEVELS,
+  TAP_UPGRADES,
 } from '@/lib/games/tap';
 import { cn } from '@/lib/utils';
 
@@ -16,8 +27,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function ClicPage() {
   const { user } = await requireAuth();
-  const [state, history] = await Promise.all([
-    getTapState(user.id),
+  const [meta, history] = await Promise.all([
+    getTapMeta(user.id),
     getTapRunHistory(user.id, 10),
   ]);
 
@@ -42,7 +53,7 @@ export default async function ClicPage() {
               <span className="font-serif italic">tape — sans casser.</span>
             </>
           }
-          description="Enchaîne les clics sans laisser passer la barre de combo. Plus tu tiens, plus tu montes de niveau, plus tu gagnes d'XP."
+          description="2 modes : enchaîne en gardant la barre de combo, ou explose le compteur en 10 secondes."
           align="left"
         />
       </Section>
@@ -52,25 +63,123 @@ export default async function ClicPage() {
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 border',
-              state.runsLeftToday > 0
+              meta.runsLeftToday > 0
                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                 : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
             )}
           >
             <Flame className="h-3 w-3" />
-            {state.runsLeftToday} / {TAP_DAILY_LIMIT} runs aujourd&apos;hui
+            {meta.runsLeftToday} / {TAP_DAILY_LIMIT} runs aujourd&apos;hui
           </span>
-          {state.bestTaps > 0 && (
+          {meta.bestTaps > 0 && (
             <span className="inline-flex items-center gap-1.5 text-amber-300">
               <Trophy className="h-3 w-3" />
-              Record : {state.bestTaps} taps (Niv {state.bestLevel})
+              Record : {meta.bestTaps} taps (Niv {meta.bestLevel})
             </span>
           )}
         </div>
       </Section>
 
+      {/* Défi du jour */}
+      <Section className="py-3">
+        <div
+          className={cn(
+            'glass-strong rounded-[var(--radius-lg)] p-4 border-l-2',
+            meta.challengeDoneToday
+              ? 'border-l-emerald-500'
+              : 'border-l-amber-500'
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Calendar className="h-5 w-5 text-amber-300 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-faint)]">
+                  Défi du jour
+                </span>
+                {meta.challengeDoneToday ? (
+                  <Badge variant="success" className="text-[10px]">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Validé
+                  </Badge>
+                ) : (
+                  <Badge variant="gold" className="text-[10px]">
+                    +{meta.challenge.bonusXp} XP
+                  </Badge>
+                )}
+              </div>
+              <div className="font-medium text-sm">{meta.challenge.label}</div>
+              <p className="text-xs text-[var(--color-text-dim)] mt-0.5">
+                {meta.challenge.description}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
       <Section className="py-6">
-        <TapGame canPlay={state.runsLeftToday > 0} />
+        <TapGame
+          canPlay={meta.runsLeftToday > 0}
+          config={{
+            hasComboUpgrade: meta.upgrades.combo,
+            hasDrainUpgrade: meta.upgrades.drain,
+          }}
+        />
+      </Section>
+
+      {/* Améliorations permanentes */}
+      <Section className="py-4">
+        <h3 className="text-sm uppercase tracking-wider text-[var(--color-text-faint)] mb-3">
+          Améliorations permanentes
+        </h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          {(['combo', 'drain', 'xp'] as const).map((id) => {
+            const upgrade = TAP_UPGRADES[id];
+            const owned = meta.upgrades[id];
+            const canAfford = meta.xpTotal >= upgrade.cost;
+            return (
+              <div
+                key={id}
+                className={cn(
+                  'glass rounded-[var(--radius-md)] p-4 flex flex-col gap-2',
+                  owned && 'border border-emerald-500/40'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{upgrade.icon}</span>
+                    <span className="font-medium text-sm">{upgrade.label}</span>
+                  </div>
+                  {owned ? (
+                    <Badge variant="success" className="text-[10px]">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Acquis
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">
+                      {upgrade.cost} XP
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--color-text-dim)] flex-1">
+                  {upgrade.description}
+                </p>
+                {!owned && (
+                  <TapUpgradeButton
+                    upgradeId={id}
+                    disabled={!canAfford}
+                    label={
+                      canAfford
+                        ? `Acheter (${upgrade.cost} XP)`
+                        : `Manque ${upgrade.cost - meta.xpTotal} XP`
+                    }
+                    icon={canAfford ? undefined : <Lock className="h-3.5 w-3.5" />}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Section>
 
       <Section className="py-4">
@@ -79,10 +188,10 @@ export default async function ClicPage() {
           <div className="space-y-2 flex-1">
             <p>
               <strong className="text-[var(--color-text)]">Règles.</strong>{' '}
-              Tape sur le bouton dès que tu peux. La barre de combo descend
-              en continu — quand elle atteint 0, le run est fini. Les
-              paliers se déclenchent à 10, 25, 50, 100 et 200 taps. Plus
-              tu montes haut, plus le combo descend vite. 3 runs par jour.
+              Mode <strong>Combo</strong> : tape sans laisser la barre
+              atteindre 0. Mode <strong>Burst</strong> : 10 secondes pour
+              taper le plus possible. Power-ups (❄️ freeze 3s, ⚡ boost)
+              apparaissent en mode Combo. 3 runs / 24h.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {TAP_LEVELS.map((l) => (

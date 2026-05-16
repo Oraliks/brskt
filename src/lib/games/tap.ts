@@ -1,17 +1,12 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { gameTapRuns } from '@/lib/db/schema';
+import { gameTapRuns, userXpStates } from '@/lib/db/schema';
 import { addXp } from './xp';
+import { getParisDate } from './markets';
 
 /**
  * Paliers du mini-jeu de clic. Atteindre un palier donne un bonus XP au
- * moment où on soumet le run. Le client peut s'en servir pour afficher
- * "Niveau X atteint" pendant le run, mais c'est le serveur qui décide
- * du XP à attribuer.
- *
- * Vitesse exigée par palier : combo time qui se réduit (cf. TapGame).
- * Au-delà du niveau 5, on continue de compter les taps mais sans nouveau
- * palier (max théorique côté UI : run "infini" tant que tu tapes vite).
+ * moment où on soumet le run.
  */
 export const TAP_LEVELS = [
   { level: 1, minTaps: 10, bonusXp: 5, icon: '🟢' },
@@ -21,32 +16,38 @@ export const TAP_LEVELS = [
   { level: 5, minTaps: 200, bonusXp: 120, icon: '🟣' },
 ] as const;
 
-/** Max XP par run (anti-farm). Bonus paliers compris. */
+/** Max XP par run (anti-farm). Bonus paliers compris, avant multiplier. */
 export const TAP_RUN_MAX_XP = 200;
-
-/** Limite de runs / jour / user. Reset à minuit Paris. */
+/** Limite de runs / 24h glissantes / user. */
 export const TAP_DAILY_LIMIT = 3;
 
 /** Taux max de taps/s plausible humainement. Au-delà → reject. */
 const MAX_TAPS_PER_SECOND = 20;
-/** Run trop court ou trop long = suspect, on rejette. */
 const MIN_DURATION_MS = 500;
-const MAX_DURATION_MS = 5 * 60 * 1000; // 5 min
+const MAX_DURATION_MS = 5 * 60 * 1000;
+
+/**
+ * Modes de jeu :
+ *  - `combo` : tape sans casser la barre (mode principal)
+ *  - `burst` : 10 secondes max, on compte juste les taps
+ */
+export type TapMode = 'combo' | 'burst';
 
 export interface TapRunInput {
-  /** Nombre total de taps dans le run. */
   taps: number;
-  /** Durée totale du run en ms (1er tap → dernier tap). */
   durationMs: number;
+  mode: TapMode;
 }
 
 export type TapRunResult =
   | {
       ok: true;
       xpAwarded: number;
+      bonusXp: number;
       levelReached: number;
       newTotal: number;
       runsLeftToday: number;
+      challengeCompleted: boolean;
     }
   | {
       ok: false;
@@ -54,9 +55,126 @@ export type TapRunResult =
       runsLeftToday?: number;
     };
 
+// ============================================================
+// Améliorations permanentes (meta-progression)
+// ============================================================
+
 /**
- * Calcule le niveau atteint pour un nombre de taps donné.
+ * Upgrades achetables avec XP. Cost = XP qui est SOUSTRAIT au total
+ * (achat = consommation). Une fois acheté, l'effet est permanent.
+ *
+ * Effets :
+ *  - `combo` : +20% sur comboMs (utilisé côté client pour étirer la
+ *    fenêtre temps entre 2 taps)
+ *  - `drain` : -20% sur la vitesse de drain de la barre (client)
+ *  - `xp` : ×1.15 sur l'XP gagné en jeu de clic (appliqué serveur)
  */
+export const TAP_UPGRADES = {
+  combo: {
+    id: 'combo' as const,
+    label: 'Combo allongé',
+    description: '+20% sur la fenêtre temps entre 2 taps',
+    cost: 500,
+    icon: '⏱️',
+  },
+  drain: {
+    id: 'drain' as const,
+    label: 'Drain réduit',
+    description: '-20% sur la vitesse de descente de la barre',
+    cost: 500,
+    icon: '🛡️',
+  },
+  xp: {
+    id: 'xp' as const,
+    label: 'XP boosté',
+    description: '×1.15 sur l’XP gagné en jeu de clic',
+    cost: 1000,
+    icon: '✨',
+  },
+};
+
+export type TapUpgradeId = keyof typeof TAP_UPGRADES;
+
+/** Multiplicateur XP appliqué si l'user a l'upgrade `xp`. */
+const XP_UPGRADE_MULTIPLIER = 1.15;
+
+// ============================================================
+// Défi quotidien
+// ============================================================
+
+/**
+ * Pool de défis quotidiens. Un défi est choisi déterministiquement
+ * depuis la date Paris du jour (modulo length). Tous les users voient
+ * le même défi le même jour.
+ *
+ * Le défi est validé serveur après un run quand `verify()` retourne true.
+ * Bonus accordé une seule fois par jour par user.
+ */
+export const TAP_CHALLENGES = [
+  {
+    id: 'reach_level_3',
+    label: 'Atteins le niveau 3',
+    description: 'Fais 50 taps minimum dans un run',
+    bonusXp: 50,
+    verify: (run: { taps: number; level: number; durationMs: number }) =>
+      run.taps >= 50,
+  },
+  {
+    id: 'burst_100',
+    label: 'Burst de 100',
+    description: 'Fais 100 taps minimum dans un run',
+    bonusXp: 75,
+    verify: (run: { taps: number; level: number; durationMs: number }) =>
+      run.taps >= 100,
+  },
+  {
+    id: 'fast_level_2',
+    label: 'Démarrage rapide',
+    description: 'Atteins le niveau 2 en moins de 15s',
+    bonusXp: 50,
+    verify: (run: { taps: number; level: number; durationMs: number }) =>
+      run.taps >= 25 && run.durationMs <= 15000,
+  },
+  {
+    id: 'legend',
+    label: 'Mode légende',
+    description: 'Atteins le niveau 5 (200 taps)',
+    bonusXp: 150,
+    verify: (run: { taps: number; level: number; durationMs: number }) =>
+      run.taps >= 200,
+  },
+  {
+    id: 'marathon',
+    label: 'Marathon',
+    description: 'Fais 150 taps dans un seul run',
+    bonusXp: 100,
+    verify: (run: { taps: number; level: number; durationMs: number }) =>
+      run.taps >= 150,
+  },
+];
+
+/**
+ * Renvoie le défi du jour (déterministe depuis la date Paris).
+ */
+export function getTodayChallenge(now: Date = new Date()) {
+  const date = getParisDate(now);
+  // Hash très simple : somme des codes de la string YYYY-MM-DD
+  let hash = 0;
+  for (let i = 0; i < date.length; i++) {
+    hash = (hash * 31 + date.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(hash) % TAP_CHALLENGES.length;
+  const challenge = TAP_CHALLENGES[idx];
+  if (!challenge) {
+    return { ...TAP_CHALLENGES[0]!, date };
+  }
+  return { ...challenge, date };
+}
+
+// ============================================================
+// Helpers internes
+// ============================================================
+
 export function tapLevelFor(taps: number): number {
   let level = 0;
   for (const tier of TAP_LEVELS) {
@@ -66,28 +184,21 @@ export function tapLevelFor(taps: number): number {
   return level;
 }
 
-/**
- * Calcule l'XP gagné pour un run (taps + paliers atteints, cappé).
- *
- * Barème :
- *  - 1 XP par tranche de 5 taps (linéaire)
- *  - + bonus du palier max atteint
- *  - Cappé à TAP_RUN_MAX_XP
- */
-export function tapXpFor(taps: number): { xp: number; level: number } {
+export function tapBaseXpFor(taps: number, mode: TapMode = 'combo'): {
+  xp: number;
+  level: number;
+  bonus: number;
+} {
   const level = tapLevelFor(taps);
-  const linear = Math.floor(taps / 5);
+  // Mode burst : XP plus généreux par tap (mode court) mais plafonné
+  // plus bas pour éviter de cannibaliser le mode combo.
+  const divisor = mode === 'burst' ? 3 : 5;
+  const linear = Math.floor(taps / divisor);
   const bonus = TAP_LEVELS.find((t) => t.level === level)?.bonusXp ?? 0;
-  const total = Math.min(TAP_RUN_MAX_XP, linear + bonus);
-  return { xp: total, level };
+  const cap = mode === 'burst' ? 100 : TAP_RUN_MAX_XP;
+  return { xp: Math.min(cap, linear + bonus), level, bonus };
 }
 
-/**
- * Compte les runs effectués par un user aujourd'hui (Paris time).
- * Utilise UTC en pratique : minuit Paris = 23h UTC (hiver) ou 22h UTC (été).
- * On approxime avec "24h glissantes" pour rester simple — un user qui
- * joue à 23h59 puis 00h01 aurait 2 runs comptés mais ça reste juste.
- */
 async function runsLast24h(userId: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const rows = await db
@@ -97,21 +208,24 @@ async function runsLast24h(userId: string): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+// ============================================================
+// API publique
+// ============================================================
+
 /**
- * Soumet un run. Validation + persistance + attribution XP.
- *
- * Anti-cheat :
- *  - Durée plausible (500ms à 5 min)
- *  - Ratio taps/seconde ≤ 20 (humanly impossible au-dessus)
- *  - Daily limit 3 runs / 24h
+ * Soumet un run. Applique :
+ *  - Validation anti-cheat
+ *  - Daily limit
+ *  - Multiplicateur XP upgrade
+ *  - Bonus défi quotidien si applicable
  */
 export async function submitTapRun(
   userId: string,
   input: TapRunInput
 ): Promise<TapRunResult> {
-  // Sanitize
   const taps = Math.floor(input.taps);
   const durationMs = Math.floor(input.durationMs);
+  const mode: TapMode = input.mode === 'burst' ? 'burst' : 'combo';
 
   if (
     !Number.isFinite(taps) ||
@@ -123,19 +237,49 @@ export async function submitTapRun(
     return { ok: false, error: 'invalid_run' };
   }
 
-  // Anti-cheat : taps trop nombreux pour la durée
   const maxPlausibleTaps = Math.ceil((durationMs / 1000) * MAX_TAPS_PER_SECOND);
   if (taps > maxPlausibleTaps) {
     return { ok: false, error: 'too_fast' };
   }
 
-  // Daily limit
+  // Mode burst : durée fixée 10s ± 1s, sinon rejet
+  if (mode === 'burst' && (durationMs < 8000 || durationMs > 12000)) {
+    return { ok: false, error: 'invalid_run' };
+  }
+
   const done = await runsLast24h(userId);
   if (done >= TAP_DAILY_LIMIT) {
     return { ok: false, error: 'daily_limit', runsLeftToday: 0 };
   }
 
-  const { xp, level } = tapXpFor(taps);
+  const { xp: baseXp, level } = tapBaseXpFor(taps, mode);
+
+  // Récupère les upgrades + état du défi
+  const [meta] = await db
+    .select({
+      xpUp: userXpStates.tapUpgradeXp,
+      challengeDate: userXpStates.tapChallengeDoneDate,
+    })
+    .from(userXpStates)
+    .where(eq(userXpStates.userId, userId))
+    .limit(1);
+
+  let finalXp = baseXp;
+  if (meta?.xpUp) finalXp = Math.floor(finalXp * XP_UPGRADE_MULTIPLIER);
+
+  // Vérification défi quotidien
+  const today = getParisDate();
+  const challenge = getTodayChallenge();
+  let challengeCompleted = false;
+  let challengeBonus = 0;
+  if (
+    meta?.challengeDate !== today &&
+    challenge.verify({ taps, level, durationMs })
+  ) {
+    challengeCompleted = true;
+    challengeBonus = challenge.bonusXp;
+  }
+  const totalXp = finalXp + challengeBonus;
 
   try {
     await db.insert(gameTapRuns).values({
@@ -143,25 +287,48 @@ export async function submitTapRun(
       taps,
       maxLevel: level,
       durationMs,
-      xpAwarded: xp,
+      xpAwarded: totalXp,
     });
 
     const newTotal =
-      xp > 0
+      totalXp > 0
         ? await addXp({
             userId,
-            amount: xp,
-            reason: 'wheel_spin', // pas d'enum dédié — on log avec un reason existant
-            metadata: { source: 'tap_game', taps, level, durationMs },
+            amount: totalXp,
+            reason: 'wheel_spin', // enum existant — métadonnée détaille
+            metadata: {
+              source: 'tap_game',
+              mode,
+              taps,
+              level,
+              durationMs,
+              baseXp,
+              xpMultiplied: finalXp,
+              challengeBonus,
+              challengeId: challengeCompleted ? challenge.id : null,
+            },
           })
         : 0;
 
+    // Marque le défi comme fait
+    if (challengeCompleted) {
+      await db
+        .insert(userXpStates)
+        .values({ userId, tapChallengeDoneDate: today })
+        .onConflictDoUpdate({
+          target: userXpStates.userId,
+          set: { tapChallengeDoneDate: today, updatedAt: new Date() },
+        });
+    }
+
     return {
       ok: true,
-      xpAwarded: xp,
+      xpAwarded: totalXp,
+      bonusXp: challengeBonus,
       levelReached: level,
       newTotal,
       runsLeftToday: Math.max(0, TAP_DAILY_LIMIT - done - 1),
+      challengeCompleted,
     };
   } catch (err) {
     console.warn('[tap] submit failed', err);
@@ -170,7 +337,136 @@ export async function submitTapRun(
 }
 
 /**
- * Historique des runs récents du user (récent en premier).
+ * Achète un upgrade permanent. Vérifie : pas déjà acheté, XP suffisant.
+ * Déduit le coût du xpTotal, set la colonne boolean.
+ */
+export async function purchaseTapUpgrade(
+  userId: string,
+  upgradeId: TapUpgradeId
+): Promise<
+  | { ok: true; newTotal: number }
+  | { ok: false; error: 'already_owned' | 'not_enough_xp' | 'unknown' }
+> {
+  const upgrade = TAP_UPGRADES[upgradeId];
+  if (!upgrade) return { ok: false, error: 'unknown' };
+
+  const [state] = await db
+    .select({
+      xp: userXpStates.xpTotal,
+      combo: userXpStates.tapUpgradeCombo,
+      drain: userXpStates.tapUpgradeDrain,
+      xpUp: userXpStates.tapUpgradeXp,
+    })
+    .from(userXpStates)
+    .where(eq(userXpStates.userId, userId))
+    .limit(1);
+
+  const xpTotal = state?.xp ?? 0;
+  const owned = state
+    ? {
+        combo: state.combo,
+        drain: state.drain,
+        xp: state.xpUp,
+      }
+    : { combo: false, drain: false, xp: false };
+
+  if (owned[upgradeId]) {
+    return { ok: false, error: 'already_owned' };
+  }
+  if (xpTotal < upgrade.cost) {
+    return { ok: false, error: 'not_enough_xp' };
+  }
+
+  try {
+    // Déduit XP + marque l'upgrade en une seule UPDATE atomique
+    const setMap: Record<string, unknown> = {
+      xpTotal: sql`${userXpStates.xpTotal} - ${upgrade.cost}`,
+      updatedAt: new Date(),
+    };
+    if (upgradeId === 'combo') setMap.tapUpgradeCombo = true;
+    if (upgradeId === 'drain') setMap.tapUpgradeDrain = true;
+    if (upgradeId === 'xp') setMap.tapUpgradeXp = true;
+
+    const [updated] = await db
+      .update(userXpStates)
+      .set(setMap)
+      .where(eq(userXpStates.userId, userId))
+      .returning({ xp: userXpStates.xpTotal });
+
+    return { ok: true, newTotal: updated?.xp ?? xpTotal - upgrade.cost };
+  } catch (err) {
+    console.warn('[tap] purchase failed', err);
+    return { ok: false, error: 'unknown' };
+  }
+}
+
+/**
+ * État pour la page : runs restants, record, upgrades possédés, défi du jour.
+ */
+export async function getTapMeta(userId: string): Promise<{
+  runsLeftToday: number;
+  bestTaps: number;
+  bestLevel: number;
+  xpTotal: number;
+  upgrades: { combo: boolean; drain: boolean; xp: boolean };
+  challenge: ReturnType<typeof getTodayChallenge>;
+  challengeDoneToday: boolean;
+}> {
+  const challenge = getTodayChallenge();
+  const today = getParisDate();
+
+  try {
+    const [done, [best], [state]] = await Promise.all([
+      runsLast24h(userId),
+      db
+        .select({
+          taps: gameTapRuns.taps,
+          maxLevel: gameTapRuns.maxLevel,
+        })
+        .from(gameTapRuns)
+        .where(eq(gameTapRuns.userId, userId))
+        .orderBy(desc(gameTapRuns.taps))
+        .limit(1),
+      db
+        .select({
+          xp: userXpStates.xpTotal,
+          combo: userXpStates.tapUpgradeCombo,
+          drain: userXpStates.tapUpgradeDrain,
+          xpUp: userXpStates.tapUpgradeXp,
+          challengeDate: userXpStates.tapChallengeDoneDate,
+        })
+        .from(userXpStates)
+        .where(eq(userXpStates.userId, userId))
+        .limit(1),
+    ]);
+    return {
+      runsLeftToday: Math.max(0, TAP_DAILY_LIMIT - done),
+      bestTaps: best?.taps ?? 0,
+      bestLevel: best?.maxLevel ?? 0,
+      xpTotal: state?.xp ?? 0,
+      upgrades: {
+        combo: state?.combo ?? false,
+        drain: state?.drain ?? false,
+        xp: state?.xpUp ?? false,
+      },
+      challenge,
+      challengeDoneToday: state?.challengeDate === today,
+    };
+  } catch {
+    return {
+      runsLeftToday: TAP_DAILY_LIMIT,
+      bestTaps: 0,
+      bestLevel: 0,
+      xpTotal: 0,
+      upgrades: { combo: false, drain: false, xp: false },
+      challenge,
+      challengeDoneToday: false,
+    };
+  }
+}
+
+/**
+ * Historique des runs récents du user.
  */
 export async function getTapRunHistory(
   userId: string,
@@ -198,32 +494,11 @@ export async function getTapRunHistory(
 }
 
 /**
- * État pour la page : runs restants aujourd'hui, meilleur run all-time.
+ * État pour le composant client. Retourne uniquement ce qui influence
+ * le gameplay (upgrades), pas l'historique.
  */
-export async function getTapState(userId: string): Promise<{
-  runsLeftToday: number;
-  bestTaps: number;
-  bestLevel: number;
-}> {
-  try {
-    const [done, [best]] = await Promise.all([
-      runsLast24h(userId),
-      db
-        .select({
-          taps: gameTapRuns.taps,
-          maxLevel: gameTapRuns.maxLevel,
-        })
-        .from(gameTapRuns)
-        .where(eq(gameTapRuns.userId, userId))
-        .orderBy(desc(gameTapRuns.taps))
-        .limit(1),
-    ]);
-    return {
-      runsLeftToday: Math.max(0, TAP_DAILY_LIMIT - done),
-      bestTaps: best?.taps ?? 0,
-      bestLevel: best?.maxLevel ?? 0,
-    };
-  } catch {
-    return { runsLeftToday: TAP_DAILY_LIMIT, bestTaps: 0, bestLevel: 0 };
-  }
-}
+export type TapGameConfig = {
+  hasComboUpgrade: boolean;
+  hasDrainUpgrade: boolean;
+  hasXpUpgrade: boolean;
+};

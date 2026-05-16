@@ -7,7 +7,13 @@ import {
   type PredictionDirection,
 } from '@/lib/games/predictions';
 import { spinWheel } from '@/lib/games/wheel';
-import { submitTapRun } from '@/lib/games/tap';
+import {
+  purchaseTapUpgrade,
+  submitTapRun,
+  TAP_UPGRADES,
+  type TapMode,
+  type TapUpgradeId,
+} from '@/lib/games/tap';
 import { MARKET_IDS, type MarketId } from '@/lib/games/markets';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -133,21 +139,20 @@ export async function spinWheelAction(): Promise<
 }
 
 /**
- * Server Action : soumet un run du mini-jeu de clic.
- *
- *  - Client envoie {taps, durationMs} après que le combo soit cassé
- *  - Serveur valide (anti-cheat) + calcule XP + persiste
- *  - Rate-limit accessoire : 6 soumissions / 5 min / user
+ * Server Action : soumet un run du mini-jeu de clic (mode combo ou burst).
  */
 export async function submitTapRunAction(input: {
   taps: number;
   durationMs: number;
+  mode: 'combo' | 'burst';
 }): Promise<
   ActionResult<{
     xpAwarded: number;
+    bonusXp: number;
     levelReached: number;
     newTotal: number;
     runsLeftToday: number;
+    challengeCompleted: boolean;
   }>
 > {
   const { user } = await requireOnboarded();
@@ -161,7 +166,12 @@ export async function submitTapRunAction(input: {
     return { success: false, error: 'Trop de tentatives, attends un peu.' };
   }
 
-  const result = await submitTapRun(user.id, input);
+  const mode: TapMode = input.mode === 'burst' ? 'burst' : 'combo';
+  const result = await submitTapRun(user.id, {
+    taps: input.taps,
+    durationMs: input.durationMs,
+    mode,
+  });
   if (!result.ok) {
     const msg =
       result.error === 'daily_limit'
@@ -181,9 +191,63 @@ export async function submitTapRunAction(input: {
     success: true,
     data: {
       xpAwarded: result.xpAwarded,
+      bonusXp: result.bonusXp,
       levelReached: result.levelReached,
       newTotal: result.newTotal,
       runsLeftToday: result.runsLeftToday,
+      challengeCompleted: result.challengeCompleted,
+    },
+  };
+}
+
+/**
+ * Server Action : achète un upgrade permanent du jeu de clic.
+ */
+export async function purchaseTapUpgradeAction(
+  upgradeId: string
+): Promise<
+  ActionResult<{
+    newTotal: number;
+    upgradeId: TapUpgradeId;
+    label: string;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  if (!(upgradeId in TAP_UPGRADES)) {
+    return { success: false, error: 'Amélioration inconnue.' };
+  }
+  const id = upgradeId as TapUpgradeId;
+
+  const rl = await checkRateLimit({
+    key: `tap_upgrade:user:${user.id}`,
+    limit: 5,
+    windowSec: 60,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Patiente quelques secondes…' };
+  }
+
+  const result = await purchaseTapUpgrade(user.id, id);
+  if (!result.ok) {
+    const msg =
+      result.error === 'already_owned'
+        ? 'Amélioration déjà débloquée.'
+        : result.error === 'not_enough_xp'
+        ? "Pas assez d'XP pour cette amélioration."
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/clic');
+  revalidatePath('/jeux');
+
+  return {
+    success: true,
+    data: {
+      newTotal: result.newTotal,
+      upgradeId: id,
+      label: TAP_UPGRADES[id].label,
     },
   };
 }

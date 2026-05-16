@@ -927,6 +927,17 @@ export const userXpStates = pgTable(
     predictionLastDate: date('prediction_last_date'),
     /** Timestamp du dernier spin de la roue. Cooldown 7 jours côté serveur. */
     lastWheelSpunAt: timestamp('last_wheel_spun_at'),
+
+    // ===== Mini-jeu de clic — améliorations permanentes achetables =====
+    /** Combo +20% : étend la fenêtre temps entre 2 taps de 20%. */
+    tapUpgradeCombo: boolean('tap_upgrade_combo').notNull().default(false),
+    /** Drain -20% : la barre de combo descend 20% moins vite. */
+    tapUpgradeDrain: boolean('tap_upgrade_drain').notNull().default(false),
+    /** XP +15% : multiplicateur final sur l'XP gagné en jeu de clic. */
+    tapUpgradeXp: boolean('tap_upgrade_xp').notNull().default(false),
+    /** Date Paris du dernier défi quotidien validé (anti double-claim). */
+    tapChallengeDoneDate: date('tap_challenge_done_date'),
+
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => ({

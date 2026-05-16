@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { requireAuth } from '@/lib/auth/server';
 import { Section, SectionHeader } from '@/components/shared/section';
-import { getLeaderboard, getUserRank } from '@/lib/games/leaderboard';
+import {
+  getLeaderboard,
+  getTapLeaderboard,
+  getUserRank,
+} from '@/lib/games/leaderboard';
 import { LeaderboardTabs } from '@/components/games/leaderboard-tabs';
 import { TelegramBackButton } from '@/components/mini/telegram-controls';
 
@@ -11,15 +15,27 @@ export const dynamic = 'force-dynamic';
 export default async function ClassementPage() {
   const { user } = await requireAuth();
 
-  const [weekTop, monthTop, allTop, weekRank, monthRank, allRank] =
-    await Promise.all([
-      getLeaderboard('week', 20),
-      getLeaderboard('month', 20),
-      getLeaderboard('all_time', 20),
-      getUserRank(user.id, 'week'),
-      getUserRank(user.id, 'month'),
-      getUserRank(user.id, 'all_time'),
-    ]);
+  const [
+    weekTop,
+    monthTop,
+    allTop,
+    weekRank,
+    monthRank,
+    allRank,
+    tapWeekTop,
+    tapMonthTop,
+    tapAllTop,
+  ] = await Promise.all([
+    getLeaderboard('week', 20),
+    getLeaderboard('month', 20),
+    getLeaderboard('all_time', 20),
+    getUserRank(user.id, 'week'),
+    getUserRank(user.id, 'month'),
+    getUserRank(user.id, 'all_time'),
+    getTapLeaderboard('week', 20),
+    getTapLeaderboard('month', 20),
+    getTapLeaderboard('all_time', 20),
+  ]);
 
   return (
     <>
@@ -54,6 +70,9 @@ export default async function ClassementPage() {
           weekRank={weekRank}
           monthRank={monthRank}
           allRank={allRank}
+          tapWeekTop={tapWeekTop}
+          tapMonthTop={tapMonthTop}
+          tapAllTop={tapAllTop}
           userId={user.id}
         />
       </Section>

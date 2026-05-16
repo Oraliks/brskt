@@ -697,3 +697,52 @@
     pointer-events: none;
   }
 }
+
+
+/* ============================================================
+   Mini-jeu de clic — animations du TapGame
+   ============================================================ */
+
+@keyframes tap-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10%      { transform: translate(-3px, 1px); }
+  20%      { transform: translate(3px, -1px); }
+  30%      { transform: translate(-2px, 2px); }
+  40%      { transform: translate(2px, -2px); }
+  50%      { transform: translate(-1px, 1px); }
+  60%      { transform: translate(1px, -1px); }
+  70%      { transform: translate(-1px, 0); }
+  80%      { transform: translate(1px, 0); }
+}
+.animate-tap-shake { animation: tap-shake 0.45s ease-out; }
+
+@keyframes tap-float {
+  0%   { opacity: 0;   transform: translate(-50%, -50%) scale(0.6); }
+  20%  { opacity: 1;   transform: translate(-50%, -70%) scale(1.1); }
+  100% { opacity: 0;   transform: translate(-50%, -180%) scale(0.9); }
+}
+.animate-tap-float {
+  animation: tap-float 0.8s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes tap-levelup {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+  85%  { opacity: 1; transform: translate(-50%, -90%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -150%) scale(0.95); }
+}
+.animate-tap-levelup {
+  animation: tap-levelup 1.4s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes tap-powerup {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.animate-tap-powerup {
+  animation: tap-powerup 0.4s cubic-bezier(0.3, 0.8, 0.3, 1.4) forwards;
+}
+

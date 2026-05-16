@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { userXpStates, users, xpEvents } from '@/lib/db/schema';
+import { gameTapRuns, userXpStates, users, xpEvents } from '@/lib/db/schema';
 import { LEVELS, type Level } from './xp';
 
 export type LeaderboardWindow = 'week' | 'month' | 'all_time';
@@ -191,4 +191,70 @@ function pickLevel(xp: number): Level {
     else break;
   }
   return level;
+}
+
+/**
+ * Leaderboard du mini-jeu de clic : meilleur run par user sur une fenêtre.
+ *
+ *  - `bestTaps` = max(taps) sur la fenêtre
+ *  - `bestLevel` = max(max_level) du même run (approx via ORDER BY taps)
+ *
+ * On groupe par user, on garde le run avec le plus de taps. Pour
+ * simplifier, le level affiché correspond au record (calculé client-side
+ * via paliers).
+ */
+export interface TapLeaderboardRow {
+  rank: number;
+  userId: string;
+  name: string;
+  username: string | null;
+  photoUrl: string | null;
+  bestTaps: number;
+  bestLevel: number;
+}
+
+export async function getTapLeaderboard(
+  window: LeaderboardWindow,
+  limit = 20
+): Promise<TapLeaderboardRow[]> {
+  try {
+    const days = window === 'week' ? 7 : window === 'month' ? 30 : 3650;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const rows = await db
+      .select({
+        userId: gameTapRuns.userId,
+        name: users.name,
+        firstName: users.telegramFirstName,
+        username: users.telegramUsername,
+        photoUrl: users.telegramPhotoUrl,
+        bestTaps: sql<number>`max(${gameTapRuns.taps})::int`,
+        bestLevel: sql<number>`max(${gameTapRuns.maxLevel})::int`,
+      })
+      .from(gameTapRuns)
+      .innerJoin(users, eq(users.id, gameTapRuns.userId))
+      .where(gte(gameTapRuns.createdAt, since))
+      .groupBy(
+        gameTapRuns.userId,
+        users.name,
+        users.telegramFirstName,
+        users.telegramUsername,
+        users.telegramPhotoUrl
+      )
+      .orderBy(desc(sql`max(${gameTapRuns.taps})`))
+      .limit(limit);
+
+    return rows.map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      name: r.firstName ?? r.name,
+      username: r.username,
+      photoUrl: r.photoUrl,
+      bestTaps: r.bestTaps,
+      bestLevel: r.bestLevel,
+    }));
+  } catch (err) {
+    console.warn('[leaderboard] tap fallback', err);
+    return [];
+  }
 }
