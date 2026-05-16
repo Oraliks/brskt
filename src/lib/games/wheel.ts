@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   gameWheelSpins,
@@ -107,32 +107,38 @@ export type SpinResult =
  *    inséré dans promo_codes. Le code est de la forme `ROUE-<XXXXX>`.
  */
 export async function spinWheel(userId: string): Promise<SpinResult> {
-  // Recheck eligibility + bump atomique via upsert. Si la row existait
-  // déjà et que `last_wheel_spun_at` est encore en cooldown, le UPDATE
-  // n'updatera rien (where clause) → on détecte l'échec via returning.
-  const cooldownAgo = new Date(Date.now() - WHEEL_COOLDOWN_MS);
+  // Bump atomique en 2 temps :
+  //  1. SELECT la row existante pour vérifier le cooldown applicatif
+  //  2. UPSERT pour mettre à jour lastWheelSpunAt
+  //
+  // On évite `setWhere` avec une Date interpolée parce que Drizzle/
+  // postgres-js plante côté driver ("string argument expected, got Date")
+  // sur les paramètres de templates SQL bruts. Le rate-limit côté action
+  // gère la concurrence (3 spins / min / user max).
   const now = new Date();
+  const cooldownThresholdMs = now.getTime() - WHEEL_COOLDOWN_MS;
 
-  // 1) On tente d'insérer (premier spin du user) ; ON CONFLICT update
-  //    seulement si le cooldown est passé.
-  const [bumped] = await db
+  const [existing] = await db
+    .select({ last: userXpStates.lastWheelSpunAt })
+    .from(userXpStates)
+    .where(eq(userXpStates.userId, userId))
+    .limit(1);
+
+  if (existing?.last && existing.last.getTime() > cooldownThresholdMs) {
+    return {
+      ok: false,
+      error: 'cooldown',
+      nextSpinAt: new Date(existing.last.getTime() + WHEEL_COOLDOWN_MS),
+    };
+  }
+
+  await db
     .insert(userXpStates)
     .values({ userId, lastWheelSpunAt: now, updatedAt: now })
     .onConflictDoUpdate({
       target: userXpStates.userId,
       set: { lastWheelSpunAt: now, updatedAt: now },
-      setWhere: sql`${userXpStates.lastWheelSpunAt} IS NULL OR ${userXpStates.lastWheelSpunAt} <= ${cooldownAgo}`,
-    })
-    .returning({ last: userXpStates.lastWheelSpunAt });
-
-  if (!bumped) {
-    const status = await getWheelStatus(userId);
-    return {
-      ok: false,
-      error: 'cooldown',
-      nextSpinAt: status.nextSpinAt ?? new Date(Date.now() + WHEEL_COOLDOWN_MS),
-    };
-  }
+    });
 
   const { segment, index } = pickSegment();
 
