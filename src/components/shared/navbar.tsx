@@ -36,6 +36,7 @@ const AUTH_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/formation', label: 'Formation' },
   { href: '/vip', label: 'VIP Telegram' },
+  { href: '/temoignages', label: 'Témoignages' },
 ];
 
 /**

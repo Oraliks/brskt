@@ -13,9 +13,24 @@ interface Props {
   ctaSectionIndex?: number;
 }
 
-const LINKS = [
+/**
+ * Liens de la nav landing. Deux types :
+ *  - `sectionIndex` : scrolle vers la section N de la landing (snap)
+ *  - `href` : navigation classique vers une autre page
+ *
+ * On utilise `'href' in l` côté JSX pour narrow proprement — un simple
+ * ternaire `l.href ?` ne suffit pas (TS ne peut pas écarter le variant
+ * sectionIndex sans tag explicite).
+ */
+type LandingLink = { label: string } & (
+  | { sectionIndex: number }
+  | { href: string }
+);
+
+const LINKS: LandingLink[] = [
   { label: 'VIP', sectionIndex: 1 },
   { label: 'Formation', sectionIndex: 2 },
+  { label: 'Témoignages', href: '/temoignages' },
 ];
 
 export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props) {
@@ -36,15 +51,25 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
         </button>
 
         <div className="hidden md:flex items-center gap-1">
-          {LINKS.map((l) => (
-            <button
-              key={l.label}
-              onClick={() => goTo(l.sectionIndex)}
-              className="px-3 py-1 text-[13px] text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] transition-all rounded-full outline-none"
-            >
-              {l.label}
-            </button>
-          ))}
+          {LINKS.map((l) =>
+            'href' in l ? (
+              <Link
+                key={l.label}
+                href={l.href}
+                className="px-3 py-1 text-[13px] text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] transition-all rounded-full outline-none"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <button
+                key={l.label}
+                onClick={() => goTo(l.sectionIndex)}
+                className="px-3 py-1 text-[13px] text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)] transition-all rounded-full outline-none"
+              >
+                {l.label}
+              </button>
+            )
+          )}
         </div>
 
         <ThemeToggle variant="nav" className="hidden md:inline-flex" />
@@ -86,18 +111,29 @@ export function LandingNav({ authenticated = false, ctaSectionIndex = 3 }: Props
         )}
       >
         <div className="rounded-2xl bg-[rgba(20,20,30,0.85)] light:bg-[rgba(255,255,255,0.95)] backdrop-blur-xl border border-[var(--color-border)] p-3 flex flex-col gap-1 shadow-xl light:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.12)]">
-          {LINKS.map((l) => (
-            <button
-              key={l.label}
-              onClick={() => {
-                goTo(l.sectionIndex);
-                setOpen(false);
-              }}
-              className="px-3 py-2 text-left text-sm rounded-md hover:bg-[var(--color-surface-tint)]"
-            >
-              {l.label}
-            </button>
-          ))}
+          {LINKS.map((l) =>
+            'href' in l ? (
+              <Link
+                key={l.label}
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className="px-3 py-2 text-left text-sm rounded-md hover:bg-[var(--color-surface-tint)]"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <button
+                key={l.label}
+                onClick={() => {
+                  goTo(l.sectionIndex);
+                  setOpen(false);
+                }}
+                className="px-3 py-2 text-left text-sm rounded-md hover:bg-[var(--color-surface-tint)]"
+              >
+                {l.label}
+              </button>
+            )
+          )}
           {authenticated ? (
             <Link
               href="/dashboard"

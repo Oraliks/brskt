@@ -1,8 +1,6 @@
 import Link from 'next/link';
-import { ArrowRight, Check, MapPin, Wifi } from 'lucide-react';
+import { ArrowRight, Bell, Check, MapPin, Wifi } from 'lucide-react';
 import { db } from '@/lib/db';
-import { formations } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Section, SectionHeader } from '@/components/shared/section';
@@ -60,12 +58,11 @@ const curriculum = [
 ];
 
 export default async function FormationPage() {
-  const list = await db.query.formations
-    .findMany({ where: eq(formations.active, true) })
-    .catch(() => []);
+  const list = await db.query.formations.findMany().catch(() => []);
 
   const remote = list.find((f) => f.mode === 'remote');
   const onsite = list.find((f) => f.mode === 'onsite');
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? '';
 
   return (
     <>
@@ -91,6 +88,8 @@ export default async function FormationPage() {
             description={remote?.description ?? '7 jours en visio privée 1:1.'}
             price={remote?.priceEur ? Number(remote.priceEur) : 1500}
             mode="remote"
+            active={remote?.active ?? true}
+            botUsername={botUsername}
             includes={[
               'Visio privée 1:1 sur 7 jours',
               '5 modules garantis acquis',
@@ -109,6 +108,8 @@ export default async function FormationPage() {
             }
             price={onsite?.priceEur ? Number(onsite.priceEur) : 3500}
             mode="onsite"
+            active={onsite?.active ?? true}
+            botUsername={botUsername}
             includes={[
               "7 jours intensifs face-à-face",
               '5 modules garantis acquis',
@@ -186,6 +187,8 @@ interface FormationCardProps {
   includes: string[];
   note?: string;
   highlight?: boolean;
+  active?: boolean;
+  botUsername?: string;
 }
 
 function FormationCard({
@@ -198,10 +201,12 @@ function FormationCard({
   includes,
   note,
   highlight,
+  active = true,
+  botUsername,
 }: FormationCardProps) {
   return (
-    <div className="relative">
-      {highlight && (
+    <div className={`relative ${!active ? 'opacity-90' : ''}`}>
+      {highlight && active && (
         <div className="absolute -inset-px rounded-[var(--radius-lg)] bg-gradient-to-br from-amber-500/30 via-pink-500/20 to-transparent blur-xl" />
       )}
       <div className="relative glass-strong rounded-[var(--radius-lg)] p-8 h-full flex flex-col">
@@ -237,21 +242,63 @@ function FormationCard({
           ))}
         </ul>
 
-        {note && (
+        {note && active && (
           <div className="mt-6 inline-flex items-center gap-2 text-xs text-amber-300/80 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
             <span>⚠</span> {note}
           </div>
         )}
 
         <div className="mt-8">
-          <Button asChild size="lg" className="w-full">
-            <Link href={`/formation/reserver?mode=${mode}`}>
-              Réserver
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          {active ? (
+            <Button asChild size="lg" className="w-full">
+              <Link href={`/formation/reserver?mode=${mode}`}>
+                Réserver
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <FullBlock mode={mode} botUsername={botUsername} />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function FullBlock({
+  mode,
+  botUsername,
+}: {
+  mode: 'remote' | 'onsite';
+  botUsername?: string;
+}) {
+  const hasBot = botUsername && botUsername.length > 0;
+  return (
+    <div className="space-y-3">
+      <div className="rounded-[var(--radius-md)] border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200/90 leading-relaxed">
+        <strong className="block text-amber-200 mb-0.5">
+          Sessions complètes
+        </strong>
+        Toutes les places sont prises — succès oblige. De nouvelles dates
+        s&apos;ouvrent bientôt.
+      </div>
+      {hasBot ? (
+        <Button asChild size="lg" variant="secondary" className="w-full">
+          <Link
+            href={`https://t.me/${botUsername}?start=waitlist_${mode}`}
+            target="_blank"
+            rel="noopener"
+          >
+            <Bell className="h-4 w-4" />
+            Être notifié·e via Telegram
+          </Link>
+        </Button>
+      ) : (
+        <Button size="lg" variant="secondary" className="w-full" disabled>
+          <Bell className="h-4 w-4" />
+          Liste d&apos;attente bientôt
+        </Button>
+      )}
     </div>
   );
 }

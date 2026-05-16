@@ -14,12 +14,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Command,
   GraduationCap,
   LayoutDashboard,
   Megaphone,
   Tag,
   Menu,
   MessageSquare,
+  Search,
   Settings,
   Shield,
   ShieldCheck,
@@ -294,6 +296,36 @@ export function AdminSidebar({
             className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--color-surface-tint)]"
           >
             <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Bouton palette de commandes — toujours visible, ouvre ⌘K.
+            Volontairement avant la nav pour qu'il soit le premier réflexe
+            visuel : la palette est le moyen le plus rapide de naviguer. */}
+        <div className={cn(collapsed ? 'md:px-2 px-3 pt-3' : 'px-3 pt-3')}>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent('admin:open-palette'))
+            }
+            title={collapsed ? 'Recherche rapide (⌘K)' : undefined}
+            aria-label="Ouvrir la palette de commandes"
+            className={cn(
+              'w-full flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-tint)] hover:bg-[var(--color-surface-tint-strong)] text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors',
+              collapsed ? 'md:justify-center md:px-2 md:py-2 px-3 py-2' : 'px-3 py-2'
+            )}
+          >
+            <Search className="h-4 w-4 flex-shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left text-sm">
+                  Recherche rapide
+                </span>
+                <kbd className="hidden md:inline-flex h-5 items-center gap-0.5 px-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[10px] font-mono text-[var(--color-text-faint)]">
+                  <Command className="h-2.5 w-2.5" />K
+                </kbd>
+              </>
+            )}
           </button>
         </div>
 

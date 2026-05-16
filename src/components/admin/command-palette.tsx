@@ -51,7 +51,10 @@ export function CommandPalette() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Toggle global via raccourci clavier
+  // Toggle global via raccourci clavier OU événement custom (déclenché
+  // par le bouton « Recherche rapide » de la sidebar). Le couplage est
+  // fait par event global pour que la sidebar n'ait pas à connaître
+  // l'état React de la palette.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -64,8 +67,17 @@ export function CommandPalette() {
         setOpen(false);
       }
     }
+    function onOpen() {
+      setOpen(true);
+      setQuery('');
+      setSelectedIdx(0);
+    }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('admin:open-palette', onOpen);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('admin:open-palette', onOpen);
+    };
   }, []);
 
   // Auto-focus input à l'ouverture
