@@ -29,7 +29,12 @@ export default async function AdminCalendarPage() {
           columns: { name: true, email: true, telegramUsername: true },
         },
         formation: {
-          columns: { title: true, mode: true, priceEur: true },
+          columns: {
+            title: true,
+            mode: true,
+            priceEur: true,
+            durationDays: true,
+          },
         },
       },
       limit: 500,
@@ -58,6 +63,7 @@ export default async function AdminCalendarPage() {
     formationTitle: b.formation.title,
     formationMode: b.formation.mode,
     formationPriceEur: Number(b.formation.priceEur),
+    formationDurationDays: b.formation.durationDays,
     status: b.status,
     preferredDates: b.preferredDates,
     preferredAsap: b.preferredAsap,

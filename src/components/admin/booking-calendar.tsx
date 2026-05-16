@@ -21,6 +21,7 @@ import {
   Check,
   Clock,
   Loader2,
+  Search,
   X,
 } from 'lucide-react';
 import {
@@ -32,10 +33,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
-import { adminBookingAction } from '@/lib/actions/admin';
+import {
+  adminBookingAction,
+  adminUpdateOfflineCoachingAction,
+} from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
 import { IcalSubscribeButton } from './ical-subscribe-button';
 import { DayDetailDialog } from './day-detail-dialog';
@@ -64,6 +69,8 @@ export interface CalendarBooking {
   formationTitle: string;
   formationMode: 'remote' | 'onsite';
   formationPriceEur: number;
+  /** Durée de la formation en jours — sert à étaler l'event sur N jours. */
+  formationDurationDays: number;
   status:
     | 'pending_admin'
     | 'date_proposed'
@@ -108,6 +115,10 @@ interface CalendarEvent {
   tooltip?: string;
   /** Class CSS ajoutée à l'event quand sa date est saturée (capacité atteinte). */
   isOverbooked?: boolean;
+  /** Si true, event "dim" (opacity réduite) — actif quand la recherche
+   *  user filtre et que ce row ne matche pas. Permet de garder le contexte
+   *  visuel "y a quand même du monde ce jour" sans cacher complètement. */
+  isDimmed?: boolean;
 }
 
 export interface CalendarOfflineCoaching {
@@ -199,6 +210,12 @@ export function BookingCalendar({
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
   const [actionRequiredOnly, setActionRequiredOnly] = useState(false);
+  /**
+   * Recherche par nom user / nom offline / email. Quand non vide, les
+   * events qui ne matchent pas sont dim (opacity 30%) plutôt que cachés,
+   * pour garder le contexte visuel "y a quand même du monde ce jour".
+   */
+  const [userSearch, setUserSearch] = useState('');
 
   /**
    * Map { `${formationId}|${date}` → count } : combien de bookings non-annulés
@@ -237,8 +254,6 @@ export function BookingCalendar({
       if (actionRequiredOnly && !isActionRequired(b)) return [];
       return buildEventsForBooking(b, ctx);
     });
-    // Le filtre "Action requise" est spécifique aux bookings online — on
-    // masque l'offline quand il est actif (l'offline n'a pas de pending_admin).
     const offlineEvents =
       sourceFilter === 'online' || actionRequiredOnly
         ? []
@@ -248,7 +263,16 @@ export function BookingCalendar({
           });
     const filtered =
       sourceFilter === 'offline' ? offlineEvents : [...onlineEvents, ...offlineEvents];
-    return filtered;
+
+    // Application du filtre recherche user : on dim les events qui ne
+    // matchent pas plutôt que les retirer — l'admin garde le contexte
+    // visuel "y a quand même du monde ce jour-là".
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered.map((e) => {
+      const matched = matchesUserSearch(e, q, bookings, offlineCoachings);
+      return matched ? e : { ...e, isDimmed: true };
+    });
   }, [
     bookings,
     offlineCoachings,
@@ -257,6 +281,7 @@ export function BookingCalendar({
     actionRequiredOnly,
     dailyLoadMap,
     capacityByFormation,
+    userSearch,
   ]);
 
   function onEventClick(arg: EventClickArg) {
@@ -274,14 +299,40 @@ export function BookingCalendar({
   function onEventDrop(arg: EventDropArg) {
     const isOffline = arg.event.extendedProps.kind === 'offline';
     if (isOffline) {
-      // Offline coachings : drag = reschedule. On affichera plus tard un
-      // dialog dédié — pour l'instant on revert (changement via /admin/coachings).
-      toast({
-        title: 'Reprogrammation offline',
-        description:
-          "Modifie la date depuis /admin/coachings (Édition). Drag pas encore actif pour l'offline.",
+      // Offline coachings : drag = reschedule direct via update.
+      // Plus rapide qu'un dialog — l'admin déplace, c'est appliqué.
+      // Si erreur, on revert.
+      const id = arg.event.extendedProps.bookingId as string;
+      const coaching = offlineCoachings.find((o) => o.id === id);
+      if (!coaching || !arg.event.start) {
+        arg.revert();
+        return;
+      }
+      const newDate = arg.event.start.toISOString().slice(0, 10);
+      if (newDate === coaching.scheduledDate) {
+        // Pas de changement (drag annulé sur même case) — silent.
+        return;
+      }
+      start(async () => {
+        const result = await adminUpdateOfflineCoachingAction({
+          coachingId: id,
+          scheduledDate: newDate,
+        });
+        if (result.success) {
+          toast({
+            title: `✓ ${coaching.fullName} reprogrammé`,
+            description: formatDate(newDate),
+          });
+          router.refresh();
+        } else {
+          toast({
+            title: 'Erreur reprogrammation',
+            description: result.error,
+            variant: 'destructive',
+          });
+          arg.revert();
+        }
       });
-      arg.revert();
       return;
     }
     const id = arg.event.extendedProps.bookingId as string;
@@ -436,6 +487,10 @@ export function BookingCalendar({
       arg.el.style.boxShadow = 'inset 0 0 0 2px rgb(239, 68, 68)';
       arg.el.style.position = 'relative';
     }
+    const dimmed = arg.event.extendedProps.isDimmed as boolean | undefined;
+    if (dimmed) {
+      arg.el.style.opacity = '0.25';
+    }
   }
 
   return (
@@ -458,6 +513,28 @@ export function BookingCalendar({
           <div className="flex-1" />
           <Legend />
           <IcalSubscribeButton token={icalToken} />
+        </div>
+
+        {/* Barre recherche user : quand on tape, les events non-matchings
+            sont dim (opacity 0.25) plutôt que retirés. */}
+        <div className="relative mb-3 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-text-faint)] pointer-events-none" />
+          <Input
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            placeholder="Rechercher un user, email, formation…"
+            className="pl-9 pr-9 h-9 text-sm"
+          />
+          {userSearch && (
+            <button
+              type="button"
+              onClick={() => setUserSearch('')}
+              aria-label="Effacer la recherche"
+              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded text-[var(--color-text-faint)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-tint)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <FullCalendar
           ref={calendarRef as React.MutableRefObject<FullCalendar | null>}
@@ -907,6 +984,9 @@ function buildEventsForBooking(
         bookingId: b.id,
         title: `${baseTitle}${cap.label}`,
         start: b.confirmedDate,
+        // end exclusive : start + durationDays = bloc étalé sur N jours.
+        // Ex: 7 jours du 16/05 → end 23/05 (exclusive), affiché sur 16→22.
+        end: addDaysIso(b.confirmedDate, Math.max(1, b.formationDurationDays)),
         backgroundColor: colorFor(b.status).bg,
         borderColor: colorFor(b.status).border,
         textColor: colorFor(b.status).text,
@@ -925,6 +1005,10 @@ function buildEventsForBooking(
         bookingId: b.id,
         title: `${baseTitle} (proposé)${cap.label}`,
         start: b.adminProposedDate,
+        end: addDaysIso(
+          b.adminProposedDate,
+          Math.max(1, b.formationDurationDays)
+        ),
         backgroundColor: colorFor('date_proposed').bg,
         borderColor: colorFor('date_proposed').border,
         textColor: colorFor('date_proposed').text,
@@ -957,6 +1041,47 @@ function buildEventsForBooking(
  *  - pending_admin : créneaux user à valider
  *  - pending_payment trop ancien (>3j) : user qui n'a pas payé
  */
+/**
+ * Ajoute N jours à une date ISO YYYY-MM-DD et renvoie le résultat au même
+ * format. Utilisé pour calculer le `end` des multi-day events (FullCalendar
+ * attend une date exclusive de fin, donc start + durationDays).
+ */
+function addDaysIso(dateIso: string, days: number): string {
+  const d = new Date(dateIso);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Match un event contre une query de recherche (lowercase). On retrouve
+ * le booking ou coaching offline correspondant à l'event puis on check
+ * nom / email / username.
+ */
+function matchesUserSearch(
+  event: CalendarEvent,
+  query: string,
+  bookings: CalendarBooking[],
+  offlineCoachings: CalendarOfflineCoaching[]
+): boolean {
+  if (event.kind === 'offline') {
+    const c = offlineCoachings.find((o) => o.id === event.bookingId);
+    if (!c) return false;
+    return (
+      c.fullName.toLowerCase().includes(query) ||
+      (c.email?.toLowerCase().includes(query) ?? false) ||
+      (c.phone?.toLowerCase().includes(query) ?? false)
+    );
+  }
+  const b = bookings.find((row) => row.id === event.bookingId);
+  if (!b) return false;
+  return (
+    b.userName.toLowerCase().includes(query) ||
+    (b.userEmail?.toLowerCase().includes(query) ?? false) ||
+    (b.userTelegramUsername?.toLowerCase().includes(query) ?? false) ||
+    b.formationTitle.toLowerCase().includes(query)
+  );
+}
+
 function isActionRequired(b: CalendarBooking): boolean {
   if (b.status === 'pending_admin') return true;
   if (b.status === 'pending_payment') {

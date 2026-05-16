@@ -272,6 +272,13 @@
   100% { transform: translateX(-50%); }
 }
 
+/* Loading bar indéterminée : la barre glisse de gauche à droite en boucle. */
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(150%); }
+}
+
 /* ----- Mesh background blobs ----- */
 .mesh-blob {
   position: absolute;
