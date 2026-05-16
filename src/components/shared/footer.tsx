@@ -2,15 +2,23 @@ import Link from 'next/link';
 import { Logo } from './logo';
 
 const SUPPORT_TELEGRAM = 'https://t.me/boursi_support';
+const CREATOR_TELEGRAM = 'https://t.me/Oralikss';
+const CREATOR_HANDLE = '@Oraliks';
 
 /**
  * Footer minimaliste — une seule ligne, identique sur toutes les pages.
- * Logo + lien CGV + lien support + copyright.
+ * Logo + © + lien CGV + Support + bot Telegram + crédit créateur.
  *
  * Volontairement compact : la majorité des liens "produits" sont déjà dans
  * la navbar, dupliquer en bas crée du bruit.
  */
 export function Footer() {
+  // Username du bot lu côté serveur (Footer = RSC). On strip '@' si présent
+  // pour éviter t.me/@bot qui casse les liens Telegram.
+  const botRaw = process.env.TELEGRAM_BOT_USERNAME ?? '';
+  const botHandle = botRaw.replace(/^@/, '');
+  const hasBot = botHandle.length > 0;
+
   return (
     <footer className="mt-12 border-t border-[var(--color-border)]">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -37,6 +45,27 @@ export function Footer() {
             <TelegramIcon className="h-3 w-3" />
             Support
           </Link>
+          {hasBot && (
+            <Link
+              href={`https://t.me/${botHandle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#229ED9] hover:text-[#3aa9e0] transition-colors inline-flex items-center gap-1.5"
+            >
+              <TelegramIcon className="h-3 w-3" />@{botHandle}
+            </Link>
+          )}
+          <span className="text-[var(--color-text-faint)] inline-flex items-center gap-1.5">
+            Site web créé par{' '}
+            <Link
+              href={CREATOR_TELEGRAM}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-accent-hover)] hover:text-[var(--color-accent)] transition-colors"
+            >
+              {CREATOR_HANDLE}
+            </Link>
+          </span>
         </div>
       </div>
     </footer>
