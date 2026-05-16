@@ -44,7 +44,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
-import { adminBookingAction } from '@/lib/actions/admin';
+import {
+  adminBookingAction,
+  adminBulkBookingsAction,
+} from '@/lib/actions/admin';
 import { formatDate, formatPrice } from '@/lib/utils';
 import type { Booking, Formation, User } from '@/lib/db/schema';
 import type { AdminBookingActionInput } from '@/lib/validations';
@@ -77,12 +80,52 @@ type DialogState =
 
 export function BookingsTable({ bookings }: Props) {
   const [dialog, setDialog] = useState<DialogState>(null);
+  /** Set des bookings sélectionnés pour les actions en masse. */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /** Dialog des actions bulk (force_cancel / mark_completed). */
+  const [bulkDialog, setBulkDialog] = useState<
+    null | 'cancel' | 'complete'
+  >(null);
+
+  const allSelected =
+    bookings.length > 0 && selectedIds.size === bookings.length;
+  const partialSelected =
+    selectedIds.size > 0 && selectedIds.size < bookings.length;
+
+  function toggleAll() {
+    if (selectedIds.size > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(bookings.map((b) => b.id)));
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="glass rounded-[var(--radius-lg)] overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = partialSelected;
+                }}
+                onChange={toggleAll}
+                aria-label="Tout sélectionner"
+                className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface-tint)] accent-[var(--color-accent)] cursor-pointer"
+              />
+            </TableHead>
             <TableHead>User</TableHead>
             <TableHead>Formation</TableHead>
             <TableHead>Créneaux proposés</TableHead>
@@ -94,13 +137,22 @@ export function BookingsTable({ bookings }: Props) {
         <TableBody>
           {bookings.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-sm text-[var(--color-text-dim)] py-10">
+              <TableCell colSpan={7} className="text-center text-sm text-[var(--color-text-dim)] py-10">
                 Aucune réservation.
               </TableCell>
             </TableRow>
           )}
           {bookings.map((b) => (
             <TableRow key={b.id} id={b.id}>
+              <TableCell>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(b.id)}
+                  onChange={() => toggleOne(b.id)}
+                  aria-label={`Sélectionner ${b.user.name}`}
+                  className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface-tint)] accent-[var(--color-accent)] cursor-pointer"
+                />
+              </TableCell>
               <TableCell>
                 <div className="text-sm font-medium">{b.user.name}</div>
                 <div className="text-xs text-[var(--color-text-dim)]">
@@ -265,7 +317,173 @@ export function BookingsTable({ bookings }: Props) {
           onClose={() => setDialog(null)}
         />
       )}
+
+      {/* Barre flottante actions en masse — apparait quand selection > 0.
+          Sticky en bas du viewport pour rester accessible pendant le scroll. */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass rounded-full border border-[var(--color-border-strong)] shadow-2xl px-4 py-2 flex items-center gap-3 backdrop-blur-md">
+          <span className="text-sm font-medium tabular-nums">
+            {selectedIds.size} sélectionnée
+            {selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <span className="h-4 w-px bg-[var(--color-border)]" />
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setBulkDialog('complete')}
+            className="h-8 gap-1.5"
+          >
+            <Check className="h-3.5 w-3.5" />
+            Marquer terminées
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setBulkDialog('cancel')}
+            className="h-8 gap-1.5"
+          >
+            <Ban className="h-3.5 w-3.5" />
+            Annuler
+          </Button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] ml-1"
+            aria-label="Tout désélectionner"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {bulkDialog && (
+        <BulkActionDialog
+          type={bulkDialog}
+          bookingIds={[...selectedIds]}
+          onClose={() => setBulkDialog(null)}
+          onSuccess={() => {
+            setBulkDialog(null);
+            setSelectedIds(new Set());
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function BulkActionDialog({
+  type,
+  bookingIds,
+  onClose,
+  onSuccess,
+}: {
+  type: 'cancel' | 'complete';
+  bookingIds: string[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [notes, setNotes] = useState('');
+
+  const isComplete = type === 'complete';
+  const title = isComplete
+    ? `Marquer ${bookingIds.length} réservation${
+        bookingIds.length > 1 ? 's' : ''
+      } comme terminée${bookingIds.length > 1 ? 's' : ''}`
+    : `Annuler ${bookingIds.length} réservation${
+        bookingIds.length > 1 ? 's' : ''
+      } en masse`;
+
+  function submit() {
+    if (!isComplete && notes.trim().length < 3) {
+      toast({
+        title: 'Raison requise',
+        description: '3 caractères minimum.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    start(async () => {
+      const result = await adminBulkBookingsAction({
+        action: isComplete ? 'mark_completed' : 'force_cancel',
+        bookingIds,
+        notes: isComplete ? undefined : notes,
+      });
+      if (result.success) {
+        const { succeeded, failed, errors } = result.data;
+        toast({
+          title: `✓ ${succeeded} traitée${succeeded > 1 ? 's' : ''}`,
+          description:
+            failed > 0
+              ? `${failed} échec${failed > 1 ? 's' : ''} : ${errors[0] ?? '?'}`
+              : undefined,
+          variant: failed > 0 ? 'destructive' : 'default',
+        });
+        router.refresh();
+        onSuccess();
+      } else {
+        toast({
+          title: 'Erreur',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {isComplete
+              ? 'Seules les réservations confirmées ou payées seront marquées. Les autres seront ignorées.'
+              : 'Toutes les réservations sélectionnées passent en annulé. Si des paiements existent, le remboursement est à organiser séparément.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!isComplete && (
+          <div className="space-y-3">
+            <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-200 light:text-rose-700">
+              ⚠ Action irréversible appliquée à {bookingIds.length} résa
+              {bookingIds.length > 1 ? 's' : ''}.
+            </div>
+            <div>
+              <Label htmlFor="bulk-notes">
+                Raison <span className="text-rose-400">*</span>
+                <span className="text-[var(--color-text-faint)] text-xs ml-2">
+                  · visible dans l&apos;audit log
+                </span>
+              </Label>
+              <Textarea
+                id="bulk-notes"
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="mt-2"
+                placeholder="Ex : nettoyage des résas de test du mois de mars"
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            Annuler
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={pending}
+            variant={isComplete ? 'default' : 'destructive'}
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isComplete ? 'Marquer terminées' : 'Annuler en masse'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

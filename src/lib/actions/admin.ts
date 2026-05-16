@@ -19,6 +19,7 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminBulkBookingsActionSchema,
   adminBulkImportOfflineCoachingSchema,
   adminCreateOfflineCoachingSchema,
   adminCreatePromoSchema,
@@ -377,6 +378,114 @@ export async function adminBookingAction(
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   return { success: true, data: undefined };
+}
+
+/**
+ * Action en masse : annule ou marque terminée plusieurs réservations.
+ * Itère sur chaque ID séquentiellement (pas en parallèle pour éviter de
+ * spammer la DB) et compile un résumé succès/échec.
+ *
+ * On garde le revalidate UNIQUEMENT à la fin pour éviter N round-trips
+ * de cache invalidation.
+ */
+export async function adminBulkBookingsAction(input: unknown): Promise<
+  ActionResult<{ succeeded: number; failed: number; errors: string[] }>
+> {
+  const session = await requireAdmin();
+  const parsed = adminBulkBookingsActionSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const data = parsed.data;
+
+  if (data.action === 'force_cancel' && (!data.notes || data.notes.trim().length < 3)) {
+    return {
+      success: false,
+      error: 'Raison requise (3 caractères min) pour annulation en masse',
+    };
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const bookingId of data.bookingIds) {
+    try {
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId),
+      });
+      if (!booking) {
+        failed++;
+        errors.push(`#${bookingId.slice(0, 8)} : introuvable`);
+        continue;
+      }
+
+      if (data.action === 'force_cancel') {
+        if (booking.status === 'completed') {
+          failed++;
+          errors.push(`#${bookingId.slice(0, 8)} : déjà terminée`);
+          continue;
+        }
+        await db
+          .update(bookings)
+          .set({
+            status: 'cancelled',
+            adminNotes: data.notes!,
+            updatedAt: new Date(),
+          })
+          .where(eq(bookings.id, bookingId));
+      } else if (data.action === 'mark_completed') {
+        if (booking.status !== 'confirmed' && booking.status !== 'paid') {
+          failed++;
+          errors.push(
+            `#${bookingId.slice(0, 8)} : status ${booking.status} (besoin confirmed/paid)`
+          );
+          continue;
+        }
+        await db
+          .update(bookings)
+          .set({ status: 'completed', updatedAt: new Date() })
+          .where(eq(bookings.id, bookingId));
+      }
+
+      succeeded++;
+    } catch (err) {
+      failed++;
+      errors.push(
+        `#${bookingId.slice(0, 8)} : ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  // Un seul audit log pour l'action en masse
+  await logAdminAction({
+    adminId: session.user.id,
+    action: `booking_bulk_${data.action}`,
+    targetType: 'bookings',
+    targetId: null,
+    after: {
+      bookingIds: data.bookingIds,
+      succeeded,
+      failed,
+      notes: data.notes ?? null,
+    },
+  });
+
+  revalidatePath('/admin/bookings');
+  revalidatePath('/admin/bookings/list');
+  revalidatePath('/admin/calendar');
+  revalidatePath('/admin');
+  revalidatePath('/dashboard');
+
+  return {
+    success: true,
+    data: { succeeded, failed, errors: errors.slice(0, 10) },
+  };
 }
 
 // ============================================================

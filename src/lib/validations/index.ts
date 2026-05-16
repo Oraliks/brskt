@@ -99,6 +99,21 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
+/**
+ * Schema pour les actions admin en masse sur plusieurs bookings simultanément.
+ * Limité aux actions qui ne nécessitent pas de paramètre par-booking (donc
+ * pas de confirm ou propose qui demandent une date différente par résa).
+ */
+export const adminBulkBookingsActionSchema = z.object({
+  action: z.enum(['force_cancel', 'mark_completed']),
+  bookingIds: z
+    .array(z.string().uuid())
+    .min(1, 'Sélectionne au moins une réservation')
+    .max(100, 'Maximum 100 réservations à la fois'),
+  /** Raison/note — obligatoire pour force_cancel, ignorée pour mark_completed. */
+  notes: z.string().optional(),
+});
+
 export type AdminBookingActionInput = z.infer<typeof adminBookingActionSchema>;
 
 // ============================================================

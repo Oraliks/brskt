@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BackgroundFX } from '@/components/shared/background-fx';
 import { Footer } from '@/components/shared/footer';
 import { AdminSidebar } from './admin-sidebar';
+import { CommandPalette } from './command-palette';
 import { cn } from '@/lib/utils';
 
 const COLLAPSE_KEY = 'admin-sidebar-collapsed';
@@ -50,6 +51,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((v) => !v)}
       />
+      <CommandPalette />
       <div
         className={cn(
           'min-h-screen flex flex-col transition-[margin-left] duration-200',
