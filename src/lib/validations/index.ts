@@ -99,6 +99,34 @@ export const adminBookingActionSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
+// ============================================================
+// ADMIN EMAIL BROADCAST
+// ============================================================
+
+/**
+ * Envoie d'un email à un segment d'utilisateurs. Audience limitée aux
+ * opt-in (briefing ou events) ou aux users onboardés (tous ceux qui ont
+ * un email vérifié). Pas d'envoi aux non-onboardés (pas d'email).
+ *
+ * Le body est en HTML simple (pas de Markdown ni templating avancé).
+ */
+export const adminBroadcastSchema = z.object({
+  subject: z
+    .string()
+    .min(3, 'Sujet trop court (3 caractères min)')
+    .max(200, 'Sujet trop long (200 caractères max)'),
+  bodyHtml: z
+    .string()
+    .min(20, 'Contenu trop court')
+    .max(20_000, 'Contenu trop long (20 000 caractères max)'),
+  audience: z.enum(['briefing', 'events', 'all_onboarded']),
+  /**
+   * Mode test : si true, n'envoie qu'à l'admin courant (preview).
+   * Si false, envoie réellement à toute l'audience.
+   */
+  testOnly: z.boolean().default(false),
+});
+
 /**
  * Schema pour les actions admin en masse sur plusieurs bookings simultanément.
  * Limité aux actions qui ne nécessitent pas de paramètre par-booking (donc

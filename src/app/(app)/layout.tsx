@@ -22,7 +22,7 @@ export default async function AppLayout({
         isAdmin={isAdminUser(session.user)}
       />
       <LiveTickerBar />
-      <main className="relative flex-1">{children}</main>
+      <main id="main-content" className="relative flex-1">{children}</main>
       <Footer />
     </div>
   );

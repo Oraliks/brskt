@@ -77,6 +77,11 @@ export default function RootLayout({
         />
       </head>
       <body>
+        {/* Skip link a11y : permet aux users clavier de sauter la nav et
+            aller direct au contenu. Visible uniquement au focus clavier. */}
+        <a href="#main-content" className="skip-to-content">
+          Aller au contenu principal
+        </a>
         <PostHogProvider>
           {children}
           <Toaster />

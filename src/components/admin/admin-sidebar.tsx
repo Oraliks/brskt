@@ -16,6 +16,7 @@ import {
   ChevronRight,
   GraduationCap,
   LayoutDashboard,
+  Megaphone,
   Tag,
   Menu,
   MessageSquare,
@@ -89,6 +90,7 @@ const NAV: NavItem[] = [
     items: [
       { href: '/admin/users', label: 'Utilisateurs', icon: UserCog },
       { href: '/admin/testimonials', label: 'Témoignages', icon: MessageSquare },
+      { href: '/admin/broadcast', label: 'Email broadcast', icon: Megaphone },
     ],
   },
   {

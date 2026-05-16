@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { and, count, eq, isNull, ne } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull, ne, type SQL } from 'drizzle-orm';
 import { revalidatePath, updateTag } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
@@ -19,6 +19,7 @@ import {
 import { requireAdmin } from '@/lib/auth/server';
 import {
   adminBookingActionSchema,
+  adminBroadcastSchema,
   adminBulkBookingsActionSchema,
   adminBulkImportOfflineCoachingSchema,
   adminCreateOfflineCoachingSchema,
@@ -1782,6 +1783,143 @@ export async function regenerateAdminIcalTokenAction(): Promise<
     targetId: session.user.id,
   });
   return { success: true, data: { token } };
+}
+
+// ============================================================
+// Email broadcast admin
+// ============================================================
+
+/**
+ * Envoie un email à un segment d'utilisateurs. Sequentiel pour ne pas
+ * spammer Resend en parallèle (rate limit ~10 req/s sur Resend).
+ *
+ * Audience :
+ *  - briefing : users avec botSubscribedBriefing = true
+ *  - events : users avec botSubscribedEvents = true
+ *  - all_onboarded : tous les users avec un email + onboardingCompletedAt
+ *
+ * Mode test : si `testOnly`, envoie uniquement à l'admin courant pour
+ * vérifier le rendu avant le vrai broadcast.
+ */
+export async function adminBroadcastAction(
+  input: unknown
+): Promise<
+  ActionResult<{
+    audience: string;
+    targeted: number;
+    sent: number;
+    failed: number;
+  }>
+> {
+  const session = await requireAdmin();
+  const parsed = adminBroadcastSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+  const data = parsed.data;
+
+  // Sélectionne l'audience
+  let recipients: Array<{
+    email: string;
+    name: string | null;
+    firstName: string | null;
+  }>;
+  if (data.testOnly) {
+    if (!session.user.email) {
+      return {
+        success: false,
+        error: 'Ton compte admin n\'a pas d\'email — ajoute-le pour tester.',
+      };
+    }
+    recipients = [
+      {
+        email: session.user.email,
+        name: session.user.name,
+        firstName: session.user.telegramFirstName,
+      },
+    ];
+  } else {
+    const conditions: SQL[] = [isNotNull(users.email)];
+    if (data.audience === 'briefing') {
+      conditions.push(eq(users.botSubscribedBriefing, true));
+    } else if (data.audience === 'events') {
+      conditions.push(eq(users.botSubscribedEvents, true));
+    } else {
+      // all_onboarded
+      conditions.push(isNotNull(users.onboardingCompletedAt));
+    }
+    const rows = await db
+      .select({
+        email: users.email,
+        name: users.name,
+        firstName: users.telegramFirstName,
+      })
+      .from(users)
+      .where(and(...conditions));
+    recipients = rows.filter((r): r is typeof r & { email: string } =>
+      Boolean(r.email)
+    );
+  }
+
+  if (recipients.length === 0) {
+    return {
+      success: false,
+      error: 'Aucun destinataire trouvé pour cette audience.',
+    };
+  }
+
+  // Audit AVANT envoi (au cas où ça crash en plein milieu)
+  await logAdminAction({
+    adminId: session.user.id,
+    action: data.testOnly ? 'broadcast_test' : 'broadcast_send',
+    targetType: 'broadcast',
+    targetId: null,
+    after: {
+      audience: data.audience,
+      subject: data.subject,
+      targeted: recipients.length,
+      testOnly: data.testOnly,
+    },
+  });
+
+  // Envoi séquentiel avec rate limit léger (50ms entre envois = 20/s max,
+  // sous la limite Resend de ~10 req/s par sécurité on baisse à 5/s).
+  const { sendEmail } = await import('@/lib/email');
+  const AdminBroadcastEmail = (
+    await import('@root/emails/admin-broadcast')
+  ).default;
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const r of recipients) {
+    const result = await sendEmail({
+      to: r.email,
+      subject: data.subject,
+      react: AdminBroadcastEmail({
+        bodyHtml: data.bodyHtml,
+        firstName: r.firstName ?? undefined,
+        preview: data.subject.slice(0, 90),
+      }),
+    });
+    if (result.success) sent++;
+    else failed++;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  return {
+    success: true,
+    data: {
+      audience: data.audience,
+      targeted: recipients.length,
+      sent,
+      failed,
+    },
+  };
 }
 
 // ============================================================

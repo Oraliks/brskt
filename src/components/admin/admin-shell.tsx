@@ -60,7 +60,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           collapsed ? 'md:ml-16' : 'md:ml-64'
         )}
       >
-        <main className="flex-1 min-w-0">{children}</main>
+        <main id="main-content" className="flex-1 min-w-0">{children}</main>
         <Footer />
       </div>
     </>

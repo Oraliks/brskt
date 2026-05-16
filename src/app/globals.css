@@ -113,6 +113,52 @@
     color: var(--color-text);
   }
 
+  /* === Accessibilité (a11y) ===
+     - Focus visible cohérent partout : un ring violet/accent autour de
+       l'élément focusé via clavier. `:focus-visible` ne s'active QUE
+       pour la navigation clavier (Tab), pas pour les clics souris.
+     - Sans ça, les users qui naviguent au clavier sont perdus. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Skip link : permet aux users clavier de bypass la nav et aller direct
+     au contenu. Caché par défaut, visible quand focus. */
+  .skip-to-content {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 9999;
+    padding: 10px 16px;
+    background: var(--color-accent);
+    color: var(--color-on-inverse);
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 6px;
+    text-decoration: none;
+    transform: translateY(-200%);
+    transition: transform 0.15s ease-out;
+  }
+  .skip-to-content:focus {
+    transform: translateY(0);
+  }
+
+  /* Respect des préférences user "Reduce motion" — désactive toutes les
+     animations / transitions pour les users qui ont activé l'option dans
+     leur OS. WCAG 2.3.3. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   ::selection {
     background: var(--color-accent);
     color: var(--color-bg);
