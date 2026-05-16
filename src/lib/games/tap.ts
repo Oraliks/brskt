@@ -254,18 +254,28 @@ export async function submitTapRun(
 
   const { xp: baseXp, level } = tapBaseXpFor(taps, mode);
 
-  // Récupère les upgrades + état du défi
-  const [meta] = await db
-    .select({
-      xpUp: userXpStates.tapUpgradeXp,
-      challengeDate: userXpStates.tapChallengeDoneDate,
-    })
-    .from(userXpStates)
-    .where(eq(userXpStates.userId, userId))
-    .limit(1);
+  // Récupère les upgrades + état du défi. Tolérant à l'absence des
+  // colonnes (migration tap_upgrade_* / tap_challenge_done_date pas
+  // encore appliquée) : on assume "pas d'upgrade, défi pas fait".
+  let xpUp = false;
+  let challengeDate: string | null = null;
+  try {
+    const [meta] = await db
+      .select({
+        xpUp: userXpStates.tapUpgradeXp,
+        challengeDate: userXpStates.tapChallengeDoneDate,
+      })
+      .from(userXpStates)
+      .where(eq(userXpStates.userId, userId))
+      .limit(1);
+    xpUp = meta?.xpUp ?? false;
+    challengeDate = meta?.challengeDate ?? null;
+  } catch (err) {
+    console.warn('[tap] upgrades select fallback (migration?)', err);
+  }
 
   let finalXp = baseXp;
-  if (meta?.xpUp) finalXp = Math.floor(finalXp * XP_UPGRADE_MULTIPLIER);
+  if (xpUp) finalXp = Math.floor(finalXp * XP_UPGRADE_MULTIPLIER);
 
   // Vérification défi quotidien
   const today = getParisDate();
@@ -273,7 +283,7 @@ export async function submitTapRun(
   let challengeCompleted = false;
   let challengeBonus = 0;
   if (
-    meta?.challengeDate !== today &&
+    challengeDate !== today &&
     challenge.verify({ taps, level, durationMs })
   ) {
     challengeCompleted = true;
@@ -310,15 +320,21 @@ export async function submitTapRun(
           })
         : 0;
 
-    // Marque le défi comme fait
+    // Marque le défi comme fait. Si la colonne n'existe pas encore en
+    // prod (migration en retard) on ignore — le défi sera juste re-claim
+    // à chaque run jusqu'à ce que la migration soit appliquée.
     if (challengeCompleted) {
-      await db
-        .insert(userXpStates)
-        .values({ userId, tapChallengeDoneDate: today })
-        .onConflictDoUpdate({
-          target: userXpStates.userId,
-          set: { tapChallengeDoneDate: today, updatedAt: new Date() },
-        });
+      try {
+        await db
+          .insert(userXpStates)
+          .values({ userId, tapChallengeDoneDate: today })
+          .onConflictDoUpdate({
+            target: userXpStates.userId,
+            set: { tapChallengeDoneDate: today, updatedAt: new Date() },
+          });
+      } catch (err) {
+        console.warn('[tap] challenge mark fallback (migration?)', err);
+      }
     }
 
     return {
@@ -350,16 +366,25 @@ export async function purchaseTapUpgrade(
   const upgrade = TAP_UPGRADES[upgradeId];
   if (!upgrade) return { ok: false, error: 'unknown' };
 
-  const [state] = await db
-    .select({
-      xp: userXpStates.xpTotal,
-      combo: userXpStates.tapUpgradeCombo,
-      drain: userXpStates.tapUpgradeDrain,
-      xpUp: userXpStates.tapUpgradeXp,
-    })
-    .from(userXpStates)
-    .where(eq(userXpStates.userId, userId))
-    .limit(1);
+  let state:
+    | { xp: number; combo: boolean; drain: boolean; xpUp: boolean }
+    | undefined;
+  try {
+    const [row] = await db
+      .select({
+        xp: userXpStates.xpTotal,
+        combo: userXpStates.tapUpgradeCombo,
+        drain: userXpStates.tapUpgradeDrain,
+        xpUp: userXpStates.tapUpgradeXp,
+      })
+      .from(userXpStates)
+      .where(eq(userXpStates.userId, userId))
+      .limit(1);
+    state = row;
+  } catch (err) {
+    console.warn('[tap] purchase select fallback (migration?)', err);
+    return { ok: false, error: 'unknown' };
+  }
 
   const xpTotal = state?.xp ?? 0;
   const owned = state
