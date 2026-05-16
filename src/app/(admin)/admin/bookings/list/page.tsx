@@ -1,6 +1,6 @@
 import { desc } from 'drizzle-orm';
 import Link from 'next/link';
-import { ArrowLeft, CalendarCheck } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Download } from 'lucide-react';
 import { db } from '@/lib/db';
 import { bookings } from '@/lib/db/schema';
 import {
@@ -33,10 +33,18 @@ export default async function AdminBookingsListPage() {
         title="Toutes les réservations"
         description="Liste complète des réservations site. Valider, proposer une autre date, refuser ou annuler."
         actions={
-          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-            <CalendarCheck className="h-3.5 w-3.5" />
-            {list.length} réservation{list.length > 1 ? 's' : ''}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+              <CalendarCheck className="h-3.5 w-3.5" />
+              {list.length} réservation{list.length > 1 ? 's' : ''}
+            </span>
+            <Button asChild size="sm" variant="secondary" className="gap-1.5">
+              <a href="/api/admin/export/bookings.csv" download>
+                <Download className="h-3.5 w-3.5" />
+                Exporter CSV
+              </a>
+            </Button>
+          </div>
         }
       />
       <BookingsTable bookings={list} />

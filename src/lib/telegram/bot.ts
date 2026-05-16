@@ -11,6 +11,11 @@ export function getBot(): Bot<Context> {
   const bot = new Bot<Context>(token);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  // URL de la chaîne YouTube — override possible via env. Hardcodée pour
+  // que le bot fonctionne même si la var n'est pas définie en prod.
+  const youtubeUrl =
+    process.env.NEXT_PUBLIC_YOUTUBE_URL ??
+    'https://www.youtube.com/@Boursikotons/videos';
 
   // === Commandes ===
   bot.command('start', async (ctx) => {
@@ -197,10 +202,22 @@ export function getBot(): Bot<Context> {
     }
 
     const botUser = process.env.TELEGRAM_BOT_USERNAME ?? 'boursikotonsbot';
+    // Inline keyboard : raccourcis vers les actions clés. Boutons URL
+    // ouvrent direct dans Telegram (in-app browser) plutôt que de coller
+    // le lien — bien plus de clics.
+    const welcomeKb = new InlineKeyboard()
+      .url('📺 Vidéos YouTube', youtubeUrl)
+      .url('💎 Funnel VIP', `${appUrl}/vip`)
+      .row()
+      .url('📅 Réserver formation', `${appUrl}/formation`)
+      .url('🔗 Mon espace', `${appUrl}/dashboard`);
+
     await ctx.reply(
       `${greeting}\n\n` +
         `<b>Bienvenue sur Boursikotons</b> — formation trading + groupe VIP Telegram gratuit.\n\n` +
         `━━━━━━━━━━━━━━━\n\n` +
+        `<b>📺 Mes vidéos YouTube</b>\n` +
+        `Tutos trading, analyses marché : <a href="${youtubeUrl}">@Boursikotons</a>\n\n` +
         `<b>🚀 Démarrer</b>\n` +
         `• <a href="${appUrl}/login">Se connecter au site</a> (1 clic Telegram)\n` +
         `• <a href="${appUrl}/vip">Funnel VIP</a> (gratuit)\n` +
@@ -221,17 +238,38 @@ export function getBot(): Bot<Context> {
         `<b>💬 Mode inline</b>\n` +
         `Tape <code>@${botUser} EURUSD</code> dans n'importe quel chat pour partager un prix live.\n\n` +
         `━━━━━━━━━━━━━━━\n` +
-        `<i>Liste complète : /help</i>`,
+        `<i>Toutes les commandes : /help — Voir les vidéos : /videos</i>`,
       {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },
+        reply_markup: welcomeKb,
       }
     );
   });
 
-  bot.command('help', async (ctx) => {
+  // === /videos : raccourci vers la chaîne YouTube ===
+  // Push usage : on encourage les users à consommer le contenu gratuit
+  // YouTube. Bouton URL natif pour ouvrir dans l'app Telegram directement.
+  bot.command(['videos', 'yt', 'youtube'], async (ctx) => {
+    const kb = new InlineKeyboard().url('📺 Ouvrir YouTube', youtubeUrl);
+    await ctx.reply(
+      `🎬 <b>Mes vidéos YouTube</b>\n\n` +
+        `Tutos trading, analyses marché live, et plein d'autres ressources gratuites.\n\n` +
+        `<a href="${youtubeUrl}">→ Voir la chaîne</a>\n\n` +
+        `<i>Astuce : abonne-toi pour ne pas rater les nouvelles vidéos.</i>`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['help', 'aide'], async (ctx) => {
     await ctx.reply(
       `<b>📋 Toutes les commandes</b>\n\n` +
+        `<b>Contenu gratuit</b>\n` +
+        `/videos — Ma chaîne YouTube (tutos, analyses marché)\n\n` +
         `<b>Compte</b>\n` +
         `/start — Démarrer\n` +
         `/login — Lien de connexion direct au site\n` +

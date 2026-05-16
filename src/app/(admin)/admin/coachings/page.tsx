@@ -1,11 +1,12 @@
 import { desc } from 'drizzle-orm';
-import { Users } from 'lucide-react';
+import { Download, Users } from 'lucide-react';
 import { db } from '@/lib/db';
 import { offlineCoachings } from '@/lib/db/schema';
 import {
   AdminContainer,
   AdminPageHeader,
 } from '@/components/admin/page-header';
+import { Button } from '@/components/ui/button';
 import { StatCard, StatCardGrid } from '@/components/admin/stat-card';
 import { CoachingsList } from '@/components/admin/coachings-list';
 
@@ -43,6 +44,14 @@ export default async function AdminCoachingsPage() {
       <AdminPageHeader
         title="Coachings clients (offline)"
         description="Clients hors-site (importés depuis Excel ou créés à la main). Paiements suivis manuellement, pas via les payment providers."
+        actions={
+          <Button asChild size="sm" variant="secondary" className="gap-1.5">
+            <a href="/api/admin/export/coachings.csv" download>
+              <Download className="h-3.5 w-3.5" />
+              Exporter CSV
+            </a>
+          </Button>
+        }
       />
 
       <StatCardGrid cols={3} className="mb-5">

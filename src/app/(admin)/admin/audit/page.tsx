@@ -13,6 +13,7 @@ import {
 import {
   Activity,
   Calendar,
+  Download,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import {
 } from '@/components/admin/page-header';
 import { StatCard, StatCardGrid } from '@/components/admin/stat-card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { AuditFilters } from '@/components/admin/audit-filters';
 import {
   AuditTable,
@@ -202,10 +204,18 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
         title="Audit log"
         description="Historique des actions admin (200 dernières)."
         actions={
-          <Badge variant="secondary" className="text-xs">
-            <ShieldCheck className="h-3 w-3 mr-1" />
-            {totalAll} entrées
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="text-xs">
+              <ShieldCheck className="h-3 w-3 mr-1" />
+              {totalAll} entrées
+            </Badge>
+            <Button asChild size="sm" variant="secondary" className="gap-1.5">
+              <a href="/api/admin/export/audit.csv" download>
+                <Download className="h-3.5 w-3.5" />
+                Exporter CSV
+              </a>
+            </Button>
+          </div>
         }
       />
 

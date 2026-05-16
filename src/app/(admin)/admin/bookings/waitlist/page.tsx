@@ -1,6 +1,6 @@
 import { desc, isNull } from 'drizzle-orm';
 import Link from 'next/link';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { ArrowLeft, Clock, Download } from 'lucide-react';
 import { db } from '@/lib/db';
 import { formationWaitlist } from '@/lib/db/schema';
 import {
@@ -33,10 +33,18 @@ export default async function AdminWaitlistPage() {
         title="Liste d'attente"
         description="Personnes en attente d'une nouvelle session. À notifier quand un créneau s'ouvre."
         actions={
-          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-            <Clock className="h-3.5 w-3.5" />
-            {waitlist.length} en attente
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+              <Clock className="h-3.5 w-3.5" />
+              {waitlist.length} en attente
+            </span>
+            <Button asChild size="sm" variant="secondary" className="gap-1.5">
+              <a href="/api/admin/export/waitlist.csv" download>
+                <Download className="h-3.5 w-3.5" />
+                Exporter CSV
+              </a>
+            </Button>
+          </div>
         }
       />
       <WaitlistTable entries={waitlist} />
