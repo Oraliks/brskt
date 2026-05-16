@@ -247,6 +247,22 @@ export function getBot(): Bot<Context> {
     );
   });
 
+  // === /app : ouvre le Mini App Telegram (auto-login via initData) ===
+  bot.command(['app', 'mini'], async (ctx) => {
+    const miniAppUrl = `${appUrl}/mini`;
+    const kb = new InlineKeyboard().webApp('🚀 Ouvrir l\'app', miniAppUrl);
+    await ctx.reply(
+      `🚀 <b>Ouvrir l'app Boursikotons</b>\n\n` +
+        `L'app intégrée à Telegram : pas besoin de se reconnecter, ` +
+        `tu accèdes direct à ton espace.\n\n` +
+        `<i>Astuce : épingle ce message pour y revenir vite.</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: kb,
+      }
+    );
+  });
+
   // === /videos : raccourci vers la chaîne YouTube ===
   // Push usage : on encourage les users à consommer le contenu gratuit
   // YouTube. Bouton URL natif pour ouvrir dans l'app Telegram directement.
@@ -269,7 +285,8 @@ export function getBot(): Bot<Context> {
     await ctx.reply(
       `<b>📋 Toutes les commandes</b>\n\n` +
         `<b>Contenu gratuit</b>\n` +
-        `/videos — Ma chaîne YouTube (tutos, analyses marché)\n\n` +
+        `/videos — Ma chaîne YouTube (tutos, analyses marché)\n` +
+        `/app — Ouvrir l'app intégrée à Telegram\n\n` +
         `<b>Compte</b>\n` +
         `/start — Démarrer\n` +
         `/login — Lien de connexion direct au site\n` +
