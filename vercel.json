@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/nps-request",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/resolve-predictions",
+      "schedule": "30 22 * * *"
     }
   ],
   "functions": {

@@ -1,4 +1,3 @@
-import Script from 'next/script';
 import { MiniAppAuth } from '@/components/mini/mini-app-auth';
 
 export const dynamic = 'force-dynamic';
@@ -16,24 +15,10 @@ export const metadata = {
  *   3. URL : https://brskt.vercel.app/mini
  *   4. Texte : "Ouvrir l'app"
  *
- * Une fois fait, les users voient un bouton "Ouvrir l'app" en bas de la
- * conversation avec le bot. Click → ouvre cette page dans un webview
- * Telegram in-app avec `initData` signé.
- *
- * Le composant client `MiniAppAuth` lit `Telegram.WebApp.initData` et
- * appelle `/api/auth/telegram-webapp` pour échanger contre un cookie de
- * session, puis redirige vers /dashboard (ou /onboarding si pas complet).
+ * Le SDK Telegram WebApp est chargé au niveau racine (app/layout.tsx) →
+ * disponible partout, pas seulement ici. Le routing `start_param` est
+ * géré par `MiniAppAuth` (cf. `routeForStartParam`).
  */
 export default function MiniAppPage() {
-  return (
-    <>
-      {/* Script officiel Telegram WebApp — expose window.Telegram.WebApp.
-          beforeInteractive pour qu'il soit dispo avant l'hydration React. */}
-      <Script
-        src="https://telegram.org/js/telegram-web-app.js"
-        strategy="beforeInteractive"
-      />
-      <MiniAppAuth />
-    </>
-  );
+  return <MiniAppAuth />;
 }

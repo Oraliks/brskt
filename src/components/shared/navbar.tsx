@@ -34,6 +34,7 @@ const PUBLIC_LINKS = [
 
 const AUTH_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/jeux', label: 'Jeux' },
   { href: '/formation', label: 'Formation' },
   { href: '/vip', label: 'VIP Telegram' },
   { href: '/temoignages', label: 'Témoignages' },

@@ -144,6 +144,29 @@ export const users = pgTable(
      */
     icalToken: uuid('ical_token').unique(),
 
+    /**
+     * Système XP & jeux (pronostic chandelier, roue, etc.).
+     *
+     *  - `xpTotal` : XP cumulé, jamais décrémenté en usage normal. Sert au
+     *    niveau (cf. LEVELS dans lib/games/xp.ts) et au leaderboard all-time.
+     *  - `predictionStreakCount` : nombre de jours consécutifs avec au
+     *    moins un pronostic. Reset à 1 si un jour est sauté.
+     *  - `predictionStreakLongest` : record perso (jamais reset).
+     *  - `predictionLastDate` : date du dernier jour avec un pronostic (en
+     *    Paris time). Utilisé pour décider si continuer / reset.
+     *  - `lastWheelSpunAt` : timestamp du dernier spin de la roue. La roue
+     *    est dispo 1×/semaine, on compare à NOW().
+     */
+    xpTotal: integer('xp_total').notNull().default(0),
+    predictionStreakCount: integer('prediction_streak_count')
+      .notNull()
+      .default(0),
+    predictionStreakLongest: integer('prediction_streak_longest')
+      .notNull()
+      .default(0),
+    predictionLastDate: date('prediction_last_date'),
+    lastWheelSpunAt: timestamp('last_wheel_spun_at'),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -891,6 +914,182 @@ export const quizResponses = pgTable(
       t.userId,
       t.questionId
     ),
+  })
+);
+
+// ============================================================
+// GAMES — pronostic chandelier journalier, roue, XP events
+// ============================================================
+
+/**
+ * Marchés disponibles pour le mini-jeu de pronostic chandelier journalier.
+ * Choisis avec l'utilisateur : indices US (Nasdaq, Dow Jones), métal (Gold),
+ * énergie (WTI), indice européen (GER40/DAX). Symboles Yahoo correspondants
+ * dans `lib/games/markets.ts`.
+ */
+export const predictionMarketEnum = pgEnum('prediction_market', [
+  'nasdaq',
+  'dowjones',
+  'gold',
+  'wti',
+  'ger40',
+]);
+
+export const predictionDirectionEnum = pgEnum('prediction_direction', [
+  'up',
+  'down',
+]);
+
+/**
+ * Raisons d'attribution d'XP. Enum strict pour pouvoir filtrer les
+ * leaderboard temporels (semaine/mois) sans confusion.
+ */
+export const xpEventReasonEnum = pgEnum('xp_event_reason', [
+  'prediction_made',
+  'prediction_correct',
+  'prediction_streak',
+  'wheel_spin',
+  'admin_adjustment',
+]);
+
+/**
+ * Types de récompense de la roue. `nothing` est réservé : la roue garantit
+ * toujours quelque chose (XP minimum) pour ne pas frustrer les users.
+ */
+export const wheelRewardTypeEnum = pgEnum('wheel_reward_type', [
+  'xp',
+  'promo',
+]);
+
+/**
+ * Pronostics journaliers des users sur les 5 marchés. Pour chaque marché et
+ * chaque jour, un user peut faire 1 pronostic (clé unique).
+ *
+ * Workflow :
+ *  1. Vers 00:00 Paris, le cron `resolve-predictions` ouvre la journée :
+ *     pour chaque marché on stocke le prix de référence (close de la veille)
+ *     dans `game_market_candles`.
+ *  2. Pendant la journée (00:00 → 21:00 Paris), les users prédisent
+ *     up/down. Insert avec `openPrice = candle.openPrice` figé.
+ *  3. Après 23:00 Paris (cron de résolution), pour chaque marché le close
+ *     du jour est récupéré, `closePrice` rempli, `correct` calculé, XP
+ *     attribué (cf. `lib/games/xp.ts`).
+ */
+export const gamePredictions = pgTable(
+  'game_predictions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    market: predictionMarketEnum('market').notNull(),
+    /** Date Paris time du pronostic (= du chandelier visé). */
+    predictionDate: date('prediction_date').notNull(),
+    direction: predictionDirectionEnum('direction').notNull(),
+    /** Prix de référence (= close de la veille) figé au moment du pronostic. */
+    openPrice: numeric('open_price', { precision: 20, scale: 8 }),
+    /** Close du jour, rempli au cron de résolution. */
+    closePrice: numeric('close_price', { precision: 20, scale: 8 }),
+    resolved: boolean('resolved').notNull().default(false),
+    correct: boolean('correct'),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at'),
+  },
+  (t) => ({
+    userIdx: index('game_predictions_user_idx').on(t.userId),
+    dateIdx: index('game_predictions_date_idx').on(t.predictionDate),
+    uniqIdx: uniqueIndex('game_predictions_uniq_idx').on(
+      t.userId,
+      t.market,
+      t.predictionDate
+    ),
+    unresolvedIdx: index('game_predictions_unresolved_idx').on(
+      t.predictionDate,
+      t.resolved
+    ),
+  })
+);
+
+/**
+ * Cache des chandeliers journaliers par marché. Une row par (marché, date).
+ *
+ * Pourquoi une table dédiée : on veut figer le prix de référence pour
+ * TOUTES les prédictions du jour (équité entre users qui prédisent à
+ * 9h et à 18h), et éviter de re-fetcher Yahoo Finance pour chaque user.
+ *
+ * Le cron de résolution remplit `closePrice` une fois par jour.
+ */
+export const gameMarketCandles = pgTable(
+  'game_market_candles',
+  {
+    market: predictionMarketEnum('market').notNull(),
+    candleDate: date('candle_date').notNull(),
+    /** Prix de référence = close du jour précédent. */
+    openPrice: numeric('open_price', { precision: 20, scale: 8 }).notNull(),
+    closePrice: numeric('close_price', { precision: 20, scale: 8 }),
+    fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at'),
+  },
+  (t) => ({
+    pk: uniqueIndex('game_market_candles_pk').on(t.market, t.candleDate),
+  })
+);
+
+/**
+ * Log des attributions d'XP (audit + leaderboard fenêtré).
+ *
+ * Permet de calculer le top de la semaine / du mois sans toucher le total.
+ * `metadata` libre pour stocker contextual info (market, milestone, etc.).
+ */
+export const xpEvents = pgTable(
+  'xp_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    reason: xpEventReasonEnum('reason').notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('xp_events_user_idx').on(t.userId),
+    createdIdx: index('xp_events_created_at_idx').on(t.createdAt),
+    userCreatedIdx: index('xp_events_user_created_idx').on(
+      t.userId,
+      t.createdAt
+    ),
+  })
+);
+
+/**
+ * Spins de la roue de la fortune. Une row par spin.
+ *
+ *  - `rewardType` = 'xp' → `rewardValue` est un montant ("100"), XP déjà
+ *    ajouté à users.xpTotal au moment du spin
+ *  - `rewardType` = 'promo' → `rewardValue` est le code généré (unique,
+ *    1 utilisation, lié au user via promo_codes.notes)
+ *
+ * `rewardLabel` est la version humaine affichée ("+100 XP", "Code -5%").
+ */
+export const gameWheelSpins = pgTable(
+  'game_wheel_spins',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rewardType: wheelRewardTypeEnum('reward_type').notNull(),
+    rewardValue: text('reward_value'),
+    rewardLabel: text('reward_label').notNull(),
+    redeemed: boolean('redeemed').notNull().default(false),
+    redeemedAt: timestamp('redeemed_at'),
+    spunAt: timestamp('spun_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('game_wheel_spins_user_idx').on(t.userId, t.spunAt),
   })
 );
 

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Section } from '@/components/shared/section';
 import { CheckoutForm } from '@/components/formation/checkout-form';
 import { PaymentDisclaimer } from '@/components/formation/payment-disclaimer';
+import { TelegramClosingConfirmation } from '@/components/mini/telegram-controls';
 import { formatPrice } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,9 @@ export default async function CheckoutPage({ params }: PageProps) {
 
   return (
     <Section className="pt-12 pb-24">
+      {/* En Mini App : confirmation native avant un swipe-to-close
+          accidentel pendant le paiement. No-op hors Mini App. */}
+      <TelegramClosingConfirmation />
       <div className="max-w-3xl mx-auto">
         <p className="text-sm text-[var(--color-text-dim)] uppercase tracking-wider">
           {installmentMode

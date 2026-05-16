@@ -310,7 +310,15 @@ export function getBot(): Bot<Context> {
         `/events — Prochains événements macro\n\n` +
         `<b>🎓 Quiz</b>\n` +
         `/quiz — Question du jour\n` +
-        `/leaderboard — Classement hebdo\n\n` +
+        `/leaderboard — Classement quiz hebdo\n\n` +
+        `<b>🎮 Jeux & XP</b>\n` +
+        `/jouer — Hub des jeux\n` +
+        `/predict — Pronostic chandelier du jour\n` +
+        `/roue — Roue de la fortune (1×/sem)\n` +
+        `/classement — Top XP semaine/mois/all-time\n\n` +
+        `<b>🎓 Formations</b>\n` +
+        `/formation — Réserver distance ou Dubaï\n` +
+        `/support — DM le support\n\n` +
         `<b>🔄 Inline</b>\n` +
         `Tape <code>@boursikotonsbot EURUSD</code> dans n'importe quel chat\n\n` +
         `<b>🎁 Parrainage</b>\n` +
@@ -331,11 +339,139 @@ export function getBot(): Bot<Context> {
   });
 
   bot.command('vip', async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '💎 Ouvrir le funnel VIP',
+      `${appUrl}/mini?goto=vip`
+    );
     await ctx.reply(
       `💎 <b>VIP Telegram — 100% gratuit</b>\n\n` +
         `Tu payes 0€ à Boursikotons. Notre rémunération vient du broker partenaire quand tu trades.\n\n` +
-        `Funnel : ${appUrl}/vip`,
-      { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+        `Lien direct : ${appUrl}/vip`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  // ============================================================
+  // Raccourcis Mini App — chaque commande ouvre directement la page
+  // correspondante dans l'app intégrée. Le routing après auth est
+  // géré par `routeForStartParam()` côté client (mini-app-auth.tsx).
+  // ============================================================
+
+  bot.command('formation', async (ctx) => {
+    const kb = new InlineKeyboard()
+      .webApp(
+        '🎓 Réserver à distance',
+        `${appUrl}/mini?goto=formation_remote`
+      )
+      .row()
+      .webApp(
+        '✈️ Réserver à Dubaï',
+        `${appUrl}/mini?goto=formation_onsite`
+      );
+    await ctx.reply(
+      `🎓 <b>Formations Boursikotons</b>\n\n` +
+        `Choisis ton mode :\n` +
+        `• <b>À distance</b> — 1500€ — 7 jours en visio privée 1:1\n` +
+        `• <b>À Dubaï</b> — 3500€ — 7 jours intensifs sur place\n\n` +
+        `5 modules, programme détaillé : ${appUrl}/formation`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['jouer', 'jeux'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🎮 Ouvrir les jeux',
+      `${appUrl}/mini?goto=jeux`
+    );
+    await ctx.reply(
+      `🎮 <b>Jeux Boursikotons</b>\n\n` +
+        `• <b>Pronostic du jour</b> — Nasdaq, Dow, Or, WTI, GER40. +50 XP par bonne réponse.\n` +
+        `• <b>Roue de la fortune</b> — 1 spin/semaine. XP ou codes promo.\n` +
+        `• <b>Classement</b> — Top traders de la semaine.\n\n` +
+        `Monte les niveaux : Oraliks → Trader → Pro → Maître → Légende.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['predict', 'pronostic'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '📈 Faire mes pronostics',
+      `${appUrl}/mini?goto=predict`
+    );
+    await ctx.reply(
+      `📈 <b>Pronostic du jour</b>\n\n` +
+        `Prédis si chacun des 5 marchés finit aujourd'hui au-dessus ou en dessous de la veille.\n\n` +
+        `• +10 XP par pronostic validé\n` +
+        `• +50 XP par bonne réponse\n` +
+        `• Bonus streak : 100/250/500/1000 XP aux paliers 7/14/30/90 jours\n\n` +
+        `<i>Fenêtre ouverte jusqu'à 21h Paris.</i>`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['roue', 'wheel'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🎰 Tourner la roue',
+      `${appUrl}/mini?goto=roue`
+    );
+    await ctx.reply(
+      `🎰 <b>Roue de la fortune</b>\n\n` +
+        `1 spin par semaine. Aucune case vide — tu gagnes toujours quelque chose : XP, jackpot 1000 XP, ou code promo formation.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command('classement', async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🏆 Voir le classement',
+      `${appUrl}/mini?goto=classement`
+    );
+    await ctx.reply(
+      `🏆 <b>Classement</b>\n\n` +
+        `Top 20 traders sur 3 fenêtres : <b>semaine</b>, <b>mois</b>, <b>all-time</b>. Ta position est toujours affichée même hors top.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['support', 'contact'], async (ctx) => {
+    const supportUsername =
+      process.env.NEXT_PUBLIC_SUPPORT_TELEGRAM_USERNAME ?? 'boursi_support';
+    const kb = new InlineKeyboard().url(
+      '💬 Contacter le support',
+      `https://t.me/${supportUsername.replace(/^@/, '')}`
+    );
+    await ctx.reply(
+      `💬 <b>Support Boursikotons</b>\n\n` +
+        `Une question, un souci de réservation, un bug ? DM ${supportUsername} — réponse rapide en français.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
     );
   });
 

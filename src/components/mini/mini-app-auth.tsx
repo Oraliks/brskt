@@ -1,27 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
-
-/**
- * Types minimaux pour `window.Telegram.WebApp` — la lib officielle Telegram
- * expose bien plus mais on n'a besoin que de quelques champs pour l'auth.
- */
-interface TelegramWebAppLike {
-  initData?: string;
-  ready?: () => void;
-  expand?: () => void;
-  colorScheme?: 'light' | 'dark';
-  themeParams?: { bg_color?: string };
-}
-
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: TelegramWebAppLike };
-  }
-}
+import { useTelegram } from './telegram-webapp';
 
 type State =
   | { status: 'loading' }
@@ -29,22 +12,36 @@ type State =
   | { status: 'no_init_data' }
   | { status: 'error'; error: string };
 
+/**
+ * Composant d'auth Mini App.
+ *
+ * 1. Lit `tg.initData` via le TelegramProvider monté au root layout
+ * 2. POST sur `/api/auth/telegram-webapp` pour échanger contre un cookie
+ * 3. Redirect selon :
+ *    - start_param fourni (deep-link bot) → route correspondante
+ *    - sinon : /onboarding si email manquant, sinon /dashboard
+ */
 export function MiniAppAuth() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { tg, startParam } = useTelegram();
   const [state, setState] = useState<State>({ status: 'loading' });
 
+  // Param lu depuis 2 sources :
+  //  - Telegram start_param (lien t.me/<bot>/<webapp>?startapp=…)
+  //  - Query string ?goto=… (URL de la WebApp button d'un InlineKeyboard
+  //    envoyé par le bot — c'est ce qu'on utilise dans bot.ts)
+  // Le ?goto= prend priorité car c'est notre mécanisme principal.
+  const gotoParam = searchParams.get('goto') ?? null;
+  const effectiveParam = gotoParam ?? startParam;
+
   useEffect(() => {
-    // Petit délai pour laisser le script Telegram WebApp s'initialiser
-    // (beforeInteractive devrait l'avoir déjà chargé mais on est défensif).
+    // Attente courte que le provider ait détecté Telegram
     const timer = setTimeout(() => {
-      const tg = window.Telegram?.WebApp;
       if (!tg) {
         setState({ status: 'no_telegram' });
         return;
       }
-
-      tg.ready?.();
-      tg.expand?.();
 
       const initData = tg.initData;
       if (!initData) {
@@ -52,12 +49,6 @@ export function MiniAppAuth() {
         return;
       }
 
-      // Synchronise data-theme avec le thème Telegram pour cohérence visuelle
-      if (tg.colorScheme === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-
-      // Échange initData contre un cookie de session
       fetch('/api/auth/telegram-webapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,8 +66,13 @@ export function MiniAppAuth() {
             });
             return;
           }
-          // Auth réussie → redirige vers onboarding si email manque, sinon dashboard
-          router.replace(data.needsOnboarding ? '/onboarding' : '/dashboard');
+          // Détermine la cible :
+          //  - Si onboarding requis → /onboarding (passe outre le startParam)
+          //  - Sinon, mappe startParam vers la bonne route
+          const target = data.needsOnboarding
+            ? '/onboarding'
+            : routeForStartParam(effectiveParam) ?? '/dashboard';
+          router.replace(target);
         })
         .catch((err: unknown) => {
           setState({
@@ -87,7 +83,7 @@ export function MiniAppAuth() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [router, tg, effectiveParam]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
@@ -156,4 +152,52 @@ export function MiniAppAuth() {
       )}
     </div>
   );
+}
+
+/**
+ * Mappe un `start_param` Telegram vers une route interne. Le bot dispatche
+ * ces paramètres via `t.me/<bot>/<webapp_short>?startapp=<value>` ou
+ * `?start=<value>` (parsé côté bot).
+ *
+ * Valeurs supportées (alignées avec les commandes bot) :
+ *  - `formation_remote` / `formation_onsite` → page de réservation
+ *  - `vip` → funnel VIP
+ *  - `jeux` / `predict` / `roue` / `classement` → pages jeux
+ *  - `reservation` / `dashboard` → dashboard user
+ *
+ * Retourne null si pas de match — on laisse le fallback /dashboard prendre.
+ */
+export function routeForStartParam(param: string | null): string | null {
+  if (!param) return null;
+  switch (param) {
+    case 'formation_remote':
+      return '/formation/reserver?mode=remote';
+    case 'formation_onsite':
+      return '/formation/reserver?mode=onsite';
+    case 'formation':
+      return '/formation';
+    case 'vip':
+      return '/vip';
+    case 'reservation':
+    case 'dashboard':
+      return '/dashboard';
+    case 'temoignages':
+      return '/temoignages';
+    case 'jeux':
+    case 'jouer':
+      return '/jeux';
+    case 'predict':
+    case 'pronostic':
+      return '/jeux/predict';
+    case 'roue':
+    case 'wheel':
+      return '/jeux/roue';
+    case 'classement':
+    case 'leaderboard':
+      return '/jeux/classement';
+    default:
+      // Paramètres dynamiques type "waitlist_remote" : prefix-match
+      if (param.startsWith('waitlist_')) return '/formation';
+      return null;
+  }
 }

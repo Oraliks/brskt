@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeScript } from '@/components/theme/theme-script';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
+import { TelegramProvider } from '@/components/mini/telegram-webapp';
 
 export const metadata: Metadata = {
   title: {
@@ -77,14 +79,24 @@ export default function RootLayout({
         />
       </head>
       <body>
+        {/* SDK Telegram WebApp — chargé au niveau racine pour que la
+            détection Mini App fonctionne partout (pas juste sur /mini),
+            ce qui permet le routing par start_param après auth. No-op
+            sur navigateur classique (window.Telegram simplement undefined). */}
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
         {/* Skip link a11y : permet aux users clavier de sauter la nav et
             aller direct au contenu. Visible uniquement au focus clavier. */}
         <a href="#main-content" className="skip-to-content">
           Aller au contenu principal
         </a>
         <PostHogProvider>
-          {children}
-          <Toaster />
+          <TelegramProvider>
+            {children}
+            <Toaster />
+          </TelegramProvider>
         </PostHogProvider>
       </body>
     </html>
