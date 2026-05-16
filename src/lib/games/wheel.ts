@@ -52,27 +52,38 @@ export interface WheelStatus {
 
 /**
  * Renvoie si l'user peut spinner aujourd'hui et si non, quand il pourra.
+ *
+ * Tolérant à l'absence de la colonne `last_wheel_spun_at` (migration 0019
+ * pas encore appliquée) : on renvoie "peut spinner" plutôt que de planter
+ * la page.
  */
 export async function getWheelStatus(userId: string): Promise<WheelStatus> {
-  const [u] = await db
-    .select({ last: users.lastWheelSpunAt })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  let last: Date | null = null;
+  try {
+    const [u] = await db
+      .select({ last: users.lastWheelSpunAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    last = u?.last ?? null;
+  } catch (err) {
+    console.warn('[wheel] getWheelStatus fallback (migration?)', err);
+    return { canSpin: true, nextSpinAt: null, lastSpunAt: null };
+  }
 
-  if (!u?.last) {
+  if (!last) {
     return { canSpin: true, nextSpinAt: null, lastSpunAt: null };
   }
 
   const now = Date.now();
-  const elapsed = now - u.last.getTime();
+  const elapsed = now - last.getTime();
   if (elapsed >= WHEEL_COOLDOWN_MS) {
-    return { canSpin: true, nextSpinAt: null, lastSpunAt: u.last };
+    return { canSpin: true, nextSpinAt: null, lastSpunAt: last };
   }
   return {
     canSpin: false,
-    nextSpinAt: new Date(u.last.getTime() + WHEEL_COOLDOWN_MS),
-    lastSpunAt: u.last,
+    nextSpinAt: new Date(last.getTime() + WHEEL_COOLDOWN_MS),
+    lastSpunAt: last,
   };
 }
 

@@ -47,14 +47,18 @@ export function DeleteCancelledBooking({ bookingId }: Props) {
       size="sm"
       onClick={onDelete}
       disabled={pending}
-      className="text-rose-300 light:text-rose-700 hover:bg-rose-500/10"
+      className="text-rose-300 light:text-rose-700 hover:bg-rose-500/10 max-w-full whitespace-nowrap"
     >
       {pending ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
       ) : (
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-4 w-4 flex-shrink-0" />
       )}
-      Supprimer et recommencer
+      {/* Texte court sur Mini App (sm:hidden évite le débord), version
+          longue sur ≥sm. Évite que l'icône soit clippée dans des
+          parents flex étroits. */}
+      <span className="sm:hidden">Recommencer</span>
+      <span className="hidden sm:inline">Supprimer et recommencer</span>
     </Button>
   );
 }

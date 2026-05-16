@@ -432,13 +432,13 @@ function BookingRow({ booking }: { booking: BookingWithFormation }) {
         )}
 
       {booking.status === 'cancelled' && (
-        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-3 space-y-2">
+        <div className="rounded-[var(--radius-md)] bg-rose-500/10 border border-rose-500/20 p-3 space-y-2 overflow-hidden">
           {booking.adminNotes && (
-            <p className="text-xs text-[var(--color-text)] italic">
+            <p className="text-xs text-[var(--color-text)] italic break-words">
               «{booking.adminNotes}»
             </p>
           )}
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end min-w-0">
             <DeleteCancelledBooking bookingId={booking.id} />
           </div>
         </div>

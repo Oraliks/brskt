@@ -30,19 +30,58 @@ export async function getLeaderboard(
   window: LeaderboardWindow,
   limit = 20
 ): Promise<LeaderboardRow[]> {
-  if (window === 'all_time') {
+  try {
+    if (window === 'all_time') {
+      const rows = await db
+        .select({
+          userId: users.id,
+          name: users.name,
+          firstName: users.telegramFirstName,
+          username: users.telegramUsername,
+          photoUrl: users.telegramPhotoUrl,
+          xp: users.xpTotal,
+        })
+        .from(users)
+        .where(sql`${users.xpTotal} > 0`)
+        .orderBy(desc(users.xpTotal))
+        .limit(limit);
+
+      return rows.map((r, i) => ({
+        rank: i + 1,
+        userId: r.userId,
+        name: r.firstName ?? r.name,
+        username: r.username,
+        photoUrl: r.photoUrl,
+        xp: r.xp,
+        level: pickLevel(r.xp),
+      }));
+    }
+
+    const days = window === 'week' ? 7 : 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
     const rows = await db
       .select({
-        userId: users.id,
+        userId: xpEvents.userId,
         name: users.name,
         firstName: users.telegramFirstName,
         username: users.telegramUsername,
         photoUrl: users.telegramPhotoUrl,
-        xp: users.xpTotal,
+        xp: sql<number>`coalesce(sum(${xpEvents.amount}), 0)::int`,
+        total: users.xpTotal,
       })
-      .from(users)
-      .where(sql`${users.xpTotal} > 0`)
-      .orderBy(desc(users.xpTotal))
+      .from(xpEvents)
+      .innerJoin(users, eq(users.id, xpEvents.userId))
+      .where(gte(xpEvents.createdAt, since))
+      .groupBy(
+        xpEvents.userId,
+        users.name,
+        users.telegramFirstName,
+        users.telegramUsername,
+        users.telegramPhotoUrl,
+        users.xpTotal
+      )
+      .orderBy(desc(sql`sum(${xpEvents.amount})`))
       .limit(limit);
 
     return rows.map((r, i) => ({
@@ -52,46 +91,12 @@ export async function getLeaderboard(
       username: r.username,
       photoUrl: r.photoUrl,
       xp: r.xp,
-      level: pickLevel(r.xp),
+      level: pickLevel(r.total),
     }));
+  } catch (err) {
+    console.warn('[leaderboard] fallback (migration?)', err);
+    return [];
   }
-
-  const days = window === 'week' ? 7 : 30;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-  const rows = await db
-    .select({
-      userId: xpEvents.userId,
-      name: users.name,
-      firstName: users.telegramFirstName,
-      username: users.telegramUsername,
-      photoUrl: users.telegramPhotoUrl,
-      xp: sql<number>`coalesce(sum(${xpEvents.amount}), 0)::int`,
-      total: users.xpTotal,
-    })
-    .from(xpEvents)
-    .innerJoin(users, eq(users.id, xpEvents.userId))
-    .where(gte(xpEvents.createdAt, since))
-    .groupBy(
-      xpEvents.userId,
-      users.name,
-      users.telegramFirstName,
-      users.telegramUsername,
-      users.telegramPhotoUrl,
-      users.xpTotal
-    )
-    .orderBy(desc(sql`sum(${xpEvents.amount})`))
-    .limit(limit);
-
-  return rows.map((r, i) => ({
-    rank: i + 1,
-    userId: r.userId,
-    name: r.firstName ?? r.name,
-    username: r.username,
-    photoUrl: r.photoUrl,
-    xp: r.xp,
-    level: pickLevel(r.total),
-  }));
 }
 
 /**
@@ -100,8 +105,22 @@ export async function getLeaderboard(
  * fenêtre) + 1.
  *
  * Retourne { rank, xp } ou null si le user n'a aucun XP sur la fenêtre.
+ *
+ * Robuste à migration non appliquée.
  */
 export async function getUserRank(
+  userId: string,
+  window: LeaderboardWindow
+): Promise<{ rank: number; xp: number } | null> {
+  try {
+    return await getUserRankImpl(userId, window);
+  } catch (err) {
+    console.warn('[leaderboard] getUserRank fallback (migration?)', err);
+    return null;
+  }
+}
+
+async function getUserRankImpl(
   userId: string,
   window: LeaderboardWindow
 ): Promise<{ rank: number; xp: number } | null> {

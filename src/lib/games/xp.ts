@@ -150,6 +150,10 @@ export async function addXp(input: AddXpInput): Promise<number> {
 /**
  * Récupère le user avec ses champs XP. Helper pour les UI/server actions
  * qui ont besoin du total + dernier niveau.
+ *
+ * Renvoie un fallback à 0 si la migration 0019 n'est pas encore appliquée
+ * (colonnes inexistantes) — évite de planter les pages /jeux pendant que
+ * l'admin n'a pas encore lancé `pnpm db:migrate`.
  */
 export async function getUserXpState(userId: string): Promise<Pick<
   User,
@@ -159,18 +163,31 @@ export async function getUserXpState(userId: string): Promise<Pick<
   | 'predictionLastDate'
   | 'lastWheelSpunAt'
 > | null> {
-  const [u] = await db
-    .select({
-      xpTotal: users.xpTotal,
-      predictionStreakCount: users.predictionStreakCount,
-      predictionStreakLongest: users.predictionStreakLongest,
-      predictionLastDate: users.predictionLastDate,
-      lastWheelSpunAt: users.lastWheelSpunAt,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return u ?? null;
+  try {
+    const [u] = await db
+      .select({
+        xpTotal: users.xpTotal,
+        predictionStreakCount: users.predictionStreakCount,
+        predictionStreakLongest: users.predictionStreakLongest,
+        predictionLastDate: users.predictionLastDate,
+        lastWheelSpunAt: users.lastWheelSpunAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return u ?? null;
+  } catch (err) {
+    // Migration pas appliquée → renvoie un état vide plutôt que de
+    // planter la page. À retirer une fois 0019 stable en prod.
+    console.warn('[xp] getUserXpState fallback (migration?)', err);
+    return {
+      xpTotal: 0,
+      predictionStreakCount: 0,
+      predictionStreakLongest: 0,
+      predictionLastDate: null,
+      lastWheelSpunAt: null,
+    };
+  }
 }
 
 /**

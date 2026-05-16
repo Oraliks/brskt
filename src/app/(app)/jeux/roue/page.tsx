@@ -12,16 +12,30 @@ import { TelegramBackButton } from '@/components/mini/telegram-controls';
 
 export const dynamic = 'force-dynamic';
 
+async function safeRecentSpins(userId: string) {
+  try {
+    return await db
+      .select()
+      .from(gameWheelSpins)
+      .where(eq(gameWheelSpins.userId, userId))
+      .orderBy(desc(gameWheelSpins.spunAt))
+      .limit(10);
+  } catch {
+    return [] as Array<{
+      id: string;
+      rewardLabel: string;
+      rewardValue: string | null;
+      rewardType: 'xp' | 'promo';
+      spunAt: Date;
+    }>;
+  }
+}
+
 export default async function RouePage() {
   const { user } = await requireAuth();
   const [status, recent] = await Promise.all([
     getWheelStatus(user.id),
-    db
-      .select()
-      .from(gameWheelSpins)
-      .where(eq(gameWheelSpins.userId, user.id))
-      .orderBy(desc(gameWheelSpins.spunAt))
-      .limit(10),
+    safeRecentSpins(user.id),
   ]);
 
   return (

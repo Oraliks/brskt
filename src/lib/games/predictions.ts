@@ -34,27 +34,41 @@ export interface DailyCandleStatus {
  * Si aucun candle n'existe pour aujourd'hui (cron pas encore passé), on
  * renvoie `openPrice: null` — la page UI affichera un état "en attente
  * d'ouverture".
+ *
+ * Robuste à l'absence des tables (migration 0019 pas appliquée) : renvoie
+ * un état "tous les marchés en attente" plutôt que de planter la page.
  */
 export async function getTodayMarkets(
   userId: string
 ): Promise<DailyCandleStatus[]> {
   const date = getParisDate();
 
-  const [candles, userPreds] = await Promise.all([
-    db
-      .select()
-      .from(gameMarketCandles)
-      .where(eq(gameMarketCandles.candleDate, date)),
-    db
-      .select()
-      .from(gamePredictions)
-      .where(
-        and(
-          eq(gamePredictions.userId, userId),
-          eq(gamePredictions.predictionDate, date)
-        )
-      ),
-  ]);
+  let candles: Array<{
+    market: string;
+    openPrice: string;
+    closePrice: string | null;
+    resolvedAt: Date | null;
+  }> = [];
+  let userPreds: Array<{ market: string; direction: string }> = [];
+  try {
+    [candles, userPreds] = await Promise.all([
+      db
+        .select()
+        .from(gameMarketCandles)
+        .where(eq(gameMarketCandles.candleDate, date)),
+      db
+        .select()
+        .from(gamePredictions)
+        .where(
+          and(
+            eq(gamePredictions.userId, userId),
+            eq(gamePredictions.predictionDate, date)
+          )
+        ),
+    ]);
+  } catch (err) {
+    console.warn('[predictions] getTodayMarkets fallback (migration?)', err);
+  }
 
   const candleByMarket = new Map(candles.map((c) => [c.market, c]));
   const predByMarket = new Map(userPreds.map((p) => [p.market, p]));
@@ -390,6 +404,8 @@ function nextParisDate(yyyyMmDd: string): string {
 
 /**
  * Historique des pronostics d'un user (récent en premier). Limité à `limit`.
+ *
+ * Renvoie [] si la table n'existe pas encore (migration 0019 en attente).
  */
 export async function getUserPredictionHistory(
   userId: string,
@@ -407,22 +423,27 @@ export async function getUserPredictionHistory(
     xpAwarded: number;
   }>
 > {
-  const rows = await db
-    .select()
-    .from(gamePredictions)
-    .where(eq(gamePredictions.userId, userId))
-    .orderBy(sql`${gamePredictions.predictionDate} desc, ${gamePredictions.createdAt} desc`)
-    .limit(limit);
+  try {
+    const rows = await db
+      .select()
+      .from(gamePredictions)
+      .where(eq(gamePredictions.userId, userId))
+      .orderBy(sql`${gamePredictions.predictionDate} desc, ${gamePredictions.createdAt} desc`)
+      .limit(limit);
 
-  return rows.map((r) => ({
-    id: r.id,
-    market: r.market as MarketId,
-    date: r.predictionDate,
-    direction: r.direction as PredictionDirection,
-    correct: r.correct,
-    resolved: r.resolved,
-    openPrice: r.openPrice ? Number(r.openPrice) : null,
-    closePrice: r.closePrice ? Number(r.closePrice) : null,
-    xpAwarded: r.xpAwarded,
-  }));
+    return rows.map((r) => ({
+      id: r.id,
+      market: r.market as MarketId,
+      date: r.predictionDate,
+      direction: r.direction as PredictionDirection,
+      correct: r.correct,
+      resolved: r.resolved,
+      openPrice: r.openPrice ? Number(r.openPrice) : null,
+      closePrice: r.closePrice ? Number(r.closePrice) : null,
+      xpAwarded: r.xpAwarded,
+    }));
+  } catch (err) {
+    console.warn('[predictions] history fallback (migration?)', err);
+    return [];
+  }
 }
