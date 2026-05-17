@@ -162,6 +162,13 @@
       "when": 1778990122891,
       "tag": "0022_graceful_lilandra",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778990582090,
+      "tag": "0023_many_winter_soldier",
+      "breakpoints": true
     }
   ]
 }

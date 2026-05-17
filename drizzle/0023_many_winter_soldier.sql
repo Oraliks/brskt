@@ -1,0 +1,2 @@
+ALTER TABLE "user_xp_states" ADD COLUMN "candle_hop_challenge_done_date" date;--> statement-breakpoint
+ALTER TABLE "user_xp_states" ADD COLUMN "candle_hop_achievements" jsonb DEFAULT '[]'::jsonb NOT NULL;

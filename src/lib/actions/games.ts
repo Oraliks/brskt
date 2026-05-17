@@ -623,6 +623,8 @@ export async function submitCandleHopAction(input: {
   score: number;
   durationMs: number;
   taps: number;
+  bonusesCollected?: number;
+  powerUpsUsed?: number;
 }): Promise<
   ActionResult<{
     score: number;
@@ -631,6 +633,8 @@ export async function submitCandleHopAction(input: {
     newTotal: number;
     isPersonalBest: boolean;
     runsLeftToday: number;
+    challengeCompleted: { id: string; label: string; bonusXp: number } | null;
+    newAchievements: Array<{ id: string; label: string; bonusXp: number }>;
   }>
 > {
   const { user } = await requireOnboarded();
@@ -656,6 +660,8 @@ export async function submitCandleHopAction(input: {
     score: input.score,
     durationMs: input.durationMs,
     taps: input.taps,
+    bonusesCollected: input.bonusesCollected,
+    powerUpsUsed: input.powerUpsUsed,
   });
   if (!result.ok) {
     const msg =
@@ -678,6 +684,8 @@ export async function submitCandleHopAction(input: {
       newTotal: result.newTotal,
       isPersonalBest: result.isPersonalBest,
       runsLeftToday: result.runsLeftToday,
+      challengeCompleted: result.challengeCompleted,
+      newAchievements: result.newAchievements,
     },
   };
 }

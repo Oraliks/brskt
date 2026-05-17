@@ -1027,6 +1027,18 @@ export const userXpStates = pgTable(
     /** Date Paris du dernier défi quotidien validé (anti double-claim). */
     tapChallengeDoneDate: date('tap_challenge_done_date'),
 
+    // ===== Candle Hop V2 =====
+    /** Date Paris du dernier défi Candle Hop validé. */
+    candleHopChallengeDoneDate: date('candle_hop_challenge_done_date'),
+    /**
+     * Array d'IDs d'achievements Candle Hop débloqués pour cet user.
+     * Permet d'éviter le double-claim et de servir la liste sur la page.
+     */
+    candleHopAchievements: jsonb('candle_hop_achievements')
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => ({

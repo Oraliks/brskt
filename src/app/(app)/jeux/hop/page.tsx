@@ -1,20 +1,29 @@
 import Link from 'next/link';
-import { ArrowLeft, Bird, Clock, Sparkles, Trophy } from 'lucide-react';
+import { Award, Bird, CheckCircle2, Clock, Lock, Sparkles, Target, Trophy } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { requireAuth } from '@/lib/auth/server';
 import { Section, SectionHeader } from '@/components/shared/section';
 import { TelegramBackButton } from '@/components/mini/telegram-controls';
 import {
+  CANDLE_HOP_ACHIEVEMENTS,
   CANDLE_HOP_DAILY_LIMIT,
   CANDLE_HOP_DAILY_XP_CAP,
+  CANDLE_HOP_POWER_UPS,
+  CANDLE_HOP_SKINS,
   getCandleHopState,
 } from '@/lib/games/candle-hop';
+import { getUserXpState } from '@/lib/games/xp';
 import { CandleHopGame } from '@/components/games/candle-hop-game';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CandleHopPage() {
   const { user } = await requireAuth();
-  const state = await getCandleHopState(user.id);
+  const [state, xpState] = await Promise.all([
+    getCandleHopState(user.id),
+    getUserXpState(user.id),
+  ]);
+  const xpTotal = xpState?.xpTotal ?? 0;
 
   return (
     <>
@@ -52,6 +61,15 @@ export default async function CandleHopPage() {
         />
       </Section>
 
+      {/* Défi du jour V2 */}
+      <Section className="py-3">
+        <DailyChallengeCard
+          label={state.dailyChallenge.challenge.label}
+          bonusXp={state.dailyChallenge.challenge.bonusXp}
+          done={state.dailyChallenge.done}
+        />
+      </Section>
+
       <Section className="py-4">
         {state.canPlay ? (
           <CandleHopGame
@@ -61,6 +79,23 @@ export default async function CandleHopPage() {
               0,
               CANDLE_HOP_DAILY_XP_CAP - state.xpEarnedToday
             )}
+            xpTotal={xpTotal}
+            skins={CANDLE_HOP_SKINS.map((s) => ({
+              id: s.id,
+              label: s.label,
+              unlockXp: s.unlockXp,
+              fill: s.fill,
+              border: s.border,
+              glow: s.glow,
+              description: s.description,
+            }))}
+            powerUps={CANDLE_HOP_POWER_UPS.map((p) => ({
+              id: p.id,
+              label: p.label,
+              durationMs: p.durationMs,
+              color: p.color,
+              description: p.description,
+            }))}
           />
         ) : (
           <CooldownCard
@@ -68,6 +103,19 @@ export default async function CandleHopPage() {
             xpEarnedToday={state.xpEarnedToday}
           />
         )}
+      </Section>
+
+      {/* Achievements V2 */}
+      <Section className="py-4">
+        <AchievementsPanel
+          unlockedIds={state.achievementsUnlocked}
+          allAchievements={CANDLE_HOP_ACHIEVEMENTS.map((a) => ({
+            id: a.id,
+            label: a.label,
+            description: a.description,
+            bonusXp: a.bonusXp,
+          }))}
+        />
       </Section>
 
       {state.recentRuns.length > 0 && (
@@ -238,6 +286,120 @@ function Tier({
     <div className="rounded-md bg-[var(--color-surface-tint)] px-2 py-1.5 text-center">
       <div className={`font-mono font-semibold ${accent}`}>{label}</div>
       <div className="text-[10px] text-[var(--color-text-faint)]">{desc}</div>
+    </div>
+  );
+}
+
+function DailyChallengeCard({
+  label,
+  bonusXp,
+  done,
+}: {
+  label: string;
+  bonusXp: number;
+  done: boolean;
+}) {
+  return (
+    <div
+      className={`glass-strong rounded-[var(--radius-lg)] p-4 flex items-center justify-between gap-3 border ${
+        done
+          ? 'border-emerald-500/40 bg-emerald-500/5'
+          : 'border-[var(--color-border-strong)]'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <span
+          className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${
+            done
+              ? 'bg-emerald-500/20'
+              : 'bg-gradient-to-br from-amber-500/30 to-orange-700/20'
+          } flex-shrink-0`}
+        >
+          {done ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+          ) : (
+            <Target className="h-5 w-5 text-amber-300" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-faint)]">
+            Défi du jour
+          </div>
+          <div className="text-sm font-medium text-[var(--color-text)] leading-tight">
+            {label}
+          </div>
+        </div>
+      </div>
+      <span
+        className={`text-xs font-mono font-semibold whitespace-nowrap rounded-full px-2.5 py-1 ${
+          done
+            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+        }`}
+      >
+        {done ? '✓ Validé' : `+${bonusXp} XP`}
+      </span>
+    </div>
+  );
+}
+
+function AchievementsPanel({
+  unlockedIds,
+  allAchievements,
+}: {
+  unlockedIds: string[];
+  allAchievements: Array<{
+    id: string;
+    label: string;
+    description: string;
+    bonusXp: number;
+  }>;
+}) {
+  const set = new Set(unlockedIds);
+  const unlockedCount = allAchievements.filter((a) => set.has(a.id)).length;
+  return (
+    <div className="glass rounded-[var(--radius-md)] p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--color-text-faint)]">
+          <Award className="h-4 w-4 text-amber-300" />
+          Achievements
+        </div>
+        <span className="text-xs text-[var(--color-text-dim)] font-mono">
+          {unlockedCount} / {allAchievements.length}
+        </span>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-2">
+        {allAchievements.map((a) => {
+          const unlocked = set.has(a.id);
+          return (
+            <div
+              key={a.id}
+              className={`rounded-md px-3 py-2 flex items-center gap-3 ${
+                unlocked
+                  ? 'bg-amber-500/10 border border-amber-500/30'
+                  : 'bg-[var(--color-surface-tint)] border border-[var(--color-border)] opacity-60'
+              }`}
+            >
+              {unlocked ? (
+                <Award className="h-4 w-4 text-amber-300 flex-shrink-0" />
+              ) : (
+                <Lock className="h-4 w-4 text-[var(--color-text-faint)] flex-shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-[var(--color-text)] leading-tight">
+                  {a.label}
+                </div>
+                <div className="text-[10px] text-[var(--color-text-dim)]">
+                  {a.description}
+                </div>
+              </div>
+              <span className="text-[10px] font-mono text-amber-300 whitespace-nowrap">
+                +{a.bonusXp} XP
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

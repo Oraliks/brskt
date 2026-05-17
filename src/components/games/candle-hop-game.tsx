@@ -2,33 +2,68 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Bird, Loader2, RotateCcw, Sparkles, Trophy } from 'lucide-react';
+import {
+  Award,
+  ArrowRight,
+  Bird,
+  CheckCircle2,
+  Lock,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  Trophy,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useHaptic } from '@/components/mini/telegram-webapp';
 import { submitCandleHopAction } from '@/lib/actions/games';
+import { cn } from '@/lib/utils';
+
+interface Skin {
+  id: string;
+  label: string;
+  unlockXp: number;
+  fill: string;
+  border: string;
+  glow: string;
+  description: string;
+}
+
+interface PowerUpDef {
+  id: string;
+  label: string;
+  durationMs: number;
+  color: string;
+  description: string;
+}
 
 interface Props {
   bestScore: number;
   runsLeftToday: number;
   xpRoomToday: number;
+  xpTotal: number;
+  skins: Skin[];
+  powerUps: PowerUpDef[];
 }
 
-// Game world dimensions (logical). Canvas est rendu en pixel ratio device.
+// Game world dimensions (logical)
 const W = 360;
 const H = 600;
 
-const GRAVITY = 1500; // px/s^2
-const JUMP_V = -460; // px/s
+const GRAVITY = 1500;
+const JUMP_V = -460;
 const PLAYER_X = 90;
 const PLAYER_SIZE = 26;
-const SCROLL_SPEED_START = 180; // px/s
+const SCROLL_SPEED_START = 180;
 const SPEED_INCREMENT_PER_10_SCORE = 0.05;
-const OBSTACLE_SPACING = 220; // px entre 2 paires
+const OBSTACLE_SPACING = 220;
 const GAP_MIN = 140;
 const GAP_MAX = 200;
 const OBSTACLE_W = 56;
 const BONUS_SIZE = 22;
+const POWERUP_SIZE = 28;
+const POWERUP_SPAWN_CHANCE = 0.12; // ~12% par obstacle pair → ~1 toutes les 8 paires
+const MAGNET_RADIUS = 100;
 
 interface Obstacle {
   x: number;
@@ -43,43 +78,78 @@ interface Bonus {
   collected: boolean;
 }
 
+interface PowerUpInstance {
+  x: number;
+  y: number;
+  defId: string;
+  color: string;
+  collected: boolean;
+}
+
+interface ActivePowerUp {
+  id: string;
+  expiresAt: number;
+  color: string;
+  label: string;
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  size: number;
+}
+
 interface GameState {
   phase: 'idle' | 'playing' | 'dead';
-  player: { y: number; vy: number; rot: number };
+  player: { y: number; vy: number };
   obstacles: Obstacle[];
   bonuses: Bonus[];
+  powerUpsOnField: PowerUpInstance[];
+  activePowerUps: ActivePowerUp[];
   scrollX: number;
   speed: number;
   score: number;
   startedAtMs: number;
   taps: number;
-  particles: Array<{
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    life: number;
-    color: string;
-    size: number;
-  }>;
+  particles: Particle[];
+  // V2 stats
+  bonusesCollected: number;
+  powerUpsUsed: number;
 }
 
 function makeInitialState(): GameState {
   return {
     phase: 'idle',
-    player: { y: H / 2, vy: 0, rot: 0 },
+    player: { y: H / 2, vy: 0 },
     obstacles: [],
     bonuses: [],
+    powerUpsOnField: [],
+    activePowerUps: [],
     scrollX: 0,
     speed: SCROLL_SPEED_START,
     score: 0,
     startedAtMs: 0,
     taps: 0,
     particles: [],
+    bonusesCollected: 0,
+    powerUpsUsed: 0,
   };
 }
 
-export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) {
+const SKIN_STORAGE_KEY = 'candle_hop_skin';
+
+export function CandleHopGame({
+  bestScore,
+  runsLeftToday,
+  xpRoomToday,
+  xpTotal,
+  skins,
+  powerUps,
+}: Props) {
   const router = useRouter();
   const haptic = useHaptic();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,9 +158,11 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
   const lastTimeRef = useRef<number>(0);
   const animRef = useRef<number>(0);
   const submittedRef = useRef(false);
-  const [, setTick] = useState(0); // pour forcer re-render des overlays UI
+  const skinRef = useRef<Skin>(skins[0]!);
+  const [, setTick] = useState(0);
   const [phase, setPhase] = useState<'idle' | 'playing' | 'dead'>('idle');
   const [score, setScore] = useState(0);
+  const [activeSkinId, setActiveSkinId] = useState<string>(skins[0]?.id ?? 'classic');
   const [submitResult, setSubmitResult] = useState<
     | null
     | {
@@ -99,32 +171,69 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
         newTotal: number;
         isPersonalBest: boolean;
         runsLeftToday: number;
+        challengeCompleted: { label: string; bonusXp: number } | null;
+        newAchievements: Array<{ label: string; bonusXp: number }>;
       }
   >(null);
   const [pending, start] = useTransition();
 
-  // ============ Game logic ============
-  const spawnObstacles = useCallback((g: GameState) => {
-    while (
-      g.obstacles.length === 0 ||
-      g.obstacles[g.obstacles.length - 1]!.x < W + OBSTACLE_SPACING
-    ) {
-      const lastX = g.obstacles[g.obstacles.length - 1]?.x ?? W;
-      const newX = lastX + OBSTACLE_SPACING;
-      const gapH = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
-      const margin = 80;
-      const gapY = margin + Math.random() * (H - 2 * margin - gapH);
-      g.obstacles.push({ x: newX, gapY, gapH, passed: false });
-      // 40% chance de bonus dans le gap
-      if (Math.random() < 0.4) {
-        g.bonuses.push({
-          x: newX + OBSTACLE_W / 2,
-          y: gapY + gapH / 2,
-          collected: false,
-        });
-      }
+  const unlockedSkins = skins.filter((s) => xpTotal >= s.unlockXp);
+
+  // Load skin from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem(SKIN_STORAGE_KEY);
+    if (!stored) return;
+    const found = skins.find((s) => s.id === stored);
+    if (found && xpTotal >= found.unlockXp) {
+      setActiveSkinId(found.id);
+      skinRef.current = found;
     }
-  }, []);
+  }, [skins, xpTotal]);
+
+  function selectSkin(skin: Skin) {
+    if (xpTotal < skin.unlockXp) return;
+    setActiveSkinId(skin.id);
+    skinRef.current = skin;
+    localStorage.setItem(SKIN_STORAGE_KEY, skin.id);
+    haptic.selection();
+  }
+
+  // ============ Game logic ============
+  const spawnObstacles = useCallback(
+    (g: GameState) => {
+      while (
+        g.obstacles.length === 0 ||
+        g.obstacles[g.obstacles.length - 1]!.x < W + OBSTACLE_SPACING
+      ) {
+        const lastX = g.obstacles[g.obstacles.length - 1]?.x ?? W;
+        const newX = lastX + OBSTACLE_SPACING;
+        const gapH = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
+        const margin = 80;
+        const gapY = margin + Math.random() * (H - 2 * margin - gapH);
+        g.obstacles.push({ x: newX, gapY, gapH, passed: false });
+        // 40% chance bonus
+        if (Math.random() < 0.4) {
+          g.bonuses.push({
+            x: newX + OBSTACLE_W / 2,
+            y: gapY + gapH / 2,
+            collected: false,
+          });
+        }
+        // 12% chance power-up
+        if (Math.random() < POWERUP_SPAWN_CHANCE && powerUps.length > 0) {
+          const def = powerUps[Math.floor(Math.random() * powerUps.length)]!;
+          g.powerUpsOnField.push({
+            x: newX + OBSTACLE_W / 2,
+            y: gapY + gapH / 2 + (Math.random() - 0.5) * 30,
+            defId: def.id,
+            color: def.color,
+            collected: false,
+          });
+        }
+      }
+    },
+    [powerUps]
+  );
 
   const reset = useCallback(() => {
     gameRef.current = makeInitialState();
@@ -159,11 +268,15 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
       const durationMs = performance.now() - g.startedAtMs;
       const score = g.score;
       const taps = g.taps;
+      const bonusesCollected = g.bonusesCollected;
+      const powerUpsUsed = g.powerUpsUsed;
       start(async () => {
         const res = await submitCandleHopAction({
           score,
           durationMs,
           taps,
+          bonusesCollected,
+          powerUpsUsed,
         });
         if (!res.success) {
           haptic.error();
@@ -180,42 +293,43 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
           newTotal: res.data.newTotal,
           isPersonalBest: res.data.isPersonalBest,
           runsLeftToday: res.data.runsLeftToday,
+          challengeCompleted: res.data.challengeCompleted,
+          newAchievements: res.data.newAchievements,
         });
         if (res.data.isPersonalBest && score > 0) {
           haptic.success();
+        }
+        if (res.data.challengeCompleted) {
           toast({
-            title: '🏆 Nouveau record !',
-            description: `Score ${score} · +${res.data.xpAwarded} XP`,
+            title: '🎯 Défi du jour validé !',
+            description: `+${res.data.challengeCompleted.bonusXp} XP`,
           });
-        } else if (res.data.xpAwarded > 0) {
-          haptic.success();
+        }
+        for (const ach of res.data.newAchievements) {
+          toast({
+            title: `🏆 ${ach.label}`,
+            description: `+${ach.bonusXp} XP`,
+          });
         }
       });
     },
     [haptic]
   );
 
-  // Inputs
+  // Keyboard
   useEffect(() => {
-    const handler = (e: KeyboardEvent | TouchEvent | MouseEvent) => {
-      if (e instanceof KeyboardEvent && e.code !== 'Space' && e.code !== 'ArrowUp') {
-        return;
-      }
-      // Avoid duplicate from touch + click on mobile
-      if (e instanceof KeyboardEvent) e.preventDefault();
-
+    const handler = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.code !== 'ArrowUp') return;
+      e.preventDefault();
       const g = gameRef.current;
       if (g.phase === 'idle') startGame();
       else if (g.phase === 'playing') jump();
-      // dead → handled by button click
     };
     window.addEventListener('keydown', handler);
-    return () => {
-      window.removeEventListener('keydown', handler);
-    };
+    return () => window.removeEventListener('keydown', handler);
   }, [startGame, jump]);
 
-  // Main game loop
+  // Main loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -243,19 +357,20 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
       const ch = container.clientHeight;
       const scaleX = cw / W;
       const scaleY = ch / H;
+      const g = gameRef.current;
 
-      // Background gradient
+      // Background
       const grad = ctx.createLinearGradient(0, 0, 0, ch);
       grad.addColorStop(0, 'rgba(15, 23, 42, 1)');
       grad.addColorStop(1, 'rgba(30, 41, 59, 1)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, cw, ch);
 
-      // Grille de chart
+      // Chart grid
       ctx.strokeStyle = 'rgba(99, 102, 241, 0.08)';
       ctx.lineWidth = 1;
       const gridSize = 40 * scaleX;
-      const offsetX = -((gameRef.current.scrollX * scaleX) % gridSize);
+      const offsetX = -((g.scrollX * scaleX) % gridSize);
       for (let x = offsetX; x < cw; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -269,50 +384,67 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
         ctx.stroke();
       }
 
-      const g = gameRef.current;
-
-      // Obstacles (bougies rouges)
+      // Obstacles
       for (const o of g.obstacles) {
         const x = o.x * scaleX;
         const wPx = OBSTACLE_W * scaleX;
-        // Bougie du haut (de 0 à gapY)
         drawCandle(ctx, x, 0, wPx, o.gapY * scaleY, '#ef4444', '#dc2626');
-        // Bougie du bas (de gapY+gapH à H)
         const bottomY = (o.gapY + o.gapH) * scaleY;
         drawCandle(ctx, x, bottomY, wPx, ch - bottomY, '#ef4444', '#dc2626');
       }
 
-      // Bonus (bougies vertes)
+      // Bonuses
       for (const b of g.bonuses) {
         if (b.collected) continue;
         const x = b.x * scaleX;
         const y = b.y * scaleY;
         const s = BONUS_SIZE * scaleX;
-        // Glow
         ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
         ctx.beginPath();
         ctx.arc(x, y, s * 0.9, 0, Math.PI * 2);
         ctx.fill();
-        // Body
         drawCandle(ctx, x - s / 2, y - s / 2, s, s, '#10b981', '#059669');
       }
 
-      // Player (candlestick)
+      // Power-ups on field
+      for (const p of g.powerUpsOnField) {
+        if (p.collected) continue;
+        const x = p.x * scaleX;
+        const y = p.y * scaleY;
+        const s = POWERUP_SIZE * scaleX;
+        // Pulsing glow
+        const pulse = 0.5 + Math.sin(performance.now() * 0.005) * 0.3;
+        ctx.fillStyle = hexToRgba(p.color, 0.4 * pulse);
+        ctx.beginPath();
+        ctx.arc(x, y, s * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        // Star shape
+        drawStar(ctx, x, y, s / 2, p.color);
+      }
+
+      // Player
       const px = PLAYER_X * scaleX;
       const py = g.player.y * scaleY;
       const ps = PLAYER_SIZE * scaleX;
+      const skin = skinRef.current;
+      const invincible = g.activePowerUps.some((p) => p.id === 'bull_run');
       ctx.save();
       ctx.translate(px, py);
       const rot = clamp(g.player.vy / 800, -0.4, 0.7);
       ctx.rotate(rot);
-      // wick
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(-1, -ps / 2 - 4, 2, ps + 8);
-      // body
-      ctx.fillStyle = '#fbbf24';
+      // Glow
+      if (invincible) {
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 18 * scaleX;
+      } else {
+        ctx.shadowColor = skin.glow;
+        ctx.shadowBlur = 8 * scaleX;
+      }
+      ctx.fillStyle = skin.fill;
+      ctx.fillRect(-1, -ps / 2 - 4, 2, ps + 8); // wick
       ctx.fillRect(-ps / 2, -ps / 2, ps, ps);
-      // border
-      ctx.strokeStyle = '#f59e0b';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = skin.border;
       ctx.lineWidth = 2;
       ctx.strokeRect(-ps / 2, -ps / 2, ps, ps);
       ctx.restore();
@@ -331,8 +463,12 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
     const update = (dtMs: number) => {
       const g = gameRef.current;
       const dt = dtMs / 1000;
+
+      // Clean expired power-ups
+      const now = performance.now();
+      g.activePowerUps = g.activePowerUps.filter((p) => p.expiresAt > now);
+
       if (g.phase !== 'playing') {
-        // Particles still update even on death
         for (const p of g.particles) {
           p.x += p.vx * dt;
           p.y += p.vy * dt;
@@ -343,19 +479,38 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
         return;
       }
 
-      // Physics
+      // Speed multiplier from power-ups
+      const slowMo = g.activePowerUps.some((p) => p.id === 'slow_mo');
+      const effectiveSpeed = slowMo ? g.speed * 0.5 : g.speed;
+      const magnetActive = g.activePowerUps.some((p) => p.id === 'magnet');
+      const invincible = g.activePowerUps.some((p) => p.id === 'bull_run');
+
       g.player.vy += GRAVITY * dt;
       g.player.y += g.player.vy * dt;
-      g.scrollX += g.speed * dt;
+      g.scrollX += effectiveSpeed * dt;
 
-      // Spawn obstacles
       spawnObstacles(g);
 
-      // Scroll obstacles toward player
-      for (const o of g.obstacles) o.x -= g.speed * dt;
-      for (const b of g.bonuses) b.x -= g.speed * dt;
+      for (const o of g.obstacles) o.x -= effectiveSpeed * dt;
+      for (const b of g.bonuses) {
+        b.x -= effectiveSpeed * dt;
+        if (magnetActive && !b.collected) {
+          const dx = PLAYER_X - b.x;
+          const dy = g.player.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < MAGNET_RADIUS) {
+            const pull = 200 * dt;
+            b.x += (dx / dist) * pull;
+            b.y += (dy / dist) * pull;
+          }
+        }
+      }
+      for (const p of g.powerUpsOnField) p.x -= effectiveSpeed * dt;
       g.obstacles = g.obstacles.filter((o) => o.x + OBSTACLE_W > 0);
-      g.bonuses = g.bonuses.filter((b) => b.x + BONUS_SIZE > 0 && !b.collected);
+      g.bonuses = g.bonuses.filter((b) => b.x + BONUS_SIZE > -50);
+      g.powerUpsOnField = g.powerUpsOnField.filter(
+        (p) => p.x + POWERUP_SIZE > 0 && !p.collected
+      );
 
       // Collisions
       const playerLeft = PLAYER_X - PLAYER_SIZE / 2;
@@ -363,7 +518,7 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
       const playerTop = g.player.y - PLAYER_SIZE / 2;
       const playerBottom = g.player.y + PLAYER_SIZE / 2;
 
-      // Sol / plafond
+      // Bounds (sol/plafond) — invincibilité ne sauve PAS d'une sortie
       if (g.player.y < PLAYER_SIZE / 2 || g.player.y > H - PLAYER_SIZE / 2) {
         killPlayer(g);
         return;
@@ -373,18 +528,14 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
         const oL = o.x;
         const oR = o.x + OBSTACLE_W;
         if (playerRight < oL || playerLeft > oR) continue;
-        // En collision X. Check Y : si player dans gap → safe
-        const inGap =
-          playerTop > o.gapY && playerBottom < o.gapY + o.gapH;
-        if (!inGap) {
+        const inGap = playerTop > o.gapY && playerBottom < o.gapY + o.gapH;
+        if (!inGap && !invincible) {
           killPlayer(g);
           return;
         }
-        // Score (passe = quand center du player passe à droite de l'obstacle)
         if (!o.passed && PLAYER_X > oR) {
           o.passed = true;
           g.score++;
-          // Speed up
           g.speed =
             SCROLL_SPEED_START *
             (1 + Math.floor(g.score / 10) * SPEED_INCREMENT_PER_10_SCORE);
@@ -400,8 +551,8 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
         if (dist < PLAYER_SIZE / 2 + BONUS_SIZE / 2) {
           b.collected = true;
           g.score += 3;
+          g.bonusesCollected++;
           haptic.impact('light');
-          // Particules vertes
           for (let i = 0; i < 8; i++) {
             const a = Math.random() * Math.PI * 2;
             const spd = 80 + Math.random() * 120;
@@ -418,8 +569,41 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
           setScore(g.score);
         }
       }
+      for (const p of g.powerUpsOnField) {
+        if (p.collected) continue;
+        const dx = (p.x + POWERUP_SIZE / 2) - PLAYER_X;
+        const dy = p.y - g.player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < PLAYER_SIZE / 2 + POWERUP_SIZE / 2) {
+          p.collected = true;
+          const def = powerUps.find((d) => d.id === p.defId);
+          if (def) {
+            g.activePowerUps.push({
+              id: def.id,
+              expiresAt: performance.now() + def.durationMs,
+              color: def.color,
+              label: def.label,
+            });
+            g.powerUpsUsed++;
+            haptic.impact('medium');
+            // Particles starburst
+            for (let i = 0; i < 14; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const spd = 100 + Math.random() * 160;
+              g.particles.push({
+                x: p.x + POWERUP_SIZE / 2,
+                y: p.y,
+                vx: Math.cos(a) * spd,
+                vy: Math.sin(a) * spd,
+                life: 0.9,
+                color: p.color,
+                size: 3,
+              });
+            }
+          }
+        }
+      }
 
-      // Particles update
       for (const p of g.particles) {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
@@ -432,7 +616,6 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
     const killPlayer = (g: GameState) => {
       g.phase = 'dead';
       haptic.error();
-      // Explosion
       for (let i = 0; i < 18; i++) {
         const a = Math.random() * Math.PI * 2;
         const spd = 120 + Math.random() * 180;
@@ -463,9 +646,9 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, [haptic, spawnObstacles, submitRun]);
+  }, [haptic, spawnObstacles, submitRun, powerUps]);
 
-  // Re-render ticker for UI (debug, futur HUD avancé)
+  // Re-render ticker
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 250);
     return () => clearInterval(t);
@@ -478,6 +661,7 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
   }, [startGame, jump]);
 
   const canRetry = !pending && runsLeftToday > 1;
+  const activePowerUpsSnapshot = gameRef.current.activePowerUps;
 
   return (
     <div className="space-y-3 max-w-md mx-auto">
@@ -489,7 +673,7 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
       >
         <canvas ref={canvasRef} className="absolute inset-0" />
 
-        {/* HUD : score top */}
+        {/* HUD : score top + active power-ups */}
         <div className="absolute top-3 left-0 right-0 pointer-events-none">
           <div className="text-center">
             <div className="inline-block px-4 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-white/10">
@@ -503,25 +687,80 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
               Best {bestScore}
             </div>
           )}
+          {activePowerUpsSnapshot.length > 0 && (
+            <div className="absolute top-1 left-3 flex flex-col gap-1">
+              {activePowerUpsSnapshot.map((p, i) => (
+                <div
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-semibold backdrop-blur-sm border"
+                  style={{
+                    backgroundColor: `${p.color}30`,
+                    borderColor: `${p.color}80`,
+                    color: p.color,
+                  }}
+                >
+                  <Sparkles className="h-2.5 w-2.5" />
+                  {p.label}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Idle overlay */}
+        {/* Idle overlay : skin selector + start */}
         {phase === 'idle' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-black/30 backdrop-blur-[2px] gap-4 px-6">
-            <div className="animate-pulse">
-              <Bird className="h-14 w-14 text-amber-300 drop-shadow" />
+          <div className="absolute inset-0 flex flex-col items-center justify-between text-center bg-black/35 backdrop-blur-[2px] py-6 px-4">
+            <div className="space-y-3">
+              <Bird className="h-12 w-12 text-amber-300 mx-auto drop-shadow animate-pulse" />
+              <h3 className="font-serif text-2xl text-white">
+                Tap pour décoller
+              </h3>
+              <div className="inline-flex items-center gap-1.5 text-xs text-white/60">
+                <Sparkles className="h-3 w-3" />
+                {runsLeftToday} runs ·{' '}
+                {xpRoomToday > 0 ? `${xpRoomToday} XP dispo` : 'cap XP atteint'}
+              </div>
             </div>
-            <h3 className="font-serif text-2xl text-white">
-              Tap pour décoller
-            </h3>
-            <p className="text-sm text-white/70 max-w-xs">
-              Évite les bougies rouges, choppe les vertes. Continue jusqu&apos;à
-              la fin du graph.
-            </p>
-            <div className="inline-flex items-center gap-1.5 text-xs text-white/60 mt-2">
-              <Sparkles className="h-3 w-3" />
-              {runsLeftToday} runs restants ·{' '}
-              {xpRoomToday > 0 ? `${xpRoomToday} XP dispo` : 'cap XP atteint'}
+
+            {/* Skin selector */}
+            <div className="w-full space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-white/50 font-mono">
+                Skin · {unlockedSkins.length}/{skins.length} débloqués
+              </div>
+              <div className="flex justify-center gap-2 flex-wrap">
+                {skins.map((s) => {
+                  const unlocked = xpTotal >= s.unlockXp;
+                  const active = activeSkinId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (unlocked) selectSkin(s);
+                      }}
+                      disabled={!unlocked}
+                      title={
+                        unlocked
+                          ? s.description
+                          : `Débloque à ${s.unlockXp} XP`
+                      }
+                      className={cn(
+                        'h-9 w-9 rounded-md border-2 flex items-center justify-center transition-all relative',
+                        active
+                          ? 'scale-110 border-amber-300 shadow-lg'
+                          : 'border-white/20 hover:border-white/50',
+                        !unlocked && 'opacity-50 cursor-not-allowed'
+                      )}
+                      style={{
+                        backgroundColor: unlocked ? s.fill : '#3f3f46',
+                      }}
+                    >
+                      {!unlocked && <Lock className="h-3 w-3 text-white/70" />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -552,7 +791,7 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
                       {submitResult.bonusXp > 0 && (
                         <span className="text-amber-300">
                           {' '}
-                          (dont +{submitResult.bonusXp} bonus)
+                          (dont +{submitResult.bonusXp} record)
                         </span>
                       )}
                     </>
@@ -560,6 +799,25 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
                     <span className="text-white/60">Cap XP du jour atteint</span>
                   )}
                 </div>
+                {submitResult.challengeCompleted && (
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs text-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Défi validé · +{submitResult.challengeCompleted.bonusXp} XP
+                  </div>
+                )}
+                {submitResult.newAchievements.length > 0 && (
+                  <div className="space-y-1">
+                    {submitResult.newAchievements.map((a, i) => (
+                      <div
+                        key={i}
+                        className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 border border-amber-500/30 px-3 py-1 text-xs text-amber-200"
+                      >
+                        <Award className="h-3.5 w-3.5" />
+                        {a.label} · +{a.bonusXp} XP
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row gap-2 mt-2 w-full max-w-xs">
                   {canRetry ? (
                     <Button
@@ -600,7 +858,7 @@ export function CandleHopGame({ bestScore, runsLeftToday, xpRoomToday }: Props) 
 
       {phase === 'playing' && (
         <div className="text-center text-xs text-[var(--color-text-faint)]">
-          Tap dans la zone pour sauter · vitesse augmente avec le score
+          Tap dans la zone pour sauter · choppe les étoiles pour des bonus
         </div>
       )}
     </div>
@@ -616,20 +874,55 @@ function drawCandle(
   color: string,
   border: string
 ) {
-  // Body
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
-  // Subtle inner shadow
   const grad = ctx.createLinearGradient(x, y, x + w, y);
   grad.addColorStop(0, 'rgba(0,0,0,0.15)');
   grad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
   grad.addColorStop(1, 'rgba(0,0,0,0.15)');
   ctx.fillStyle = grad;
   ctx.fillRect(x, y, w, h);
-  // Border
   ctx.strokeStyle = border;
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+
+function drawStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string
+) {
+  const spikes = 5;
+  const inner = r * 0.45;
+  ctx.beginPath();
+  let rot = -Math.PI / 2;
+  const step = Math.PI / spikes;
+  ctx.moveTo(cx + Math.cos(rot) * r, cy + Math.sin(rot) * r);
+  for (let i = 0; i < spikes; i++) {
+    rot += step;
+    ctx.lineTo(cx + Math.cos(rot) * inner, cy + Math.sin(rot) * inner);
+    rot += step;
+    ctx.lineTo(cx + Math.cos(rot) * r, cy + Math.sin(rot) * r);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const m = hex.replace('#', '');
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function clamp(v: number, min: number, max: number): number {
