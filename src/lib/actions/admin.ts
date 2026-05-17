@@ -40,6 +40,7 @@ import {
   dailyBriefingSchema,
   ironfxModeSchema,
   manualIronfxUpdateSchema,
+  vipPaidAccessConfigSchema,
   welcomeBonusSchema,
 } from '@/lib/validations';
 import { setIronFXMode } from '@/lib/ironfx';
@@ -48,6 +49,7 @@ import { setBotFeatures } from '@/lib/settings/bot-features';
 import { setDailyBriefing } from '@/lib/settings/daily-briefing';
 import { setCommunityCountOverride } from '@/lib/settings/community-count';
 import { setAutomations } from '@/lib/settings/automations';
+import { setVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
 import { ejectFromTelegram } from '@/lib/telegram/helpers';
 import { notifyUser } from '@/lib/notify';
 import { logAdminAction } from '@/lib/admin/audit';
@@ -1931,4 +1933,40 @@ function escapeHtml(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/**
+ * Configure l'accès VIP payant direct (toggle + prix).
+ * Le prix est appliqué aux NOUVEAUX checkouts — les rows déjà
+ * créées en `pending_payment` gardent leur montant figé.
+ */
+export async function adminSetVipPaidAccessConfigAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = vipPaidAccessConfigSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  await setVipPaidAccessConfig(parsed.data, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'vip_paid_access_config_update',
+    targetType: 'settings',
+    targetId: 'vip_paid_access',
+    after: parsed.data,
+  });
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/vip');
+  revalidatePath('/vip');
+  revalidatePath('/vip/acces-direct');
+  return { success: true, data: undefined };
 }

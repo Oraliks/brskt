@@ -1,4 +1,4 @@
-import { Database, Gift, KeyRound, Sun, Users } from 'lucide-react';
+import { Coins, Database, Gift, KeyRound, Sun, Users } from 'lucide-react';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -14,20 +14,24 @@ import { IronFxModeForm } from '@/components/admin/ironfx-mode-form';
 import { WelcomeBonusForm } from '@/components/admin/welcome-bonus-form';
 import { DailyBriefingForm } from '@/components/admin/daily-briefing-form';
 import { CommunityCountForm } from '@/components/admin/community-count-form';
+import { VipPaidAccessConfigForm } from '@/components/admin/vip-paid-access-config-form';
 import { getIronFXMode } from '@/lib/ironfx';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { getDailyBriefing } from '@/lib/settings/daily-briefing';
 import { getCommunityCountOverride } from '@/lib/settings/community-count';
+import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  const [mode, welcomeBonus, briefing, communityCount] = await Promise.all([
-    getIronFXMode(),
-    getWelcomeBonus(),
-    getDailyBriefing(),
-    getCommunityCountOverride(),
-  ]);
+  const [mode, welcomeBonus, briefing, communityCount, vipPaidConfig] =
+    await Promise.all([
+      getIronFXMode(),
+      getWelcomeBonus(),
+      getDailyBriefing(),
+      getCommunityCountOverride(),
+      getVipPaidAccessConfig(),
+    ]);
 
   return (
     <AdminContainer>
@@ -53,6 +57,10 @@ export default async function AdminSettingsPage() {
           <TabsTrigger value="community" className="gap-1.5">
             <Users className="h-3.5 w-3.5" />
             Communauté
+          </TabsTrigger>
+          <TabsTrigger value="vip-paid" className="gap-1.5">
+            <Coins className="h-3.5 w-3.5" />
+            VIP payant
           </TabsTrigger>
           <TabsTrigger value="env" className="gap-1.5">
             <KeyRound className="h-3.5 w-3.5" />
@@ -97,6 +105,16 @@ export default async function AdminSettingsPage() {
             icon={<Users className="h-4 w-4" />}
           >
             <CommunityCountForm initial={communityCount} />
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="vip-paid">
+          <SectionCard
+            title="Accès VIP direct payant"
+            description="Active ou désactive l'option d'accès direct payant sur /vip (alternative au funnel affilié). Configure le prix."
+            icon={<Coins className="h-4 w-4" />}
+          >
+            <VipPaidAccessConfigForm initial={vipPaidConfig} />
           </SectionCard>
         </TabsContent>
 

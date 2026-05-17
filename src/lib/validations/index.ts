@@ -526,3 +526,16 @@ export const vipPaidAccessSchema = z.object({
 
 export type VipPaidAccessInput = z.infer<typeof vipPaidAccessSchema>;
 
+
+// ============================================================
+// VIP PAID ACCESS CONFIG (admin)
+// ============================================================
+
+export const vipPaidAccessConfigSchema = z.object({
+  enabled: z.boolean(),
+  priceEur: z
+    .number()
+    .int("Prix entier en euros")
+    .min(10, "Prix minimum 10€")
+    .max(10000, "Prix maximum 10 000€"),
+});
