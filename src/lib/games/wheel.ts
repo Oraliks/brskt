@@ -1,5 +1,4 @@
-import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   gameWheelSpins,
@@ -140,20 +139,32 @@ export async function spinWheel(userId: string): Promise<SpinResult> {
       set: { lastWheelSpunAt: now, updatedAt: now },
     });
 
-  const { segment, index } = pickSegment();
+  const picked = pickSegment();
+  let segment = picked.segment;
+  const index = picked.index;
 
   let promoCodeStr: string | undefined;
   if (segment.rewardType === 'promo') {
-    promoCodeStr = `ROUE-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-    await db.insert(promoCodes).values({
-      code: promoCodeStr,
-      discountType: 'percent',
-      discountValue: String(segment.value),
-      maxUses: 1,
-      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      notes: `Roue de la fortune · user ${userId}`,
-      active: true,
-    });
+    // Pioche dans le pool admin : codes scope IN ('game','both'), actifs,
+    // pas expirés, encore des usages dispo, valeur correspondante au segment.
+    // Si rien → fallback XP équivalent (segment.value pour un -5% ≈ +200 XP,
+    // pour -10% ≈ +400 XP — barème simple).
+    const claimedCode = await tryClaimPromoFromPool(segment.value);
+    if (claimedCode) {
+      promoCodeStr = claimedCode;
+    } else {
+      // Fallback : transforme le segment promo en XP. L'user gagne quand
+      // même quelque chose et l'admin est notifié indirectement via les
+      // logs xp_events (metadata.fallback='no_promo_in_pool').
+      const fallbackXp = segment.value === 10 ? 400 : 200;
+      const fallbackSegment: WheelSegment = {
+        weight: segment.weight,
+        rewardType: 'xp',
+        value: fallbackXp,
+        label: `+${fallbackXp} XP`,
+      };
+      segment = fallbackSegment;
+    }
   }
 
   let newXpTotal = 0;
@@ -162,7 +173,11 @@ export async function spinWheel(userId: string): Promise<SpinResult> {
       userId,
       amount: segment.value,
       reason: 'wheel_spin',
-      metadata: { segmentIndex: index, label: segment.label },
+      metadata: {
+        segmentIndex: index,
+        label: segment.label,
+        fallback: promoCodeStr ? undefined : 'maybe_no_promo_in_pool',
+      },
     });
   } else {
     // Promo : pas d'XP gagné mais on récupère le total courant pour
@@ -190,6 +205,77 @@ export async function spinWheel(userId: string): Promise<SpinResult> {
     promoCode: promoCodeStr,
     newXpTotal,
   };
+}
+
+/**
+ * Tente de "réserver" un code promo du pool admin pour la roue.
+ *
+ *  - Filtres : scope IN ('game', 'both'), active=true, pas expiré,
+ *    discountValue = `targetPercent`, et soit maxUses=null soit
+ *    usedCount < maxUses
+ *  - Si trouvé : incrémente usedCount de 1 (claim atomique via UPDATE)
+ *    et renvoie le code à afficher à l'user
+ *  - Si rien dispo : null → l'appelant fallback en XP
+ *
+ * NOTE : pour l'instant on incrémente `usedCount` au moment du SPIN, pas
+ * de l'UTILISATION effective côté checkout. Ça veut dire qu'un code
+ * "gagné mais jamais utilisé" compte quand même pour son maxUses. Bon
+ * compromis pour empêcher qu'un même code soit donné à 1000 users (un
+ * code avec maxUses=10 reste pour 10 users max).
+ */
+async function tryClaimPromoFromPool(
+  targetPercent: number
+): Promise<string | null> {
+  const now = new Date();
+  const candidates = await db
+    .select()
+    .from(promoCodes)
+    .where(
+      and(
+        inArray(promoCodes.scope, ['game', 'both']),
+        eq(promoCodes.active, true),
+        eq(promoCodes.discountType, 'percent'),
+        eq(promoCodes.discountValue, String(targetPercent)),
+        or(
+          isNull(promoCodes.validUntil),
+          gt(promoCodes.validUntil, now)
+        ),
+        or(
+          isNull(promoCodes.maxUses),
+          sql`${promoCodes.usedCount} < ${promoCodes.maxUses}`
+        )
+      )
+    )
+    .orderBy(desc(promoCodes.createdAt))
+    .limit(20);
+
+  if (candidates.length === 0) return null;
+
+  // Pick aléatoire parmi les candidats pour répartir le tirage si l'admin
+  // a plusieurs codes valides (ex: WHEEL5_A, WHEEL5_B...).
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  if (!pick) return null;
+
+  // Claim atomique : incrémente usedCount, mais seulement si la row est
+  // encore éligible (anti-race condition entre 2 spins simultanés).
+  const [updated] = await db
+    .update(promoCodes)
+    .set({
+      usedCount: sql`${promoCodes.usedCount} + 1`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(promoCodes.id, pick.id),
+        or(
+          isNull(promoCodes.maxUses),
+          sql`${promoCodes.usedCount} < ${promoCodes.maxUses}`
+        )
+      )
+    )
+    .returning({ code: promoCodes.code });
+
+  return updated?.code ?? null;
 }
 
 /**

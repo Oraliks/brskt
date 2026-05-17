@@ -40,6 +40,7 @@ export default async function AdminPromosPage() {
           maxUses: p.maxUses,
           usedCount: p.usedCount,
           applicableMode: p.applicableMode,
+          scope: p.scope,
           active: p.active,
           notes: p.notes,
           createdAt: p.createdAt.toISOString(),

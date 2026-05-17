@@ -418,6 +418,11 @@ export const adminCreatePromoSchema = z
     validUntil: z.string().optional(),
     maxUses: z.number().int().min(1).max(100_000).optional(),
     applicableMode: z.enum(['remote', 'onsite']).optional(),
+    /**
+     * Périmètre : site (checkout formation), game (pool roue de la
+     * fortune), ou both. Default site.
+     */
+    scope: z.enum(['site', 'game', 'both']).default('site'),
     active: z.boolean().default(true),
     notes: z.string().max(500).optional(),
   })
@@ -432,6 +437,7 @@ export const adminUpdatePromoSchema = z.object({
   discountValue: z.number().min(0).max(100_000).optional(),
   validUntil: z.string().optional().nullable(),
   maxUses: z.number().int().min(1).max(100_000).optional().nullable(),
+  scope: z.enum(['site', 'game', 'both']).optional(),
   notes: z.string().max(500).optional(),
 });
 

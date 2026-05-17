@@ -752,6 +752,18 @@ export const promoDiscountTypeEnum = pgEnum('promo_discount_type', [
 ]);
 
 /**
+ * Périmètre d'application d'un code promo :
+ *  - `site` : utilisable au checkout formation uniquement
+ *  - `game` : pool tirable par la roue de la fortune uniquement
+ *  - `both` : utilisable au checkout ET pioché par la roue
+ *
+ * La roue ne peut tirer que des codes scope IN ('game', 'both') actifs.
+ * Si la roue gagne un segment promo et que le pool est vide, l'user
+ * reçoit un fallback XP équivalent (cf. lib/games/wheel.ts).
+ */
+export const promoScopeEnum = pgEnum('promo_scope', ['site', 'game', 'both']);
+
+/**
  * Codes promo applicables sur le checkout d'une formation.
  *
  * 2 modes :
@@ -777,6 +789,8 @@ export const promoCodes = pgTable(
     applicableMode: formationModeEnum('applicable_mode'),
     active: boolean('active').notNull().default(true),
     notes: text('notes'),
+    /** Périmètre : site / game / both. Default site (rétro-compat). */
+    scope: promoScopeEnum('scope').notNull().default('site'),
     createdBy: uuid('created_by').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -785,6 +799,7 @@ export const promoCodes = pgTable(
   },
   (t) => ({
     codeIdx: index('promo_codes_code_idx').on(t.code),
+    scopeIdx: index('promo_codes_scope_idx').on(t.scope, t.active),
   })
 );
 

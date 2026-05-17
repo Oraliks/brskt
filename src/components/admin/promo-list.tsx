@@ -43,6 +43,7 @@ export interface PromoItem {
   maxUses: number | null;
   usedCount: number;
   applicableMode: 'remote' | 'onsite' | null;
+  scope: 'site' | 'game' | 'both';
   active: boolean;
   notes: string | null;
   createdAt: string;
@@ -142,11 +143,29 @@ export function PromoList({ items }: { items: PromoItem[] }) {
                   {p.discountType === 'percent'
                     ? `-${p.discountValue}%`
                     : `-${p.discountValue}€`}
-                  {p.applicableMode && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">
-                      {p.applicableMode === 'onsite' ? 'Dubaï' : 'Distance'}
+                  <div className="mt-1 inline-flex items-center gap-1 flex-wrap">
+                    {p.applicableMode && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {p.applicableMode === 'onsite' ? 'Dubaï' : 'Distance'}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={
+                        p.scope === 'game'
+                          ? 'gold'
+                          : p.scope === 'both'
+                          ? 'success'
+                          : 'outline'
+                      }
+                      className="text-[10px]"
+                    >
+                      {p.scope === 'site'
+                        ? 'Site'
+                        : p.scope === 'game'
+                        ? '🎰 Jeu'
+                        : '🎰 + Site'}
                     </Badge>
-                  )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm tabular-nums">
                   {p.usedCount}
@@ -228,6 +247,7 @@ function CreatePromoDialog({ onCreated }: { onCreated: () => void }) {
   const [maxUses, setMaxUses] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [mode, setMode] = useState<'all' | 'remote' | 'onsite'>('all');
+  const [scope, setScope] = useState<'site' | 'game' | 'both'>('site');
   const [notes, setNotes] = useState('');
 
   function submit() {
@@ -248,6 +268,7 @@ function CreatePromoDialog({ onCreated }: { onCreated: () => void }) {
         validUntil: validUntil || undefined,
         maxUses: maxUses ? Number(maxUses) : undefined,
         applicableMode: mode === 'all' ? undefined : mode,
+        scope,
         active: true,
         notes: notes.trim() || undefined,
       });
@@ -384,6 +405,36 @@ function CreatePromoDialog({ onCreated }: { onCreated: () => void }) {
               sub="3500€"
             />
           </div>
+        </div>
+
+        <div>
+          <Label className="text-xs">Périmètre d&apos;utilisation</Label>
+          <div className="mt-1.5 grid grid-cols-3 gap-2">
+            <TypeButton
+              active={scope === 'site'}
+              onClick={() => setScope('site')}
+              label="Site"
+              sub="Checkout uniquement"
+            />
+            <TypeButton
+              active={scope === 'game'}
+              onClick={() => setScope('game')}
+              label="Jeu"
+              sub="Roue de la fortune"
+            />
+            <TypeButton
+              active={scope === 'both'}
+              onClick={() => setScope('both')}
+              label="Les deux"
+              sub="Checkout + roue"
+            />
+          </div>
+          {scope !== 'site' && (
+            <p className="mt-1.5 text-[10px] text-amber-300 light:text-amber-700">
+              La roue pioche dans le pool actif. Sans codes scope game/both,
+              les segments promo de la roue retournent un fallback XP.
+            </p>
+          )}
         </div>
 
         <div>
