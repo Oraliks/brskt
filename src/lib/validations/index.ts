@@ -545,3 +545,11 @@ export const vipPaidAccessConfigSchema = z.object({
     .min(10, "Prix minimum 10€")
     .max(10000, "Prix maximum 10 000€"),
 });
+
+// ============================================================
+// THEME MODE (admin)
+// ============================================================
+
+export const themeModeSchema = z.object({
+  mode: z.enum(['both', 'light_only', 'dark_only']),
+});

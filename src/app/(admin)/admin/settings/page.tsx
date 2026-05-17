@@ -1,4 +1,4 @@
-import { Coins, Database, Gift, KeyRound, Sun, Users } from 'lucide-react';
+import { Coins, Database, Gift, KeyRound, Palette, Sun, Users } from 'lucide-react';
 import {
   AdminContainer,
   AdminPageHeader,
@@ -15,22 +15,25 @@ import { WelcomeBonusForm } from '@/components/admin/welcome-bonus-form';
 import { DailyBriefingForm } from '@/components/admin/daily-briefing-form';
 import { CommunityCountForm } from '@/components/admin/community-count-form';
 import { VipPaidAccessConfigForm } from '@/components/admin/vip-paid-access-config-form';
+import { ThemeModeForm } from '@/components/admin/theme-mode-form';
 import { getIronFXMode } from '@/lib/ironfx';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { getDailyBriefing } from '@/lib/settings/daily-briefing';
 import { getCommunityCountOverride } from '@/lib/settings/community-count';
 import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
+import { getThemeMode } from '@/lib/settings/theme-mode';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  const [mode, welcomeBonus, briefing, communityCount, vipPaidConfig] =
+  const [mode, welcomeBonus, briefing, communityCount, vipPaidConfig, themeMode] =
     await Promise.all([
       getIronFXMode(),
       getWelcomeBonus(),
       getDailyBriefing(),
       getCommunityCountOverride(),
       getVipPaidAccessConfig(),
+      getThemeMode(),
     ]);
 
   return (
@@ -61,6 +64,10 @@ export default async function AdminSettingsPage() {
           <TabsTrigger value="vip-paid" className="gap-1.5">
             <Coins className="h-3.5 w-3.5" />
             VIP payant
+          </TabsTrigger>
+          <TabsTrigger value="theme" className="gap-1.5">
+            <Palette className="h-3.5 w-3.5" />
+            Thème
           </TabsTrigger>
           <TabsTrigger value="env" className="gap-1.5">
             <KeyRound className="h-3.5 w-3.5" />
@@ -115,6 +122,16 @@ export default async function AdminSettingsPage() {
             icon={<Coins className="h-4 w-4" />}
           >
             <VipPaidAccessConfigForm initial={vipPaidConfig} />
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="theme">
+          <SectionCard
+            title="Mode d'affichage du thème"
+            description="Choisis si les users peuvent toggler light/dark, ou si tu forces un seul thème pour toute la plateforme."
+            icon={<Palette className="h-4 w-4" />}
+          >
+            <ThemeModeForm initial={themeMode} />
           </SectionCard>
         </TabsContent>
 

@@ -23,6 +23,7 @@ interface Props {
 
 export function ThemeToggle({ variant = 'nav', className }: Props) {
   const [theme, setTheme] = useState<Theme | null>(null);
+  const [mode, setMode] = useState<string>('both');
 
   useEffect(() => {
     // Source de vérité : l'attribut posé par ThemeScript. MutationObserver
@@ -33,15 +34,19 @@ export function ThemeToggle({ variant = 'nav', className }: Props) {
     const update = () => {
       const current = html.getAttribute('data-theme');
       setTheme(current === 'light' ? 'light' : 'dark');
+      setMode(html.getAttribute('data-theme-mode') ?? 'both');
     };
     update();
     const observer = new MutationObserver(update);
     observer.observe(html, {
       attributes: true,
-      attributeFilter: ['data-theme'],
+      attributeFilter: ['data-theme', 'data-theme-mode'],
     });
     return () => observer.disconnect();
   }, []);
+
+  // Si l'admin a forcé un mode unique → toggle masqué (rien à toggler).
+  if (mode !== 'both') return null;
 
   function toggle() {
     const next: Theme = theme === 'light' ? 'dark' : 'light';

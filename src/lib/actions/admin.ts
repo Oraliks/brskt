@@ -2004,3 +2004,39 @@ export async function adminSetVipPaidAccessConfigAction(
   revalidatePath('/vip/acces-direct');
   return { success: true, data: undefined };
 }
+
+/**
+ * Configure le mode d'affichage du thème :
+ *  - both : toggle light/dark visible
+ *  - light_only : force light, toggle masqué
+ *  - dark_only : force dark, toggle masqué
+ */
+export async function adminSetThemeModeAction(
+  input: unknown
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const { themeModeSchema } = await import('@/lib/validations');
+  const parsed = themeModeSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Mode invalide',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const { setThemeMode } = await import('@/lib/settings/theme-mode');
+  await setThemeMode(parsed.data.mode, session.user.id);
+
+  await logAdminAction({
+    adminId: session.user.id,
+    action: 'theme_mode_update',
+    targetType: 'settings',
+    targetId: 'theme_mode',
+    after: { mode: parsed.data.mode },
+  });
+
+  revalidatePath('/', 'layout');
+  return { success: true, data: undefined };
+}

@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ThemeScript } from '@/components/theme/theme-script';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { TelegramProvider } from '@/components/mini/telegram-webapp';
+import { getThemeMode } from '@/lib/settings/theme-mode';
 
 export const metadata: Metadata = {
   title: {
@@ -58,15 +59,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Mode thème admin (both / light_only / dark_only) lu en SSR pour
+  // pouvoir l'injecter dans ThemeScript avant first paint.
+  const themeMode = await getThemeMode();
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
         {/* DOIT être le premier child du <head> : applique data-theme avant
             le premier paint pour éviter le flash dark→light */}
-        <ThemeScript />
+        <ThemeScript mode={themeMode} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
