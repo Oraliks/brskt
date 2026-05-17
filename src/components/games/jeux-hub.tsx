@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { Level } from '@/lib/games/xp';
 
-type Category = 'all' | 'daily' | 'weekly' | 'challenges' | 'xp' | 'ranking';
+type Category = 'all' | 'daily' | 'weekly' | 'challenges' | 'xp';
 
 interface Availability {
   tap: { runsLeft: number; runsTotal: number };
@@ -57,7 +57,6 @@ const CATEGORIES: { id: Category; label: string }[] = [
   { id: 'weekly', label: 'Hebdo' },
   { id: 'challenges', label: 'Défis' },
   { id: 'xp', label: 'XP' },
-  { id: 'ranking', label: 'Classement' },
 ];
 
 type Status =
@@ -129,18 +128,6 @@ export function JeuxHub({
                 }
               : { kind: 'available', label: 'Dispo' },
         metric: { icon: Users, value: formatCount(counts.predict) },
-      },
-      {
-        id: 'classement',
-        category: ['all', 'ranking', 'xp'],
-        href: '/jeux/classement',
-        icon: Trophy,
-        iconBg: 'from-indigo-500/30 to-purple-700/20',
-        iconColor: 'text-indigo-300',
-        title: 'Top trader',
-        subtitle: 'Hebdo',
-        status: { kind: 'available', label: 'Voir' },
-        metric: { icon: Users, value: formatCount(counts.classement) },
       },
       {
         id: 'defi',
@@ -216,7 +203,6 @@ export function JeuxHub({
     [
       counts.wheel,
       counts.predict,
-      counts.classement,
       challengeLabel,
       challengeDone,
       availability,
@@ -329,20 +315,38 @@ export function JeuxHub({
         </div>
       </div>
 
+      {/* Top trader CTA */}
+      <Link
+        href="/jeux/classement"
+        className="group glass-strong rounded-[var(--radius-lg)] p-4 flex items-center justify-between gap-4 hover:-translate-y-0.5 transition-all border border-[var(--color-border-strong)]"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-700/20 flex-shrink-0">
+            <Trophy className="h-5 w-5 text-amber-300" />
+          </span>
+          <div className="min-w-0">
+            <div className="font-serif text-base leading-tight">Top trader</div>
+            <div className="text-xs text-[var(--color-text-dim)]">
+              {challenges.topRank
+                ? `Tu es #${challenges.topRank} cette semaine`
+                : 'Classement hebdomadaire'}
+              {' · '}
+              {formatCount(counts.classement)} joueurs
+            </div>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-accent-hover)] font-medium whitespace-nowrap">
+          Voir le classement
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </Link>
+
       {/* Défis en cours */}
       <div className="glass rounded-[var(--radius-lg)] p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm uppercase tracking-wider text-[var(--color-text-faint)] inline-flex items-center gap-2">
-            <Target className="h-4 w-4 text-[var(--color-accent-hover)]" />
-            Défis en cours
-          </h2>
-          <Link
-            href="/jeux/classement"
-            className="text-xs text-[var(--color-accent-hover)] hover:underline"
-          >
-            Voir tous
-          </Link>
-        </div>
+        <h2 className="text-sm uppercase tracking-wider text-[var(--color-text-faint)] inline-flex items-center gap-2">
+          <Target className="h-4 w-4 text-[var(--color-accent-hover)]" />
+          Défis en cours
+        </h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <ChallengeBar
             icon={Target}
