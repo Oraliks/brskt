@@ -1,223 +1,185 @@
-import Link from 'next/link';
-import {
-  ArrowRight,
-  Flame,
-  LineChart,
-  MousePointer2,
-  Trophy,
-  Disc,
-  Sparkles,
-} from 'lucide-react';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/server';
+import { db } from '@/lib/db';
+import { gamePredictions, gameTapRuns, xpEvents } from '@/lib/db/schema';
 import { getLevel, getUserXpState } from '@/lib/games/xp';
 import { getWheelStatus } from '@/lib/games/wheel';
-import { Section, SectionHeader } from '@/components/shared/section';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { getTapMeta } from '@/lib/games/tap';
+import { getTodayChallenge } from '@/lib/games/tap';
+import { getUserRank } from '@/lib/games/leaderboard';
+import { JeuxHub } from '@/components/games/jeux-hub';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Hub des mini-jeux. 4 entrées : pronostic du jour, roue, classement,
- * sa progression XP. Page volontairement compacte pour rester rapide à
- * naviguer en Mini App.
+ * Hub des mini-jeux — design inspiré des maquettes user.
+ *
+ * Layout : XP bandeau + onglets filtres + grille de cards visuelles
+ * (1 grande "Jeu du jour" + 4-8 cards secondaires) + section "Défis
+ * en cours" avec progress bars.
  */
 export default async function JeuxPage() {
   const { user } = await requireAuth();
-  const [xpState, wheelStatus] = await Promise.all([
+
+  // Toutes les données en parallèle pour la page hub
+  const [xpState, wheelStatus, tapMeta, weekRank] = await Promise.all([
     getUserXpState(user.id),
     getWheelStatus(user.id),
+    getTapMeta(user.id),
+    getUserRank(user.id, 'week'),
   ]);
 
   const xp = xpState?.xpTotal ?? 0;
   const streak = xpState?.predictionStreakCount ?? 0;
   const longest = xpState?.predictionStreakLongest ?? 0;
-  const { level, next, progress, xpToNext } = getLevel(xp);
+  const levelInfo = getLevel(xp);
+
+  // Stats pour les "Défis en cours"
+  const [predictionsToday, predictionsAccuracy, xpThisWeek] = await Promise.all([
+    countPredictionsToday(user.id),
+    computePredictionAccuracy(user.id),
+    computeXpThisWeek(user.id),
+  ]);
+
+  // Stats compteur des participations (KPI affichées sur les cards)
+  const counts = await getGameCounts();
+
+  const dailyChallenge = getTodayChallenge();
 
   return (
-    <>
-      <Section className="pt-10 pb-4">
-        <SectionHeader
-          eyebrow="Jeux"
-          title={
-            <>
-              Joue, monte en{' '}
-              <span className="font-serif italic">niveau.</span>
-            </>
-          }
-          description="Pronostique les marchés, fais ta roue de la semaine, grimpe au classement."
-          align="left"
-        />
-      </Section>
-
-      {/* Bandeau profil XP — compact, toujours visible */}
-      <Section className="py-2">
-        <div className="glass-strong rounded-[var(--radius-lg)] p-5 flex flex-col sm:flex-row sm:items-center gap-5">
-          <div className="flex items-center gap-4 flex-1">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/30 to-pink-500/30 text-2xl">
-              {level.icon}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-serif text-xl">{level.label}</span>
-                {next && (
-                  <Badge variant="outline" className="text-[10px]">
-                    {xp} / {next.minXp} XP
-                  </Badge>
-                )}
-                {!next && <Badge variant="gold">MAX</Badge>}
-              </div>
-              {next ? (
-                <>
-                  <div className="h-1.5 bg-[var(--color-surface-tint)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all"
-                      style={{ width: `${Math.round(progress * 100)}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-[var(--color-text-faint)] mt-1">
-                    Encore {xpToNext} XP → {next.icon} {next.label}
-                  </div>
-                </>
-              ) : (
-                <div className="text-xs text-[var(--color-text-faint)]">
-                  Niveau max atteint, légende vivante.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 sm:border-l sm:border-[var(--color-border)] sm:pl-5">
-            <Stat icon={Flame} label="Streak" value={streak} accent="amber" />
-            <Stat icon={Trophy} label="Record" value={longest} accent="emerald" />
-          </div>
-        </div>
-      </Section>
-
-      {/* Cards des jeux */}
-      <Section className="py-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <GameCard
-            href="/jeux/predict"
-            icon={LineChart}
-            badge="Quotidien"
-            title="Pronostic chandelier"
-            description="5 marchés. Tu prédis si chaque clôture du jour finit au-dessus ou en dessous de la veille. +10 XP par participation, +50 par bonne réponse."
-            cta="Faire mes pronostics"
-            highlight
-          />
-          <GameCard
-            href="/jeux/roue"
-            icon={Disc}
-            badge="Hebdomadaire"
-            title="Roue de la fortune"
-            description="1 spin par semaine. XP, jackpot 1000 XP, ou codes promo formation. Garantit toujours quelque chose."
-            cta={wheelStatus.canSpin ? 'Tourner la roue' : 'Voir le compteur'}
-            note={wheelStatus.canSpin ? 'Disponible maintenant' : 'En cooldown'}
-          />
-          <GameCard
-            href="/jeux/clic"
-            icon={MousePointer2}
-            badge="Réflexes"
-            title="Combo de clic"
-            description="Enchaîne les clics sans casser la barre de combo. 5 paliers, plus tu montes haut plus c'est serré. 3 runs par jour."
-            cta="Tester mes réflexes"
-          />
-          <GameCard
-            href="/jeux/classement"
-            icon={Trophy}
-            badge="Classement"
-            title="Top trader"
-            description="3 leaderboards : semaine, mois, all-time. Les plus actifs montent."
-            cta="Voir le classement"
-          />
-          <GameCard
-            href="/dashboard"
-            icon={Sparkles}
-            badge="Retour"
-            title="Mon espace"
-            description="Tes formations, tes réservations, ton lien d'invitation."
-            cta="Aller au dashboard"
-          />
-        </div>
-      </Section>
-    </>
+    <JeuxHub
+      level={levelInfo}
+      xp={xp}
+      streak={streak}
+      longest={longest}
+      wheelAvailable={wheelStatus.canSpin}
+      tapRunsLeft={tapMeta.runsLeftToday}
+      challengeLabel={dailyChallenge.label}
+      challengeDone={tapMeta.challengeDoneToday}
+      counts={counts}
+      challenges={{
+        precision: predictionsAccuracy,
+        streak: { current: streak, target: nextStreakMilestone(streak) },
+        rushXp: { current: xpThisWeek, target: 1000 },
+        topRank: weekRank?.rank ?? null,
+      }}
+      hasPredictionsToday={predictionsToday > 0}
+    />
   );
 }
 
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: number;
-  accent: 'amber' | 'emerald';
-}) {
-  const colorClass = accent === 'amber' ? 'text-amber-300' : 'text-emerald-300';
-  return (
-    <div className="flex items-center gap-2">
-      <Icon className={cn('h-4 w-4', colorClass)} />
-      <div>
-        <div className={cn('font-serif text-lg leading-none', colorClass)}>
-          {value}
-        </div>
-        <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-faint)]">
-          {label}
-        </div>
-      </div>
-    </div>
-  );
+// ============================================================
+// Helpers de calcul
+// ============================================================
+
+async function countPredictionsToday(userId: string): Promise<number> {
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rows = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(gamePredictions)
+      .where(
+        and(
+          eq(gamePredictions.userId, userId),
+          gte(gamePredictions.createdAt, today)
+        )
+      );
+    return rows[0]?.c ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
-function GameCard({
-  href,
-  icon: Icon,
-  badge,
-  title,
-  description,
-  cta,
-  note,
-  highlight,
-}: {
-  href: string;
-  icon: React.ElementType;
-  badge: string;
-  title: string;
-  description: string;
-  cta: string;
-  note?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'glass-strong rounded-[var(--radius-lg)] p-5 flex flex-col gap-3 transition-all hover:-translate-y-0.5 hover:border-[var(--color-border-strong)]',
-        highlight && 'ring-1 ring-amber-500/30'
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <Badge variant={highlight ? 'gold' : 'outline'}>
-          <Icon className="h-3 w-3 mr-1" />
-          {badge}
-        </Badge>
-        {note && (
-          <span className="text-[10px] text-[var(--color-text-faint)] uppercase tracking-wider">
-            {note}
-          </span>
-        )}
-      </div>
-      <h3 className="font-serif text-xl">{title}</h3>
-      <p className="text-sm text-[var(--color-text-dim)] flex-1">
-        {description}
-      </p>
-      <span className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent-hover)]">
-        {cta}
-        <ArrowRight className="h-4 w-4" />
-      </span>
-    </Link>
-  );
+/**
+ * Calcule la précision des 10 derniers pronostics résolus.
+ * Renvoie {correct, total} pour afficher "7/10".
+ */
+async function computePredictionAccuracy(
+  userId: string
+): Promise<{ correct: number; total: number }> {
+  try {
+    const rows = await db
+      .select()
+      .from(gamePredictions)
+      .where(
+        and(
+          eq(gamePredictions.userId, userId),
+          eq(gamePredictions.resolved, true)
+        )
+      )
+      .orderBy(sql`${gamePredictions.resolvedAt} desc`)
+      .limit(10);
+    const correct = rows.filter((r) => r.correct === true).length;
+    return { correct, total: rows.length };
+  } catch {
+    return { correct: 0, total: 0 };
+  }
+}
+
+async function computeXpThisWeek(userId: string): Promise<number> {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        sum: sql<number>`coalesce(sum(${xpEvents.amount}), 0)::int`,
+      })
+      .from(xpEvents)
+      .where(
+        and(eq(xpEvents.userId, userId), gte(xpEvents.createdAt, weekAgo))
+      );
+    return rows[0]?.sum ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Compteurs de participation par jeu (pour afficher "X 245" sous chaque card).
+ * Best-effort, fallback 0 si table absente.
+ */
+async function getGameCounts(): Promise<{
+  wheel: number;
+  tap: number;
+  predict: number;
+  classement: number;
+}> {
+  try {
+    const [wheelRow, tapRow, predRow, classRow] = await Promise.all([
+      db.execute(
+        sql`SELECT count(*)::int as c FROM game_wheel_spins`
+      ).catch(() => ({ rows: [{ c: 0 }] })),
+      db
+        .select({ c: sql<number>`count(distinct user_id)::int` })
+        .from(gameTapRuns)
+        .catch(() => [{ c: 0 }]),
+      db
+        .select({ c: sql<number>`count(distinct user_id)::int` })
+        .from(gamePredictions)
+        .catch(() => [{ c: 0 }]),
+      db
+        .select({ c: sql<number>`count(distinct user_id)::int` })
+        .from(xpEvents)
+        .catch(() => [{ c: 0 }]),
+    ]);
+    type Row = { c?: number; rows?: { c?: number }[] };
+    const get = (r: Row | Array<{ c?: number }>): number => {
+      if (Array.isArray(r)) return r[0]?.c ?? 0;
+      if (r.rows && r.rows[0]) return r.rows[0].c ?? 0;
+      return 0;
+    };
+    return {
+      wheel: get(wheelRow as Row),
+      tap: get(tapRow as unknown as Array<{ c?: number }>),
+      predict: get(predRow as unknown as Array<{ c?: number }>),
+      classement: get(classRow as unknown as Array<{ c?: number }>),
+    };
+  } catch {
+    return { wheel: 0, tap: 0, predict: 0, classement: 0 };
+  }
+}
+
+function nextStreakMilestone(current: number): number {
+  const milestones = [7, 14, 30, 90, 180, 365];
+  return milestones.find((m) => m > current) ?? 365;
 }
