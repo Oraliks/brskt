@@ -1186,6 +1186,33 @@ export const xpEvents = pgTable(
 );
 
 /**
+ * Patience Trainer : un graphique se trace en temps réel, l'user maintient
+ * un bouton "Entrer position" et le lâche au moment qu'il pense optimal.
+ * Score basé sur la qualité de son entry vs la suite du chart.
+ *
+ * Limite : 3 runs / 24h glissantes. Anti-cheat : durée plausible
+ * (1-60 sec), score borné 0-100 côté serveur.
+ */
+export const patienceRuns = pgTable(
+  'patience_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Temps que l'user a tenu le bouton (ms). */
+    durationHeldMs: integer('duration_held_ms').notNull(),
+    /** Score qualité d'entrée 0-100. */
+    score: integer('score').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('patience_runs_user_idx').on(t.userId, t.createdAt),
+  })
+);
+
+/**
  * Test d'aversion à la perte. 1 run par user par semaine.
  *
  * 10 choix binaires "sûr vs loterie" → on calcule le coefficient lambda

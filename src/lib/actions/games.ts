@@ -20,6 +20,7 @@ import {
   submitLossAversionRun,
   LOSS_AVERSION_QUESTIONS,
 } from '@/lib/games/loss-aversion';
+import { submitPatienceRun } from '@/lib/games/patience';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -364,6 +365,59 @@ export async function submitLossAversionAction(input: {
       coefficient: result.coefficient,
       safeCount: result.safeCount,
       newTotal: result.newTotal,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run du Patience Trainer.
+ */
+export async function submitPatienceRunAction(input: {
+  score: number;
+  durationHeldMs: number;
+}): Promise<
+  ActionResult<{
+    score: number;
+    xpAwarded: number;
+    newTotal: number;
+    runsLeftToday: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `patience:user:${user.id}`,
+    limit: 6,
+    windowSec: 300,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  const result = await submitPatienceRun(user.id, {
+    score: input.score,
+    durationHeldMs: input.durationHeldMs,
+  });
+  if (!result.ok) {
+    const msg =
+      result.error === 'daily_limit'
+        ? 'Tu as utilisé tes 3 essais du jour. Reviens demain.'
+        : result.error === 'invalid_run'
+        ? 'Run invalide.'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/patience');
+  revalidatePath('/jeux');
+
+  return {
+    success: true,
+    data: {
+      score: result.score,
+      xpAwarded: result.xpAwarded,
+      newTotal: result.newTotal,
+      runsLeftToday: result.runsLeftToday,
     },
   };
 }
