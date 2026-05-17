@@ -169,6 +169,13 @@
       "when": 1778990582090,
       "tag": "0023_many_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778991051312,
+      "tag": "0024_flippant_maelstrom",
+      "breakpoints": true
     }
   ]
 }

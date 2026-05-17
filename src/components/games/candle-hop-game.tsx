@@ -37,13 +37,23 @@ interface PowerUpDef {
   description: string;
 }
 
+type Mode = 'endless' | 'time_attack' | 'survival';
+
+interface ModeDef {
+  id: Mode;
+  label: string;
+  description: string;
+}
+
 interface Props {
   bestScore: number;
+  bestByMode: Record<Mode, number>;
   runsLeftToday: number;
   xpRoomToday: number;
   xpTotal: number;
   skins: Skin[];
   powerUps: PowerUpDef[];
+  modes: ModeDef[];
 }
 
 // Game world dimensions (logical)
@@ -116,12 +126,17 @@ interface GameState {
   startedAtMs: number;
   taps: number;
   particles: Particle[];
-  // V2 stats
   bonusesCollected: number;
   powerUpsUsed: number;
+  // V3
+  mode: Mode;
+  bossEndsAt: number; // performance.now() ; > now si boss en cours
+  bossesTriggered: number; // tracking pour ne pas re-trigger
+  /** Pour Time Attack : timestamp prévu de fin */
+  timeAttackEndsAt: number;
 }
 
-function makeInitialState(): GameState {
+function makeInitialState(mode: Mode = 'endless'): GameState {
   return {
     phase: 'idle',
     player: { y: H / 2, vy: 0 },
@@ -137,32 +152,45 @@ function makeInitialState(): GameState {
     particles: [],
     bonusesCollected: 0,
     powerUpsUsed: 0,
+    mode,
+    bossEndsAt: 0,
+    bossesTriggered: 0,
+    timeAttackEndsAt: 0,
   };
 }
 
 const SKIN_STORAGE_KEY = 'candle_hop_skin';
+const MODE_STORAGE_KEY = 'candle_hop_mode';
+const TIME_ATTACK_DURATION_MS = 60_000;
+const BOSS_DURATION_MS = 3000;
+const BOSS_SPEED_MULT = 1.4;
+const SURVIVAL_GAP_SHRINK_PER_SCORE = 1.5; // px par point
 
 export function CandleHopGame({
   bestScore,
+  bestByMode,
   runsLeftToday,
   xpRoomToday,
   xpTotal,
   skins,
   powerUps,
+  modes,
 }: Props) {
   const router = useRouter();
   const haptic = useHaptic();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<GameState>(makeInitialState());
+  const gameRef = useRef<GameState>(makeInitialState('endless'));
   const lastTimeRef = useRef<number>(0);
   const animRef = useRef<number>(0);
   const submittedRef = useRef(false);
   const skinRef = useRef<Skin>(skins[0]!);
+  const modeRef = useRef<Mode>('endless');
   const [, setTick] = useState(0);
   const [phase, setPhase] = useState<'idle' | 'playing' | 'dead'>('idle');
   const [score, setScore] = useState(0);
   const [activeSkinId, setActiveSkinId] = useState<string>(skins[0]?.id ?? 'classic');
+  const [selectedMode, setSelectedMode] = useState<Mode>('endless');
   const [submitResult, setSubmitResult] = useState<
     | null
     | {
@@ -182,19 +210,34 @@ export function CandleHopGame({
   // Load skin from localStorage
   useEffect(() => {
     const stored = localStorage.getItem(SKIN_STORAGE_KEY);
-    if (!stored) return;
-    const found = skins.find((s) => s.id === stored);
-    if (found && xpTotal >= found.unlockXp) {
-      setActiveSkinId(found.id);
-      skinRef.current = found;
+    if (stored) {
+      const found = skins.find((s) => s.id === stored);
+      if (found && xpTotal >= found.unlockXp) {
+        setActiveSkinId(found.id);
+        skinRef.current = found;
+      }
     }
-  }, [skins, xpTotal]);
+    const storedMode = localStorage.getItem(MODE_STORAGE_KEY) as Mode | null;
+    if (storedMode && (modes.some((m) => m.id === storedMode))) {
+      setSelectedMode(storedMode);
+      modeRef.current = storedMode;
+      gameRef.current.mode = storedMode;
+    }
+  }, [skins, xpTotal, modes]);
 
   function selectSkin(skin: Skin) {
     if (xpTotal < skin.unlockXp) return;
     setActiveSkinId(skin.id);
     skinRef.current = skin;
     localStorage.setItem(SKIN_STORAGE_KEY, skin.id);
+    haptic.selection();
+  }
+
+  function selectMode(mode: Mode) {
+    setSelectedMode(mode);
+    modeRef.current = mode;
+    gameRef.current = makeInitialState(mode);
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
     haptic.selection();
   }
 
@@ -207,11 +250,19 @@ export function CandleHopGame({
       ) {
         const lastX = g.obstacles[g.obstacles.length - 1]?.x ?? W;
         const newX = lastX + OBSTACLE_SPACING;
-        const gapH = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
+        // Mode Survival : le gap rétrécit avec le score
+        let effectiveGapMax = GAP_MAX;
+        let effectiveGapMin = GAP_MIN;
+        if (g.mode === 'survival') {
+          const shrink = Math.min(80, g.score * SURVIVAL_GAP_SHRINK_PER_SCORE);
+          effectiveGapMax = Math.max(GAP_MIN + 10, GAP_MAX - shrink);
+          effectiveGapMin = Math.max(GAP_MIN - 30, GAP_MIN - shrink * 0.3);
+        }
+        const gapH =
+          effectiveGapMin + Math.random() * (effectiveGapMax - effectiveGapMin);
         const margin = 80;
         const gapY = margin + Math.random() * (H - 2 * margin - gapH);
         g.obstacles.push({ x: newX, gapY, gapH, passed: false });
-        // 40% chance bonus
         if (Math.random() < 0.4) {
           g.bonuses.push({
             x: newX + OBSTACLE_W / 2,
@@ -219,7 +270,6 @@ export function CandleHopGame({
             collected: false,
           });
         }
-        // 12% chance power-up
         if (Math.random() < POWERUP_SPAWN_CHANCE && powerUps.length > 0) {
           const def = powerUps[Math.floor(Math.random() * powerUps.length)]!;
           g.powerUpsOnField.push({
@@ -236,7 +286,7 @@ export function CandleHopGame({
   );
 
   const reset = useCallback(() => {
-    gameRef.current = makeInitialState();
+    gameRef.current = makeInitialState(modeRef.current);
     submittedRef.current = false;
     setPhase('idle');
     setScore(0);
@@ -249,6 +299,9 @@ export function CandleHopGame({
     g.startedAtMs = performance.now();
     g.player.vy = JUMP_V;
     g.taps = 1;
+    if (g.mode === 'time_attack') {
+      g.timeAttackEndsAt = performance.now() + TIME_ATTACK_DURATION_MS;
+    }
     submittedRef.current = false;
     setPhase('playing');
     haptic.impact('light');
@@ -277,6 +330,7 @@ export function CandleHopGame({
           taps,
           bonusesCollected,
           powerUpsUsed,
+          mode: g.mode,
         });
         if (!res.success) {
           haptic.error();
@@ -365,6 +419,14 @@ export function CandleHopGame({
       grad.addColorStop(1, 'rgba(30, 41, 59, 1)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, cw, ch);
+
+      // V3 : boss red flash overlay
+      const nowDraw = performance.now();
+      if (nowDraw < g.bossEndsAt) {
+        const pulseAlpha = 0.18 + Math.sin(nowDraw * 0.015) * 0.1;
+        ctx.fillStyle = `rgba(239, 68, 68, ${pulseAlpha})`;
+        ctx.fillRect(0, 0, cw, ch);
+      }
 
       // Chart grid
       ctx.strokeStyle = 'rgba(99, 102, 241, 0.08)';
@@ -479,9 +541,36 @@ export function CandleHopGame({
         return;
       }
 
-      // Speed multiplier from power-ups
+      // V3 : Time Attack timer
+      if (g.mode === 'time_attack' && now >= g.timeAttackEndsAt) {
+        // Fin du temps imparti — soumet le run
+        g.phase = 'dead';
+        haptic.success();
+        setPhase('dead');
+        submitRun(g);
+        return;
+      }
+
+      // V3 : Boss fights (toutes les 50pts, sauf en Time Attack court)
+      if (g.mode === 'endless' || g.mode === 'survival') {
+        const expectedBosses = Math.floor(g.score / 50);
+        if (
+          expectedBosses > g.bossesTriggered &&
+          now >= g.bossEndsAt
+        ) {
+          g.bossesTriggered = expectedBosses;
+          g.bossEndsAt = now + BOSS_DURATION_MS;
+          haptic.impact('heavy');
+        }
+      }
+      const bossActive = now < g.bossEndsAt;
+
+      // Speed multiplier from power-ups + boss
       const slowMo = g.activePowerUps.some((p) => p.id === 'slow_mo');
-      const effectiveSpeed = slowMo ? g.speed * 0.5 : g.speed;
+      let speedMult = 1;
+      if (slowMo) speedMult *= 0.5;
+      if (bossActive) speedMult *= BOSS_SPEED_MULT;
+      const effectiveSpeed = g.speed * speedMult;
       const magnetActive = g.activePowerUps.some((p) => p.id === 'magnet');
       const invincible = g.activePowerUps.some((p) => p.id === 'bull_run');
 
@@ -673,7 +762,7 @@ export function CandleHopGame({
       >
         <canvas ref={canvasRef} className="absolute inset-0" />
 
-        {/* HUD : score top + active power-ups */}
+        {/* HUD : score top + active power-ups + mode timer */}
         <div className="absolute top-3 left-0 right-0 pointer-events-none">
           <div className="text-center">
             <div className="inline-block px-4 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-white/10">
@@ -681,6 +770,9 @@ export function CandleHopGame({
                 {score}
               </span>
             </div>
+            {phase === 'playing' && gameRef.current.mode === 'time_attack' && (
+              <TimeAttackCountdown endsAt={gameRef.current.timeAttackEndsAt} />
+            )}
           </div>
           {bestScore > 0 && (
             <div className="absolute top-1 right-3 text-[10px] uppercase tracking-wider text-white/50 font-mono">
@@ -707,27 +799,64 @@ export function CandleHopGame({
           )}
         </div>
 
-        {/* Idle overlay : skin selector + start */}
+        {/* Idle overlay : mode + skin + start */}
         {phase === 'idle' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-between text-center bg-black/35 backdrop-blur-[2px] py-6 px-4">
-            <div className="space-y-3">
-              <Bird className="h-12 w-12 text-amber-300 mx-auto drop-shadow animate-pulse" />
-              <h3 className="font-serif text-2xl text-white">
+          <div className="absolute inset-0 flex flex-col items-center justify-between text-center bg-black/40 backdrop-blur-[2px] py-5 px-4 gap-3">
+            <div className="space-y-2">
+              <Bird className="h-10 w-10 text-amber-300 mx-auto drop-shadow animate-pulse" />
+              <h3 className="font-serif text-xl text-white">
                 Tap pour décoller
               </h3>
-              <div className="inline-flex items-center gap-1.5 text-xs text-white/60">
+              <div className="inline-flex items-center gap-1.5 text-[10px] text-white/60">
                 <Sparkles className="h-3 w-3" />
                 {runsLeftToday} runs ·{' '}
-                {xpRoomToday > 0 ? `${xpRoomToday} XP dispo` : 'cap XP atteint'}
+                {xpRoomToday > 0 ? `${xpRoomToday} XP dispo` : 'cap atteint'}
               </div>
             </div>
 
-            {/* Skin selector */}
-            <div className="w-full space-y-2">
-              <div className="text-[10px] uppercase tracking-wider text-white/50 font-mono">
-                Skin · {unlockedSkins.length}/{skins.length} débloqués
+            {/* Mode selector V3 */}
+            <div className="w-full space-y-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-white/50 font-mono">
+                Mode · best{' '}
+                <span className="text-amber-300">
+                  {bestByMode[selectedMode] ?? 0}
+                </span>
               </div>
-              <div className="flex justify-center gap-2 flex-wrap">
+              <div className="flex gap-1.5 justify-center">
+                {modes.map((m) => {
+                  const active = selectedMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectMode(m.id);
+                      }}
+                      title={m.description}
+                      className={cn(
+                        'flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium border transition-all',
+                        active
+                          ? 'bg-gradient-to-r from-indigo-500/80 to-purple-500/80 border-amber-300 text-white shadow-md'
+                          : 'bg-black/30 border-white/15 text-white/70 hover:border-white/40'
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-white/50 italic">
+                {modes.find((m) => m.id === selectedMode)?.description}
+              </p>
+            </div>
+
+            {/* Skin selector */}
+            <div className="w-full space-y-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-white/50 font-mono">
+                Skin · {unlockedSkins.length}/{skins.length}
+              </div>
+              <div className="flex justify-center gap-1.5 flex-wrap">
                 {skins.map((s) => {
                   const unlocked = xpTotal >= s.unlockXp;
                   const active = activeSkinId === s.id;
@@ -746,7 +875,7 @@ export function CandleHopGame({
                           : `Débloque à ${s.unlockXp} XP`
                       }
                       className={cn(
-                        'h-9 w-9 rounded-md border-2 flex items-center justify-center transition-all relative',
+                        'h-8 w-8 rounded-md border-2 flex items-center justify-center transition-all relative',
                         active
                           ? 'scale-110 border-amber-300 shadow-lg'
                           : 'border-white/20 hover:border-white/50',
@@ -818,32 +947,40 @@ export function CandleHopGame({
                     ))}
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2 mt-2 w-full max-w-xs">
-                  {canRetry ? (
+                <div className="flex flex-col gap-2 mt-2 w-full max-w-xs">
+                  <div className="flex gap-2">
+                    {canRetry ? (
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reset();
+                        }}
+                        className="flex-1"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Rejouer ({submitResult.runsLeftToday})
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
+                      variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        reset();
+                        router.push('/jeux');
                       }}
                       className="flex-1"
                     >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Rejouer ({submitResult.runsLeftToday})
+                      Retour
+                      <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push('/jeux');
-                    }}
-                    className="flex-1"
-                  >
-                    Retour
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
+                  </div>
+                  {score > 0 && (
+                    <ShareScoreButton
+                      score={score}
+                      mode={gameRef.current.mode}
+                    />
+                  )}
                 </div>
               </>
             ) : (
@@ -927,4 +1064,80 @@ function hexToRgba(hex: string, alpha: number): string {
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+function TimeAttackCountdown({ endsAt }: { endsAt: number }) {
+  const [remaining, setRemaining] = useState(
+    Math.max(0, Math.ceil((endsAt - performance.now()) / 1000))
+  );
+  useEffect(() => {
+    const tick = () => {
+      const r = Math.max(0, Math.ceil((endsAt - performance.now()) / 1000));
+      setRemaining(r);
+    };
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [endsAt]);
+  const critical = remaining <= 10;
+  return (
+    <div
+      className={cn(
+        'mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider backdrop-blur-sm border',
+        critical
+          ? 'bg-rose-500/30 border-rose-500/60 text-rose-100 animate-pulse'
+          : 'bg-black/30 border-white/15 text-white/80'
+      )}
+    >
+      ⏱ {remaining}s
+    </div>
+  );
+}
+
+function ShareScoreButton({
+  score,
+  mode,
+}: {
+  score: number;
+  mode: 'endless' | 'time_attack' | 'survival';
+}) {
+  const haptic = useHaptic();
+  function share() {
+    haptic.impact('light');
+    const modeLabel =
+      mode === 'time_attack'
+        ? 'Time Attack'
+        : mode === 'survival'
+          ? 'Survival'
+          : 'Endless';
+    const text = `🐦 J'ai fait ${score} pts en mode ${modeLabel} sur Candle Hop. Tente de me battre :`;
+    // Construit l'URL de partage native Telegram
+    const url = 'https://t.me/boursikotonsbot?startapp=hop';
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    try {
+      const w = window as unknown as {
+        Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } };
+      };
+      if (w.Telegram?.WebApp?.openTelegramLink) {
+        w.Telegram.WebApp.openTelegramLink(tgUrl);
+        return;
+      }
+    } catch {
+      /* fallback below */
+    }
+    window.open(tgUrl, '_blank');
+  }
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={(e) => {
+        e.stopPropagation();
+        share();
+      }}
+      className="w-full bg-white/10 hover:bg-white/15 text-white"
+    >
+      <Sparkles className="h-4 w-4 mr-2 text-amber-300" />
+      Partager mon score
+    </Button>
+  );
 }

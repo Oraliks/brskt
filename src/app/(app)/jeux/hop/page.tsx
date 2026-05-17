@@ -8,6 +8,8 @@ import {
   CANDLE_HOP_ACHIEVEMENTS,
   CANDLE_HOP_DAILY_LIMIT,
   CANDLE_HOP_DAILY_XP_CAP,
+  CANDLE_HOP_MODES,
+  CANDLE_HOP_MODE_LABELS,
   CANDLE_HOP_POWER_UPS,
   CANDLE_HOP_SKINS,
   getCandleHopState,
@@ -74,6 +76,7 @@ export default async function CandleHopPage() {
         {state.canPlay ? (
           <CandleHopGame
             bestScore={state.bestScore}
+            bestByMode={state.bestByMode}
             runsLeftToday={state.runsLeftToday}
             xpRoomToday={Math.max(
               0,
@@ -96,6 +99,11 @@ export default async function CandleHopPage() {
               color: p.color,
               description: p.description,
             }))}
+            modes={CANDLE_HOP_MODES.map((m) => ({
+              id: m,
+              label: CANDLE_HOP_MODE_LABELS[m].label,
+              description: CANDLE_HOP_MODE_LABELS[m].description,
+            }))}
           />
         ) : (
           <CooldownCard
@@ -103,6 +111,31 @@ export default async function CandleHopPage() {
             xpEarnedToday={state.xpEarnedToday}
           />
         )}
+      </Section>
+
+      {/* CTA Leaderboard */}
+      <Section className="py-3">
+        <Link
+          href="/jeux/hop/leaderboard"
+          className="group glass-strong rounded-[var(--radius-lg)] p-4 flex items-center justify-between gap-4 hover:-translate-y-0.5 transition-all border border-[var(--color-border-strong)]"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-700/20 flex-shrink-0">
+              <Trophy className="h-5 w-5 text-amber-300" />
+            </span>
+            <div className="min-w-0">
+              <div className="font-serif text-base leading-tight">
+                Leaderboard
+              </div>
+              <div className="text-xs text-[var(--color-text-dim)]">
+                Top 20 par mode · trouve ton rang
+              </div>
+            </div>
+          </div>
+          <span className="text-xs text-[var(--color-accent-hover)] font-medium">
+            Voir →
+          </span>
+        </Link>
       </Section>
 
       {/* Achievements V2 */}

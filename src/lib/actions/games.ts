@@ -625,6 +625,7 @@ export async function submitCandleHopAction(input: {
   taps: number;
   bonusesCollected?: number;
   powerUpsUsed?: number;
+  mode?: 'endless' | 'time_attack' | 'survival';
 }): Promise<
   ActionResult<{
     score: number;
@@ -662,6 +663,7 @@ export async function submitCandleHopAction(input: {
     taps: input.taps,
     bonusesCollected: input.bonusesCollected,
     powerUpsUsed: input.powerUpsUsed,
+    mode: input.mode,
   });
   if (!result.ok) {
     const msg =

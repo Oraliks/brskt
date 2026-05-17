@@ -24,6 +24,33 @@ export const CANDLE_HOP_DAILY_LIMIT = 5;
 export const CANDLE_HOP_DAILY_XP_CAP = 300;
 export const CANDLE_HOP_PB_BONUS_XP = 50;
 
+// V3 : modes de jeu
+export type CandleHopMode = 'endless' | 'time_attack' | 'survival';
+export const CANDLE_HOP_MODES: ReadonlyArray<CandleHopMode> = [
+  'endless',
+  'time_attack',
+  'survival',
+];
+export const TIME_ATTACK_DURATION_MS = 60_000;
+
+export const CANDLE_HOP_MODE_LABELS: Record<
+  CandleHopMode,
+  { label: string; description: string }
+> = {
+  endless: {
+    label: 'Endless',
+    description: 'Jusqu\'à la mort. Vitesse augmente avec le score.',
+  },
+  time_attack: {
+    label: 'Time Attack',
+    description: '60 secondes. Maximise ton score avant le buzzer.',
+  },
+  survival: {
+    label: 'Survival',
+    description: 'Les gaps rétrécissent. 1 vie. Bonne chance.',
+  },
+};
+
 // ============================================================
 // V2 : skins, power-ups, challenges, achievements
 // ============================================================
@@ -309,8 +336,10 @@ export interface CandleHopState {
   /** Runs encore dispos sur les 24h glissantes. */
   runsLeftToday: number;
   runsTotal: number;
-  /** Meilleur score all-time. */
+  /** Meilleur score all-time, tous modes confondus. */
   bestScore: number;
+  /** Meilleur score par mode (V3). */
+  bestByMode: Record<CandleHopMode, number>;
   /** XP gagné sur les 24h glissantes pour ce jeu (pour cap). */
   xpEarnedToday: number;
   xpCap: number;
@@ -318,10 +347,7 @@ export interface CandleHopState {
   recentRuns: Array<{ score: number; xpAwarded: number; createdAt: Date }>;
   /** Nombre total de runs de l'user. */
   totalRuns: number;
-  // V2
-  /** Défi du jour avec status validé/non. */
   dailyChallenge: { challenge: CandleHopChallenge; done: boolean };
-  /** Achievements débloqués (IDs). */
   achievementsUnlocked: string[];
 }
 
@@ -345,6 +371,19 @@ export async function getCandleHopState(
       0,
       CANDLE_HOP_DAILY_LIMIT - last24.length
     );
+
+    // V3 : best par mode
+    const bestByMode: Record<CandleHopMode, number> = {
+      endless: 0,
+      time_attack: 0,
+      survival: 0,
+    };
+    for (const r of allRuns) {
+      const m = (r.mode ?? 'endless') as CandleHopMode;
+      if (bestByMode[m] !== undefined && r.score > bestByMode[m]) {
+        bestByMode[m] = r.score;
+      }
+    }
 
     // V2 : challenge + achievements
     const todayChallenge = getTodayCandleHopChallenge();
@@ -371,6 +410,7 @@ export async function getCandleHopState(
       runsLeftToday,
       runsTotal: CANDLE_HOP_DAILY_LIMIT,
       bestScore,
+      bestByMode,
       xpEarnedToday,
       xpCap: CANDLE_HOP_DAILY_XP_CAP,
       lastRun: allRuns[0]
@@ -396,6 +436,7 @@ export async function getCandleHopState(
       runsLeftToday: CANDLE_HOP_DAILY_LIMIT,
       runsTotal: CANDLE_HOP_DAILY_LIMIT,
       bestScore: 0,
+      bestByMode: { endless: 0, time_attack: 0, survival: 0 },
       xpEarnedToday: 0,
       xpCap: CANDLE_HOP_DAILY_XP_CAP,
       lastRun: null,
@@ -440,6 +481,7 @@ export async function submitCandleHopRun(
     taps: number;
     bonusesCollected?: number;
     powerUpsUsed?: number;
+    mode?: CandleHopMode;
   }
 ): Promise<SubmitCandleHopResult> {
   const score = Math.floor(input.score);
@@ -447,6 +489,11 @@ export async function submitCandleHopRun(
   const taps = Math.floor(input.taps);
   const bonusesCollected = Math.max(0, Math.floor(input.bonusesCollected ?? 0));
   const powerUpsUsed = Math.max(0, Math.floor(input.powerUpsUsed ?? 0));
+  const mode: CandleHopMode = CANDLE_HOP_MODES.includes(
+    input.mode as CandleHopMode
+  )
+    ? (input.mode as CandleHopMode)
+    : 'endless';
 
   if (
     !Number.isFinite(score) ||
@@ -479,9 +526,12 @@ export async function submitCandleHopRun(
     return { ok: false, error: 'daily_limit' };
   }
 
-  const isPersonalBest = score > state.bestScore;
+  // PB calculé par mode (V3) — un nouveau record en Time Attack compte
+  // même si l'user a un meilleur score en Endless.
+  const modeBest = state.bestByMode[mode] ?? 0;
+  const isPersonalBest = score > modeBest;
   const baseXp = candleHopXpFor(score);
-  const bonusXp = isPersonalBest && state.bestScore > 0
+  const bonusXp = isPersonalBest && modeBest > 0
     ? CANDLE_HOP_PB_BONUS_XP
     : 0;
   const rawTotalXp = baseXp + bonusXp;
@@ -496,6 +546,7 @@ export async function submitCandleHopRun(
       taps,
       xpAwarded,
       isPersonalBest,
+      mode,
     });
 
     let newTotal: number;
@@ -616,10 +667,11 @@ export async function submitCandleHopRun(
 }
 
 /**
- * Renvoie le top N scores all-time (un par user, son best). Utilisé par
- * le hub pour afficher un mini-leaderboard.
+ * Renvoie le top N scores all-time (un par user, son best) pour un mode
+ * donné. Utilisé par la page leaderboard.
  */
 export async function getCandleHopTopScores(
+  mode: CandleHopMode = 'endless',
   limit = 10
 ): Promise<Array<{ userId: string; bestScore: number }>> {
   try {
@@ -629,6 +681,7 @@ export async function getCandleHopTopScores(
         bestScore: sql<number>`MAX(${candleHopRuns.score})::int`,
       })
       .from(candleHopRuns)
+      .where(eq(candleHopRuns.mode, mode))
       .groupBy(candleHopRuns.userId)
       .orderBy(desc(sql`MAX(${candleHopRuns.score})`))
       .limit(limit);
@@ -636,6 +689,32 @@ export async function getCandleHopTopScores(
   } catch (err) {
     console.warn('[candle-hop] top scores fallback', err);
     return [];
+  }
+}
+
+/**
+ * Renvoie le rang d'un user dans le leaderboard d'un mode.
+ * Plus efficace que de prendre le top complet pour trouver l'user.
+ */
+export async function getCandleHopUserRank(
+  userId: string,
+  mode: CandleHopMode = 'endless'
+): Promise<{ rank: number; bestScore: number } | null> {
+  try {
+    const rows = await db
+      .select({
+        userId: candleHopRuns.userId,
+        bestScore: sql<number>`MAX(${candleHopRuns.score})::int`,
+      })
+      .from(candleHopRuns)
+      .where(eq(candleHopRuns.mode, mode))
+      .groupBy(candleHopRuns.userId)
+      .orderBy(desc(sql`MAX(${candleHopRuns.score})`));
+    const idx = rows.findIndex((r) => r.userId === userId);
+    if (idx < 0) return null;
+    return { rank: idx + 1, bestScore: rows[idx]!.bestScore };
+  } catch {
+    return null;
   }
 }
 

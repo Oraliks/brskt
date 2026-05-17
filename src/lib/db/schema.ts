@@ -1416,11 +1416,14 @@ export const candleHopRuns = pgTable(
     xpAwarded: integer('xp_awarded').notNull().default(0),
     /** Vrai si c'est un nouveau record perso au moment du run. */
     isPersonalBest: boolean('is_personal_best').notNull().default(false),
+    /** V3 : mode du run ('endless' | 'time_attack' | 'survival'). */
+    mode: text('mode').notNull().default('endless'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => ({
     userIdx: index('candle_hop_runs_user_idx').on(t.userId, t.createdAt),
     scoreIdx: index('candle_hop_runs_score_idx').on(t.score),
+    modeIdx: index('candle_hop_runs_mode_idx').on(t.mode, t.score),
   })
 );
 

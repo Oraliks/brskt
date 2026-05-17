@@ -1,0 +1,2 @@
+ALTER TABLE "candle_hop_runs" ADD COLUMN "mode" text DEFAULT 'endless' NOT NULL;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "candle_hop_runs_mode_idx" ON "candle_hop_runs" USING btree ("mode","score");
