@@ -642,7 +642,7 @@ function SuccessStep({ tradingProgressPct }: { tradingProgressPct: number }) {
               <h3 className="font-medium text-sm">
                 Progression de trading depuis ton arrivée
               </h3>
-              <span className="font-mono text-2xl font-medium text-white tabular-nums">
+              <span className="font-mono text-2xl font-medium text-[var(--color-text)] tabular-nums">
                 {tradingProgressPct}%
               </span>
             </div>

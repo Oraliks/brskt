@@ -146,7 +146,7 @@ export function VipLanding() {
             <p className="mt-4 text-sm text-[var(--color-text-dim)]">
               Quand tu ouvres ton compte via notre lien partenaire et que tu trades,
               le broker nous reverse une commission. Cette commission finance le
-              groupe VIP et notre travail. <strong className="text-white">Ton dépôt reste à 100% sur ton compte broker</strong> — c'est ton capital pour trader,
+              groupe VIP et notre travail. <strong className="text-[var(--color-text)]">Ton dépôt reste à 100% sur ton compte broker</strong> — c'est ton capital pour trader,
               tu peux le retirer (sous conditions, voir ci-dessous).
             </p>
           </div>

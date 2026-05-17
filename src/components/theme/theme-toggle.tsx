@@ -25,14 +25,28 @@ export function ThemeToggle({ variant = 'nav', className }: Props) {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    // Source de vérité : l'attribut posé par ThemeScript
-    const current = document.documentElement.getAttribute('data-theme');
-    setTheme(current === 'light' ? 'light' : 'dark');
+    // Source de vérité : l'attribut posé par ThemeScript. MutationObserver
+    // permet de garder tous les ThemeToggle de la page sync — sinon le
+    // toggle desktop et mobile (rendus simultanément, l'un caché par CSS)
+    // affichent des labels désynchronisés après un toggle.
+    const html = document.documentElement;
+    const update = () => {
+      const current = html.getAttribute('data-theme');
+      setTheme(current === 'light' ? 'light' : 'dark');
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(html, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    return () => observer.disconnect();
   }, []);
 
   function toggle() {
     const next: Theme = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
+    // On set juste l'attribut — le MutationObserver se charge de mettre
+    // à jour `theme` (et tous les autres ThemeToggle).
     document.documentElement.setAttribute('data-theme', next);
     try {
       localStorage.setItem('theme', next);

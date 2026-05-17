@@ -145,29 +145,47 @@ export function TelegramProvider({
           inst.ready();
           inst.expand();
 
-          // Sync data-theme avec colorScheme Telegram
-          if (inst.colorScheme === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-          } else {
-            document.documentElement.removeAttribute('data-theme');
-          }
-
-          // Sync header & background colors → look natif. Couleurs
-          // hardcodées au bg-elevated de notre palette pour éviter
-          // le flash de couleur différente.
-          // Dark : #0e0e15 (bg-elevated dark mode).
-          // Light : #ffffff.
-          const headerBg = inst.colorScheme === 'light' ? '#ffffff' : '#0e0e15';
+          // Sync data-theme avec colorScheme Telegram, MAIS uniquement si :
+          //  1. On est vraiment dans le Mini App (initData présent — le SDK
+          //     est chargé partout pour éviter les races, mais en dehors
+          //     d'un vrai Mini App initData est vide)
+          //  2. L'user n'a pas explicitement choisi un thème via le toggle
+          //     (localStorage 'theme' absent). Sinon on écraserait son choix
+          //     à chaque F5.
+          const isRealMiniApp = !!inst.initData;
+          let userPref: string | null = null;
           try {
-            inst.setHeaderColor(headerBg);
-            inst.setBackgroundColor(headerBg);
+            userPref = localStorage.getItem('theme');
           } catch {
-            // Versions Telegram anciennes peuvent rejeter ces appels
+            /* localStorage indispo */
+          }
+          if (isRealMiniApp && !userPref) {
+            if (inst.colorScheme === 'light') {
+              document.documentElement.setAttribute('data-theme', 'light');
+            } else {
+              document.documentElement.removeAttribute('data-theme');
+            }
           }
 
-          // Récupère start_param pour le routing
-          setStartParam(inst.initDataUnsafe?.start_param ?? null);
-          setTg(inst);
+          // Sync header & background colors → uniquement dans un vrai
+          // Mini App (sinon le SDK log des warnings inutiles sur navigateur).
+          if (isRealMiniApp) {
+            const currentTheme =
+              document.documentElement.getAttribute('data-theme') ?? 'dark';
+            const headerBg = currentTheme === 'light' ? '#ffffff' : '#0e0e15';
+            try {
+              inst.setHeaderColor(headerBg);
+              inst.setBackgroundColor(headerBg);
+            } catch {
+              // Versions Telegram anciennes peuvent rejeter ces appels
+            }
+          }
+
+          // Récupère start_param pour le routing (uniquement réel Mini App)
+          if (isRealMiniApp) {
+            setStartParam(inst.initDataUnsafe?.start_param ?? null);
+            setTg(inst);
+          }
         } catch (err) {
           console.warn('[telegram] init failed', err);
         }
