@@ -1063,6 +1063,14 @@ export const xpEventReasonEnum = pgEnum('xp_event_reason', [
   'prediction_streak',
   'wheel_spin',
   'admin_adjustment',
+  /** L'user est devenu membre VIP (funnel affilié → in_group OU paid → active). */
+  'vip_joined',
+  /** L'user a sécurisé son VIP (CPA qualifié — funnel affilié uniquement). */
+  'vip_secured',
+  /** L'user a terminé sa formation à distance. */
+  'formation_remote_completed',
+  /** L'user a terminé sa formation en présentiel Dubaï. */
+  'formation_onsite_completed',
 ]);
 
 /**

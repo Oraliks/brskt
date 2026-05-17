@@ -240,7 +240,7 @@ async function processIronfxEvent(payload: IronfxPayload) {
         .where(eq(vipApplications.id, application.id));
       break;
 
-    case 'cpa_qualified':
+    case 'cpa_qualified': {
       await db
         .update(vipApplications)
         .set({
@@ -249,7 +249,15 @@ async function processIronfxEvent(payload: IronfxPayload) {
           updatedAt: new Date(),
         })
         .where(eq(vipApplications.id, application.id));
+
+      // Bonus XP "VIP sécurisé" (CPA qualifié) — idempotent
+      const { awardMilestoneOnce } = await import('@/lib/games/xp');
+      await awardMilestoneOnce(application.userId, 'vip_secured', {
+        source: 'ironfx_webhook',
+        applicationId: application.id,
+      });
       break;
+    }
 
     case 'withdrawal':
       // Important : si retrait avant qualification CPA, le CRON déclenchera l'éjection

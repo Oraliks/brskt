@@ -166,6 +166,13 @@ export async function GET(request: Request) {
             updatedAt: new Date(),
           })
           .where(eq(vipApplications.id, app.id));
+
+        // Bonus XP "VIP sécurisé" (CPA qualifié) — idempotent
+        const { awardMilestoneOnce } = await import('@/lib/games/xp');
+        await awardMilestoneOnce(app.userId, 'vip_secured', {
+          source: 'cron_check_vip_status',
+          applicationId: app.id,
+        });
       }
     } catch (err) {
       console.error(`[CRON] Error for app ${app.id}`, err);

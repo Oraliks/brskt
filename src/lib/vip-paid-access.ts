@@ -8,6 +8,7 @@ import {
 } from '@/lib/db/schema';
 import { getBot } from '@/lib/telegram/bot';
 import { sendDirectMessage } from '@/lib/telegram/helpers';
+import { awardMilestoneOnce } from '@/lib/games/xp';
 
 const VIP_GROUP_ID = Number(process.env.VIP_GROUP_CHAT_ID);
 
@@ -153,6 +154,14 @@ export async function deliverInviteToUser(
       updatedAt: new Date(),
     })
     .where(eq(vipPaidAccesses.id, paidAccessId));
+
+  // Bonus XP "VIP rejoint" — idempotent, déclenché au passage à `active`
+  if (sent) {
+    await awardMilestoneOnce(access.access.userId, 'vip_joined', {
+      source: 'paid_access',
+      paidAccessId,
+    });
+  }
 
   return sent;
 }

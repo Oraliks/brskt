@@ -75,6 +75,13 @@ export const XP_REWARDS = {
     180: 2500,
     365: 5000,
   } as Record<number, number>,
+  /** Milestones business : 1×/user à vie, idempotent via awardMilestoneOnce. */
+  MILESTONES: {
+    VIP_JOINED: 200,
+    VIP_SECURED: 500,
+    FORMATION_REMOTE_COMPLETED: 2000,
+    FORMATION_ONSITE_COMPLETED: 5000,
+  },
 } as const;
 
 export type XpReason =
@@ -82,7 +89,17 @@ export type XpReason =
   | 'prediction_correct'
   | 'prediction_streak'
   | 'wheel_spin'
-  | 'admin_adjustment';
+  | 'admin_adjustment'
+  | 'vip_joined'
+  | 'vip_secured'
+  | 'formation_remote_completed'
+  | 'formation_onsite_completed';
+
+export type MilestoneReason =
+  | 'vip_joined'
+  | 'vip_secured'
+  | 'formation_remote_completed'
+  | 'formation_onsite_completed';
 
 interface AddXpInput {
   userId: string;
@@ -187,5 +204,59 @@ export async function getXpSince(
     return row?.sum ?? 0;
   } catch {
     return 0;
+  }
+}
+
+/**
+ * Attribue un bonus de milestone (VIP / Formation) UNE SEULE FOIS par
+ * user, idempotent. Vérifie si un xp_event avec la même `reason` existe
+ * déjà pour ce user — si oui, no-op.
+ *
+ * Utilisé pour :
+ *  - VIP_JOINED : déclenché au passage `in_group` (funnel) ou `active`
+ *    (accès payant)
+ *  - VIP_SECURED : déclenché quand `cpaQualified` passe true
+ *  - FORMATION_REMOTE_COMPLETED / FORMATION_ONSITE_COMPLETED : déclenché
+ *    quand booking.status → 'completed' (selon formation.mode)
+ *
+ * Renvoie le nouveau total XP, ou null si déjà attribué (idempotent).
+ */
+export async function awardMilestoneOnce(
+  userId: string,
+  reason: MilestoneReason,
+  metadata?: Record<string, unknown>
+): Promise<{ awarded: boolean; xp: number; newTotal: number }> {
+  try {
+    // Check if already awarded for this reason
+    const existing = await db
+      .select({ id: xpEvents.id })
+      .from(xpEvents)
+      .where(and(eq(xpEvents.userId, userId), eq(xpEvents.reason, reason)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return { awarded: false, xp: 0, newTotal: 0 };
+    }
+
+    const amount =
+      reason === 'vip_joined'
+        ? XP_REWARDS.MILESTONES.VIP_JOINED
+        : reason === 'vip_secured'
+          ? XP_REWARDS.MILESTONES.VIP_SECURED
+          : reason === 'formation_remote_completed'
+            ? XP_REWARDS.MILESTONES.FORMATION_REMOTE_COMPLETED
+            : XP_REWARDS.MILESTONES.FORMATION_ONSITE_COMPLETED;
+
+    const newTotal = await addXp({
+      userId,
+      amount,
+      reason,
+      metadata,
+    });
+
+    return { awarded: true, xp: amount, newTotal };
+  } catch (err) {
+    console.warn('[xp] awardMilestoneOnce failed', { userId, reason, err });
+    return { awarded: false, xp: 0, newTotal: 0 };
   }
 }

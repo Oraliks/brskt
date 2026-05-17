@@ -1940,6 +1940,12 @@ async function handleUserJoinedVip(
         eventName: 'vip_joined_group',
         metadata: { applicationId: intendedApp.id },
       });
+      // Bonus XP "VIP rejoint" — idempotent
+      const { awardMilestoneOnce } = await import('@/lib/games/xp');
+      await awardMilestoneOnce(joiningUser.id, 'vip_joined', {
+        source: 'telegram_chat_member',
+        applicationId: intendedApp.id,
+      });
       // DM de bienvenue (best-effort — peut échouer si l'user n'a jamais
       // ouvert le bot, auquel cas Telegram interdit le DM).
       await sendVipWelcomeDM(telegramUserId, joiningUser.telegramFirstName);
@@ -1993,6 +1999,12 @@ async function handleUserJoinedVip(
       .update(vipApplications)
       .set({ step: 'in_group', updatedAt: new Date() })
       .where(eq(vipApplications.userId, joiningUser.id));
+    // Bonus XP "VIP rejoint" — idempotent (couvre les cas où l'admin
+    // ajoute manuellement un user via lien externe)
+    const { awardMilestoneOnce } = await import('@/lib/games/xp');
+    await awardMilestoneOnce(joiningUser.id, 'vip_joined', {
+      source: 'telegram_chat_member_manual',
+    });
     // Idem case 3.a : on DM la bienvenue (best-effort)
     await sendVipWelcomeDM(telegramUserId, joiningUser.telegramFirstName);
   }

@@ -342,6 +342,19 @@ export async function adminBookingAction(
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, data.bookingId));
+
+    // Bonus XP "Formation terminée" — idempotent, distance vs présentiel
+    const { awardMilestoneOnce } = await import('@/lib/games/xp');
+    const milestoneReason =
+      booking.formation.mode === 'onsite'
+        ? 'formation_onsite_completed'
+        : 'formation_remote_completed';
+    await awardMilestoneOnce(booking.userId, milestoneReason, {
+      source: 'admin_mark_completed',
+      bookingId: booking.id,
+      formationMode: booking.formation.mode,
+    });
+
     // Pas de notification user : on attend que le CRON NPS le contacte
     // automatiquement avec sa demande de feedback.
   }
@@ -421,6 +434,7 @@ export async function adminBulkBookingsAction(input: unknown): Promise<
     try {
       const booking = await db.query.bookings.findFirst({
         where: eq(bookings.id, bookingId),
+        with: { formation: true },
       });
       if (!booking) {
         failed++;
@@ -454,6 +468,18 @@ export async function adminBulkBookingsAction(input: unknown): Promise<
           .update(bookings)
           .set({ status: 'completed', updatedAt: new Date() })
           .where(eq(bookings.id, bookingId));
+
+        // Bonus XP "Formation terminée" — idempotent, distance vs présentiel
+        const { awardMilestoneOnce } = await import('@/lib/games/xp');
+        const milestoneReason =
+          booking.formation.mode === 'onsite'
+            ? 'formation_onsite_completed'
+            : 'formation_remote_completed';
+        await awardMilestoneOnce(booking.userId, milestoneReason, {
+          source: 'admin_bulk_mark_completed',
+          bookingId: booking.id,
+          formationMode: booking.formation.mode,
+        });
       }
 
       succeeded++;
@@ -710,6 +736,14 @@ export async function adminSetTradingProgressAction(
       sessionId: userId,
       eventName: 'vip_qualified',
       metadata: { applicationId: vipApp.id, byAdmin: session.user.id },
+    });
+
+    // Bonus XP "VIP sécurisé" — idempotent
+    const { awardMilestoneOnce } = await import('@/lib/games/xp');
+    await awardMilestoneOnce(userId, 'vip_secured', {
+      source: 'admin_progress_set',
+      applicationId: vipApp.id,
+      byAdmin: session.user.id,
     });
   }
 

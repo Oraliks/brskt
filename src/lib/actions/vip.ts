@@ -17,6 +17,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { emitFunnelEvent } from '@/lib/analytics/funnel';
 import { getPaymentProvider } from '@/lib/payments';
 import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
+import { awardMilestoneOnce } from '@/lib/games/xp';
 import {
   ejectPaidVipAccess,
   resendInviteByAdmin,
@@ -328,6 +329,12 @@ export async function confirmVipMembershipAction(): Promise<
     sessionId: session.user.id,
     eventName: 'vip_joined_group',
     metadata: { applicationId: app.id, source: 'manual_confirm' },
+  });
+
+  // Bonus XP "VIP rejoint" — idempotent, ne s'applique qu'une fois à vie
+  await awardMilestoneOnce(session.user.id, 'vip_joined', {
+    source: 'affiliate_funnel',
+    applicationId: app.id,
   });
 
   revalidatePath('/vip');
