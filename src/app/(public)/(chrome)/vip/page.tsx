@@ -6,12 +6,21 @@ import { Section, SectionHeader } from '@/components/shared/section';
 import { VipLanding } from '@/components/vip/vip-landing';
 import { VipWizard } from '@/components/vip/vip-wizard';
 import { WelcomeBonusBanner } from '@/components/vip/welcome-bonus-banner';
+import { VipPathChoice } from '@/components/vip/vip-path-choice';
+import { VipPaidAccessSummary } from '@/components/vip/vip-paid-access-summary';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
+import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
+import { getActivePaidAccess } from '@/lib/vip-paid-access';
 import { getIronFXMode } from '@/lib/ironfx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function VipPage() {
+export default async function VipPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ path?: string; paid?: string }>;
+}) {
+  const params = await searchParams;
   const session = await getSession().catch(() => null);
 
   if (!session?.user) {
@@ -38,15 +47,71 @@ export default async function VipPage() {
     );
   }
 
-  const [application, welcomeBonus, ironfxMode] = await Promise.all([
-    db.query.vipApplications.findFirst({
-      where: eq(vipApplications.userId, session.user.id),
-    }),
-    getWelcomeBonus(),
-    getIronFXMode(),
-  ]);
+  const [application, paidAccess, welcomeBonus, ironfxMode, paidConfig] =
+    await Promise.all([
+      db.query.vipApplications.findFirst({
+        where: eq(vipApplications.userId, session.user.id),
+      }),
+      getActivePaidAccess(session.user.id),
+      getWelcomeBonus(),
+      getIronFXMode(),
+      getVipPaidAccessConfig(),
+    ]);
 
-  // Fetch progression de trading si l'user est in_group avec un compte broker
+  // 1) Si user a un accès payant actif (ou en cours) → on lui montre cet état,
+  // pas le wizard affilié (les 2 chemins ne se mélangent pas).
+  if (paidAccess) {
+    return (
+      <Section className="pt-24 pb-16">
+        <div className="max-w-3xl mx-auto">
+          <SectionHeader
+            eyebrow="Accès VIP Telegram"
+            title={
+              <>
+                Accès <span className="font-serif italic">direct.</span>
+              </>
+            }
+            description="Tu as choisi l'accès direct payant — pas de funnel affilié, pas de qualification CPA."
+            align="left"
+          />
+          <div className="mt-8">
+            <VipPaidAccessSummary access={paidAccess} />
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  // 2) Si user n'a pas encore d'application ET pas d'accès payant, et
+  //    que l'option payante est activée → on lui propose les 2 chemins.
+  //    Skip si ?path=affiliate (l'user a explicitement choisi le funnel).
+  if (!application && paidConfig.enabled && params.path !== 'affiliate') {
+    return (
+      <Section className="pt-24 pb-16">
+        <div className="max-w-4xl mx-auto">
+          <SectionHeader
+            eyebrow="Funnel VIP Telegram"
+            title={
+              <>
+                Choisis ton{' '}
+                <span className="font-serif italic">accès.</span>
+              </>
+            }
+            description="Deux chemins vers le groupe Telegram privé. Tu peux changer d'avis tant que tu n'as pas démarré."
+            align="left"
+          />
+          <div className="mt-8 space-y-4">
+            {welcomeBonus.enabled && (
+              <WelcomeBonusBanner bonus={welcomeBonus} />
+            )}
+            <VipPathChoice priceEur={paidConfig.priceEur} />
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  // 3) Sinon (application existante ou paidConfig désactivé) → wizard normal.
   let tradingProgressPct = 0;
   if (application?.brokerAccountId && application.step === 'in_group') {
     const status = await db.query.manualIronfxStatus.findFirst({

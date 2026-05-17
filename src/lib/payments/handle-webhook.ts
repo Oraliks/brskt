@@ -3,6 +3,7 @@ import { after } from 'next/server';
 import { db } from '@/lib/db';
 import { bookings, payments } from '@/lib/db/schema';
 import { notifyUser } from '@/lib/notify';
+import { completePaidVipAccess } from '@/lib/vip-paid-access';
 import PaymentReceiptEmail from '@root/emails/payment-receipt';
 import { getProviderByName } from './index';
 import type { ParsedWebhookEvent } from './types';
@@ -145,6 +146,25 @@ async function processPaymentEvent(
       completedAt: event.status === 'completed' ? new Date() : undefined,
     })
     .where(eq(payments.id, payment.id));
+
+  // Détecte le type de paiement via la metadata. Si c'est un accès VIP
+  // payant et que le paiement est completed → déclenche le flow auto :
+  // génère un invite link Telegram + DM l'user.
+  const meta = payment.metadata as
+    | { kind?: string; vipPaidAccessId?: string }
+    | null;
+  if (
+    meta?.kind === 'vip_paid_access' &&
+    meta.vipPaidAccessId &&
+    event.status === 'completed'
+  ) {
+    try {
+      await completePaidVipAccess(meta.vipPaidAccessId);
+    } catch (err) {
+      console.error('[vip-paid] completePaidVipAccess failed', err);
+    }
+    return;
+  }
 
   // Mettre à jour le booking lié
   // Flow paiement en 1 fois : completed → pending_admin (admin valide la date)

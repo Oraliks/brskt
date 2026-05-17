@@ -19,7 +19,9 @@ export interface PaymentSession {
 
 export interface CreatePaymentInput {
   userId: string;
-  bookingId: string;
+  /** ID du booking si paiement de formation. Absent pour les paiements
+   *  hors-formation (ex: accès VIP payant direct). */
+  bookingId?: string;
   amount: number; // EUR
   currency: 'EUR';
   metadata: Record<string, unknown>;

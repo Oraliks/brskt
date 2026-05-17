@@ -505,3 +505,24 @@ export const formationWaitlistSchema = z.object({
   firstName: z.string().min(1, 'Prénom requis').max(50).optional(),
   notes: z.string().max(500).optional(),
 });
+
+// ============================================================
+// VIP PAID ACCESS
+// ============================================================
+
+export const vipPaidAccessSchema = z.object({
+  firstName: z
+    .string()
+    .min(2, "Prénom requis (2 caractères minimum)")
+    .max(50, "Prénom trop long")
+    .regex(/^[\p{L}\p{M}'\-\s]+$/u, "Caractères invalides dans le prénom"),
+  lastName: z
+    .string()
+    .min(2, "Nom requis (2 caractères minimum)")
+    .max(50, "Nom trop long")
+    .regex(/^[\p{L}\p{M}'\-\s]+$/u, "Caractères invalides dans le nom"),
+  paymentMethod: z.enum(["card", "paypal", "crypto"]),
+});
+
+export type VipPaidAccessInput = z.infer<typeof vipPaidAccessSchema>;
+

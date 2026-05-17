@@ -447,6 +447,80 @@ export const vipApplications = pgTable(
 );
 
 // ============================================================
+// VIP PAID ACCESSES — accès direct payant 250€ (sans funnel broker)
+// ============================================================
+
+/**
+ * Statut d'un accès VIP payant. Lifecycle :
+ *   pending_payment → paid → active → ejected
+ *
+ *  - `pending_payment` : row créée, paiement en cours côté provider
+ *  - `paid` : webhook a confirmé le paiement, bot va envoyer l'invite
+ *  - `active` : bot a DM le lien d'invitation, user a accès au groupe
+ *  - `ejected` : éjecté manuellement par admin (rare, comportement abusif)
+ *
+ * Pas d'état `refunded` : remboursement non prévu (accès à vie).
+ */
+export const vipPaidAccessStatusEnum = pgEnum('vip_paid_access_status', [
+  'pending_payment',
+  'paid',
+  'active',
+  'ejected',
+]);
+
+/**
+ * Accès VIP payant à vie. Alternative au funnel affilié IronFX pour les
+ * users qui ont déjà leur broker et préfèrent payer 250€ direct.
+ *
+ * Pas lié à `vip_applications` (différent lifecycle, pas de qualification
+ * CPA, pas d'éjection automatique sur retrait). Stockage à part = logique
+ * séparée + queries plus simples.
+ *
+ * Le `firstName` + `lastName` servent de référence pour la communication
+ * du paiement (les comptes Telegram changent, le nom légal pas).
+ *
+ * Prix lu depuis `app_settings.vip_paid_access_price_eur` (modifiable
+ * sans redeploy via l'admin), fallback 250€.
+ */
+export const vipPaidAccesses = pgTable(
+  'vip_paid_accesses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    /** Montant payé en EUR, figé au moment de la création (snapshot). */
+    amountEur: numeric('amount_eur', { precision: 10, scale: 2 }).notNull(),
+    paymentId: uuid('payment_id').references(() => payments.id),
+    status: vipPaidAccessStatusEnum('status')
+      .notNull()
+      .default('pending_payment'),
+    /** Lien d'invitation unique généré par le bot (member_limit=1). */
+    telegramInviteLink: text('telegram_invite_link'),
+    paidAt: timestamp('paid_at'),
+    activatedAt: timestamp('activated_at'),
+    ejectionReason: text('ejection_reason'),
+    ejectedAt: timestamp('ejected_at'),
+    /** Nombre de renvois manuels du lien par l'admin (CRUD audit). */
+    resendCount: integer('resend_count').notNull().default(0),
+    lastResendAt: timestamp('last_resend_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('vip_paid_accesses_user_idx').on(t.userId),
+    statusIdx: index('vip_paid_accesses_status_idx').on(t.status),
+    paymentIdx: index('vip_paid_accesses_payment_idx').on(t.paymentId),
+    // Un user ne peut avoir qu'UN seul accès payant non éjecté à la fois
+    activeUniq: uniqueIndex('vip_paid_accesses_active_uniq')
+      .on(t.userId)
+      .where(sql`status <> 'ejected'`),
+  })
+);
+
+// ============================================================
 // FUNNEL EVENTS (tracking drop-off)
 // ============================================================
 

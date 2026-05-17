@@ -1,18 +1,30 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
-import { adminNotifications, vipApplications } from '@/lib/db/schema';
-import { requireOnboarded } from '@/lib/auth/server';
+import {
+  adminNotifications,
+  payments,
+  vipApplications,
+  vipPaidAccesses,
+} from '@/lib/db/schema';
+import { requireAdmin, requireOnboarded } from '@/lib/auth/server';
 import { generateVipInvite } from '@/lib/telegram/helpers';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { emitFunnelEvent } from '@/lib/analytics/funnel';
+import { getPaymentProvider } from '@/lib/payments';
+import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
+import {
+  ejectPaidVipAccess,
+  resendInviteByAdmin,
+} from '@/lib/vip-paid-access';
 import {
   vipBrokerAccountSchema,
   vipDepositSchema,
+  vipPaidAccessSchema,
 } from '@/lib/validations';
 import type { ActionResult } from './bookings';
 
@@ -370,4 +382,204 @@ export async function requestTelegramInviteAction(): Promise<
       error: "Impossible de générer le lien Telegram. Contacte l'équipe.",
     };
   }
+}
+
+// ============================================================
+// VIP PAID ACCESS — accès direct payant 250€
+// ============================================================
+
+/**
+ * Crée un accès VIP payant et initialise la session de paiement chez le
+ * provider choisi. Renvoie l'URL de redirection.
+ *
+ *  1. Vérifie qu'il n'y a pas déjà un accès payant actif (status <> 'ejected')
+ *  2. Lit le prix depuis app_settings (fallback 250€)
+ *  3. Crée la row `vip_paid_accesses` en `pending_payment`
+ *  4. Crée la row `payments` avec metadata.kind = 'vip_paid_access'
+ *  5. Lance la session provider
+ *  6. Lie le payment à l'accès, renvoie redirectUrl
+ */
+export async function createPaidVipAccessAction(
+  input: unknown
+): Promise<ActionResult<{ redirectUrl: string }>> {
+  const session = await requireOnboarded();
+  const parsed = vipPaidAccessSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Données invalides',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  // Rate-limit anti-spam (3 tentatives / 10 min — l'user peut retenter
+  // si le provider échoue, mais pas spammer).
+  const rl = await checkRateLimit({
+    key: `vip_paid:user:${session.user.id}`,
+    limit: 3,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return {
+      success: false,
+      error: 'Trop de tentatives, réessaie dans quelques minutes.',
+    };
+  }
+
+  // 1) Accès existant ?
+  const existing = await db.query.vipPaidAccesses.findFirst({
+    where: and(
+      eq(vipPaidAccesses.userId, session.user.id),
+      sql`${vipPaidAccesses.status} <> 'ejected'`
+    ),
+  });
+  if (existing && existing.status !== 'pending_payment') {
+    return {
+      success: false,
+      error: 'Tu as déjà un accès VIP payant actif.',
+    };
+  }
+
+  // 2) Prix
+  const config = await getVipPaidAccessConfig();
+  if (!config.enabled) {
+    return {
+      success: false,
+      error: "L'accès payant direct n'est pas activé pour le moment.",
+    };
+  }
+  const amount = config.priceEur;
+
+  // 3) Crée la row paid_access (ou réutilise si pending_payment)
+  let paidAccessId: string;
+  if (existing) {
+    paidAccessId = existing.id;
+    // Mets à jour les noms au cas où l'user les change avant retentative
+    await db
+      .update(vipPaidAccesses)
+      .set({
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        amountEur: String(amount),
+        updatedAt: new Date(),
+      })
+      .where(eq(vipPaidAccesses.id, existing.id));
+  } else {
+    const [inserted] = await db
+      .insert(vipPaidAccesses)
+      .values({
+        userId: session.user.id,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        amountEur: String(amount),
+        status: 'pending_payment',
+      })
+      .returning({ id: vipPaidAccesses.id });
+    if (!inserted) {
+      return { success: false, error: 'Échec de la création.' };
+    }
+    paidAccessId = inserted.id;
+  }
+
+  // 4-5) Provider session
+  const provider = getPaymentProvider(parsed.data.paymentMethod);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+  try {
+    const sessionInfo = await provider.createSession({
+      userId: session.user.id,
+      bookingId: undefined,
+      amount,
+      currency: 'EUR',
+      metadata: {
+        kind: 'vip_paid_access',
+        vipPaidAccessId: paidAccessId,
+        fullName: `${parsed.data.firstName} ${parsed.data.lastName}`,
+      },
+      returnUrl: `${appUrl}/vip?paid=${paidAccessId}`,
+      cancelUrl: `${appUrl}/vip/acces-direct?cancelled=1`,
+    });
+
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        userId: session.user.id,
+        amountEur: String(amount),
+        method: parsed.data.paymentMethod,
+        provider: provider.name,
+        providerSessionId: sessionInfo.sessionId,
+        status: 'pending',
+        metadata: {
+          kind: 'vip_paid_access',
+          vipPaidAccessId: paidAccessId,
+          fullName: `${parsed.data.firstName} ${parsed.data.lastName}`,
+        },
+      })
+      .returning({ id: payments.id });
+
+    if (!payment) {
+      return { success: false, error: 'Échec création paiement' };
+    }
+
+    // 6) Lie payment ↔ paid_access
+    await db
+      .update(vipPaidAccesses)
+      .set({ paymentId: payment.id, updatedAt: new Date() })
+      .where(eq(vipPaidAccesses.id, paidAccessId));
+
+    if (!sessionInfo.redirectUrl) {
+      return {
+        success: false,
+        error: "Le provider n'a pas retourné de redirection",
+      };
+    }
+
+    return {
+      success: true,
+      data: { redirectUrl: sessionInfo.redirectUrl },
+    };
+  } catch (err) {
+    console.error('[vip-paid] createSession error', err);
+    return {
+      success: false,
+      error: "Le paiement n'a pas pu être initialisé. Réessaie ou choisis un autre mode.",
+    };
+  }
+}
+
+/**
+ * Action admin : renvoie manuellement un lien d'invitation à l'user.
+ * Utile si le 1er DM a échoué (user a bloqué le bot, etc.) ou si l'user
+ * a perdu le message.
+ */
+export async function resendPaidVipInviteAction(
+  paidAccessId: string
+): Promise<ActionResult<{ inviteSent: boolean }>> {
+  await requireAdmin();
+  if (typeof paidAccessId !== 'string') {
+    return { success: false, error: 'ID invalide' };
+  }
+  const result = await resendInviteByAdmin(paidAccessId);
+  revalidatePath('/admin/vip');
+  return { success: true, data: { inviteSent: result.inviteSent } };
+}
+
+/**
+ * Action admin : éjecte un user du VIP payant (ban+unban Telegram).
+ */
+export async function ejectPaidVipAccessAction(
+  paidAccessId: string,
+  reason: string
+): Promise<ActionResult<void>> {
+  await requireAdmin();
+  if (typeof paidAccessId !== 'string' || !reason?.trim()) {
+    return { success: false, error: 'Paramètres invalides' };
+  }
+  const result = await ejectPaidVipAccess(paidAccessId, reason.trim());
+  if (!result.ok) {
+    return { success: false, error: result.error ?? 'Échec éjection' };
+  }
+  revalidatePath('/admin/vip');
+  return { success: true, data: undefined };
 }

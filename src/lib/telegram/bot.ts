@@ -201,6 +201,40 @@ export function getBot(): Bot<Context> {
       /* ignore tracking errors */
     }
 
+    // === Auto-resend du lien VIP payant si jamais délivré ===
+    // Si l'user a une row vip_paid_accesses status='paid' (paiement reçu
+    // mais DM jamais réussi), on tente de lui envoyer son lien maintenant
+    // qu'il a démarré le bot.
+    if (ctx.from?.id) {
+      try {
+        const { and, eq } = await import('drizzle-orm');
+        const { db } = await import('@/lib/db');
+        const { users, vipPaidAccesses } = await import('@/lib/db/schema');
+        const { deliverInviteToUser } = await import('@/lib/vip-paid-access');
+
+        const u = await db.query.users.findFirst({
+          where: eq(users.telegramId, ctx.from.id),
+        });
+        if (u) {
+          const [pendingInvite] = await db
+            .select({ id: vipPaidAccesses.id })
+            .from(vipPaidAccesses)
+            .where(
+              and(
+                eq(vipPaidAccesses.userId, u.id),
+                eq(vipPaidAccesses.status, 'paid')
+              )
+            )
+            .limit(1);
+          if (pendingInvite) {
+            await deliverInviteToUser(pendingInvite.id);
+          }
+        }
+      } catch (err) {
+        console.warn('[bot] auto-resend VIP paid invite failed', err);
+      }
+    }
+
     const botUser = process.env.TELEGRAM_BOT_USERNAME ?? 'boursikotonsbot';
     // Inline keyboard : raccourcis vers les actions clés. Boutons URL
     // ouvrent direct dans Telegram (in-app browser) plutôt que de coller
