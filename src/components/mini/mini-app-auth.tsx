@@ -196,6 +196,16 @@ export function routeForStartParam(param: string | null): string | null {
     case 'click':
     case 'tap':
       return '/jeux/clic';
+    case 'journal':
+    case 'emotion':
+      return '/jeux/journal';
+    case 'fomo':
+      return '/jeux/fomo';
+    case 'patience':
+      return '/jeux/patience';
+    case 'aversion':
+    case 'loss':
+      return '/jeux/aversion';
     case 'classement':
     case 'leaderboard':
       return '/jeux/classement';

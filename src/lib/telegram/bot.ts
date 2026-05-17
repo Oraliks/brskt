@@ -350,6 +350,10 @@ export function getBot(): Bot<Context> {
         `/predict — Pronostic chandelier du jour\n` +
         `/roue — Roue de la fortune (1×/sem)\n` +
         `/clic — Combo de clic (3×/jour)\n` +
+        `/journal — Journal d'émotion quotidien\n` +
+        `/fomo — FOMO Test (10 décisions sous pression)\n` +
+        `/patience — Patience Trainer (chart real-time)\n` +
+        `/aversion — Test d'aversion à la perte (1×/sem)\n` +
         `/classement — Top XP semaine/mois/all-time\n\n` +
         `<b>🎓 Formations</b>\n` +
         `/formation — Réserver distance ou Dubaï\n` +
@@ -485,6 +489,81 @@ export function getBot(): Bot<Context> {
       `👆 <b>Combo de clic</b>\n\n` +
         `Tape sans laisser passer la barre de combo. 5 paliers (10/25/50/100/200 taps), jusqu'à 200 XP par run.\n\n` +
         `3 runs par jour — fais-les compter.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['journal', 'emotion'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '📝 Noter mon humeur',
+      `${appUrl}/mini?goto=journal`
+    );
+    await ctx.reply(
+      `📝 <b>Journal d'émotion</b>\n\n` +
+        `Note ton état mental face au trading chaque jour. ` +
+        `Au bout d'un mois tu vois ta vraie courbe émotionnelle — ` +
+        `la clé pour comprendre tes bons et mauvais moments.\n\n` +
+        `+20 XP par entrée · milestones streak jusqu'à +2 000 XP.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command('fomo', async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '⚡ Tester mon FOMO',
+      `${appUrl}/mini?goto=fomo`
+    );
+    await ctx.reply(
+      `⚡ <b>FOMO Test</b>\n\n` +
+        `10 patterns de chart, 4 secondes pour décider Acheter/Garder/Vendre.\n\n` +
+        `Plus tu cliques mal et vite, plus ton FOMO score monte. ` +
+        `Objectif : score bas. 1 run / jour, jusqu'à +200 XP.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command('patience', async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🎯 Lancer un chart',
+      `${appUrl}/mini?goto=patience`
+    );
+    await ctx.reply(
+      `🎯 <b>Patience Trainer</b>\n\n` +
+        `Un chart se trace en temps réel pendant 30 secondes. ` +
+        `Tu cliques au moment où tu veux entrer. Le reste est révélé, ` +
+        `et tu vois si tu as bien lu — ou si l'impatience t'a eu.\n\n` +
+        `3 runs / jour, jusqu'à +150 XP par run.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['aversion', 'loss'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🧠 Faire le test',
+      `${appUrl}/mini?goto=aversion`
+    );
+    await ctx.reply(
+      `🧠 <b>Test d'aversion à la perte</b>\n\n` +
+        `10 choix binaires "sûr vs loterie". On calcule ton coefficient λ ` +
+        `(Kahneman ~2.25 en moyenne — une perte est ressentie 2× plus ` +
+        `qu'un gain équivalent).\n\n` +
+        `1 test / semaine, +250 XP par run complété.`,
       {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },

@@ -40,6 +40,10 @@ export async function POST() {
     { command: 'predict', description: 'Pronostic chandelier du jour' },
     { command: 'roue', description: 'Roue de la fortune (1×/semaine)' },
     { command: 'clic', description: 'Combo de clic (3×/jour)' },
+    { command: 'journal', description: "Journal d'émotion quotidien" },
+    { command: 'fomo', description: 'FOMO Test (10 décisions, 4s chacune)' },
+    { command: 'patience', description: 'Patience Trainer (chart real-time)' },
+    { command: 'aversion', description: "Test d'aversion à la perte (1×/sem)" },
     { command: 'classement', description: 'Top traders Boursikotons' },
 
     // Calculatrices trading
