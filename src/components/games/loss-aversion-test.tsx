@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Brain,
-  CheckCircle2,
   Coins,
   Dices,
   Loader2,

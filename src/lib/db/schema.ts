@@ -1186,6 +1186,42 @@ export const xpEvents = pgTable(
 );
 
 /**
+ * FOMO Test : 10 scénarios rapides où l'user décide Acheter/Garder/Vendre
+ * sous pression temporelle (4s par scénario). On mesure son impulsivité
+ * vs les choix optimaux pré-définis.
+ *
+ *  - `fomoScore` 0-100 : 0 = pas de FOMO, 100 = très impulsif
+ *  - `decisions` jsonb : array de {scenarioId, choice, optimal, latencyMs}
+ *
+ * Limite : 1 run / 24h. Anti-cheat : nb scenarios fixe, latencies plausibles.
+ */
+export const fomoRuns = pgTable(
+  'fomo_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    decisions: jsonb('decisions')
+      .$type<
+        Array<{
+          scenarioId: number;
+          choice: 'buy' | 'hold' | 'sell';
+          optimal: 'buy' | 'hold' | 'sell';
+          latencyMs: number;
+        }>
+      >()
+      .notNull(),
+    fomoScore: integer('fomo_score').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('fomo_runs_user_idx').on(t.userId, t.createdAt),
+  })
+);
+
+/**
  * Patience Trainer : un graphique se trace en temps réel, l'user maintient
  * un bouton "Entrer position" et le lâche au moment qu'il pense optimal.
  * Score basé sur la qualité de son entry vs la suite du chart.

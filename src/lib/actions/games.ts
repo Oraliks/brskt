@@ -21,6 +21,7 @@ import {
   LOSS_AVERSION_QUESTIONS,
 } from '@/lib/games/loss-aversion';
 import { submitPatienceRun } from '@/lib/games/patience';
+import { submitFomoRun, FOMO_SCENARIOS } from '@/lib/games/fomo';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -418,6 +419,67 @@ export async function submitPatienceRunAction(input: {
       xpAwarded: result.xpAwarded,
       newTotal: result.newTotal,
       runsLeftToday: result.runsLeftToday,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run complet du FOMO Test.
+ */
+export async function submitFomoRunAction(input: {
+  decisions: Array<{
+    scenarioId: number;
+    choice: 'buy' | 'hold' | 'sell';
+    latencyMs: number;
+  }>;
+}): Promise<
+  ActionResult<{
+    score: number;
+    xpAwarded: number;
+    newTotal: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `fomo:user:${user.id}`,
+    limit: 3,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  if (
+    !Array.isArray(input.decisions) ||
+    input.decisions.length !== FOMO_SCENARIOS.length
+  ) {
+    return { success: false, error: 'Décisions incomplètes ou invalides.' };
+  }
+
+  const result = await submitFomoRun(user.id, input.decisions);
+  if (!result.ok) {
+    if (result.error === 'cooldown' && result.nextRunAt) {
+      return {
+        success: false,
+        error: `Tu pourras refaire le test le ${result.nextRunAt.toLocaleString('fr-FR')}.`,
+      };
+    }
+    const msg =
+      result.error === 'invalid_decisions'
+        ? 'Décisions invalides.'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/fomo');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      score: result.score,
+      xpAwarded: result.xpAwarded,
+      newTotal: result.newTotal,
     },
   };
 }
