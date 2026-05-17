@@ -1186,6 +1186,39 @@ export const xpEvents = pgTable(
 );
 
 /**
+ * Journal d'émotion quotidien. 1 entrée par user par jour.
+ *
+ *  - `mood` : note 1-10 (1=très négatif, 10=très positif/confiant)
+ *  - `note` : commentaire libre optionnel
+ *  - `entryDate` : date Paris du jour
+ *
+ * Sert aux users à tracker leur état mental face au trading et à
+ * eux-mêmes voir la corrélation entre humeur et perf. Pas exposé
+ * publiquement — privé par user.
+ */
+export const emotionJournalEntries = pgTable(
+  'emotion_journal_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    entryDate: date('entry_date').notNull(),
+    mood: integer('mood').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('emotion_journal_user_idx').on(t.userId, t.entryDate),
+    uniqUserDate: uniqueIndex('emotion_journal_uniq_idx').on(
+      t.userId,
+      t.entryDate
+    ),
+  })
+);
+
+/**
  * Mini-jeu de clic combo. Une row par "run".
  *
  * Mécanique côté client : on tape sur un bouton, chaque clic enchaîné

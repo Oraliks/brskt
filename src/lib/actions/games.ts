@@ -15,6 +15,7 @@ import {
   type TapUpgradeId,
 } from '@/lib/games/tap';
 import { MARKET_IDS, type MarketId } from '@/lib/games/markets';
+import { submitEmotionEntry } from '@/lib/games/emotion-journal';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -248,6 +249,60 @@ export async function purchaseTapUpgradeAction(
       newTotal: result.newTotal,
       upgradeId: id,
       label: TAP_UPGRADES[id].label,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet l'entrée du journal d'émotion du jour.
+ * Upsert : si déjà une entrée aujourd'hui, update mood/note (pas de XP).
+ */
+export async function submitEmotionEntryAction(input: {
+  mood: number;
+  note: string | null;
+}): Promise<
+  ActionResult<{
+    created: boolean;
+    xpAwarded: number;
+    bonusAwarded: number;
+    newStreak: number;
+    newTotal: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `emotion:user:${user.id}`,
+    limit: 20,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de soumissions, attends un peu.' };
+  }
+
+  const result = await submitEmotionEntry(
+    user.id,
+    Math.floor(input.mood),
+    input.note?.trim() || null
+  );
+  if (!result.ok) {
+    const msg =
+      result.error === 'invalid_mood'
+        ? 'Note invalide (1-10).'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/journal');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      created: result.created,
+      xpAwarded: result.xpAwarded,
+      bonusAwarded: result.bonusAwarded,
+      newStreak: result.newStreak,
+      newTotal: result.newTotal,
     },
   };
 }
