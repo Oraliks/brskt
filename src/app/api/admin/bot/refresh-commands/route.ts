@@ -46,6 +46,7 @@ export async function POST() {
     { command: 'aversion', description: "Test d'aversion à la perte (1×/sem)" },
     { command: 'anchoring', description: "Test d'ancrage (1×/sem)" },
     { command: 'pattern', description: 'Pattern Memory (1×/jour)' },
+    { command: 'hop', description: 'Candle Hop arcade (5×/jour)' },
     { command: 'classement', description: 'Top traders Boursikotons' },
 
     // Calculatrices trading

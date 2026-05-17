@@ -1381,6 +1381,38 @@ export const anchoringRuns = pgTable(
 );
 
 /**
+ * Candle Hop : jeu Flappy-style themé trading. Player = candlestick qui
+ * saute entre des bougies rouges (obstacles) en touchant des bougies vertes
+ * bonus. Score = nombre de paires traversées + bonus.
+ *
+ * Limite : 5 runs / 24h glissantes + cap 300 XP / jour. Anti-cheat :
+ * vérifie ratio durée/score plausible.
+ */
+export const candleHopRuns = pgTable(
+  'candle_hop_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Score atteint dans ce run. */
+    score: integer('score').notNull(),
+    /** Durée totale du run (ms). */
+    durationMs: integer('duration_ms').notNull(),
+    /** Nombre de taps/sauts (anti-cheat ratio). */
+    taps: integer('taps').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    /** Vrai si c'est un nouveau record perso au moment du run. */
+    isPersonalBest: boolean('is_personal_best').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('candle_hop_runs_user_idx').on(t.userId, t.createdAt),
+    scoreIdx: index('candle_hop_runs_score_idx').on(t.score),
+  })
+);
+
+/**
  * Pattern Memory : on flash 5 patterns techniques pendant 3s chacun, puis
  * on demande à l'user à quelle position était chaque pattern. Score 0-5.
  *

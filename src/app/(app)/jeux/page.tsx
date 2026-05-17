@@ -16,6 +16,7 @@ import { getPatienceState } from '@/lib/games/patience';
 import { getLossAversionState } from '@/lib/games/loss-aversion';
 import { getAnchoringState } from '@/lib/games/anchoring';
 import { getPatternMemoryState } from '@/lib/games/pattern-memory';
+import { getCandleHopState } from '@/lib/games/candle-hop';
 import { getParisDate } from '@/lib/games/markets';
 import { JeuxHub } from '@/components/games/jeux-hub';
 
@@ -35,6 +36,7 @@ export default async function JeuxPage() {
     aversionState,
     anchoringState,
     patternState,
+    candleHopState,
     todayJournal,
   ] = await Promise.all([
     getUserXpState(user.id),
@@ -46,6 +48,7 @@ export default async function JeuxPage() {
     getLossAversionState(user.id),
     getAnchoringState(user.id),
     getPatternMemoryState(user.id),
+    getCandleHopState(user.id),
     countTodayJournalEntry(user.id),
   ]);
 
@@ -112,6 +115,11 @@ export default async function JeuxPage() {
         },
         pattern: {
           available: patternState.canPlay,
+        },
+        hop: {
+          runsLeft: candleHopState.runsLeftToday,
+          runsTotal: candleHopState.runsTotal,
+          bestScore: candleHopState.bestScore,
         },
       }}
     />

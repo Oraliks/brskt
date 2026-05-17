@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   Anchor,
   ArrowRight,
+  Bird,
   BookHeart,
   Brain,
   CheckCircle2,
@@ -36,6 +37,7 @@ interface Availability {
   aversion: { available: boolean; nextAt: string | null };
   anchoring: { available: boolean; nextAt: string | null };
   pattern: { available: boolean };
+  hop: { runsLeft: number; runsTotal: number; bestScore: number };
 }
 
 interface Props {
@@ -228,6 +230,26 @@ export function JeuxHub({
         status: availability.pattern.available
           ? { kind: 'available', label: 'Dispo' }
           : { kind: 'done', label: 'Fait' },
+      },
+      {
+        id: 'hop',
+        category: ['all', 'daily'],
+        href: '/jeux/hop',
+        icon: Bird,
+        iconBg: 'from-lime-500/30 to-emerald-700/20',
+        iconColor: 'text-lime-300',
+        title: 'Candle Hop',
+        subtitle: availability.hop.bestScore > 0
+          ? `Record ${availability.hop.bestScore}`
+          : 'Arcade — tap to jump',
+        status:
+          availability.hop.runsLeft > 0
+            ? {
+                kind: 'limited',
+                left: availability.hop.runsLeft,
+                total: availability.hop.runsTotal,
+              }
+            : { kind: 'done', label: 'Limite' },
       },
     ],
     [

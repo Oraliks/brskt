@@ -30,6 +30,7 @@ import {
   submitPatternMemoryRun,
   PATTERNS_PER_RUN,
 } from '@/lib/games/pattern-memory';
+import { submitCandleHopRun } from '@/lib/games/candle-hop';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -611,6 +612,72 @@ export async function submitPatternMemoryAction(input: {
       xpAwarded: result.xpAwarded,
       newTotal: result.newTotal,
       correctIds: result.correctIds,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run de Candle Hop.
+ */
+export async function submitCandleHopAction(input: {
+  score: number;
+  durationMs: number;
+  taps: number;
+}): Promise<
+  ActionResult<{
+    score: number;
+    xpAwarded: number;
+    bonusXp: number;
+    newTotal: number;
+    isPersonalBest: boolean;
+    runsLeftToday: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `candle_hop:user:${user.id}`,
+    limit: 10,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  if (
+    typeof input.score !== 'number' ||
+    typeof input.durationMs !== 'number' ||
+    typeof input.taps !== 'number'
+  ) {
+    return { success: false, error: 'Run invalide.' };
+  }
+
+  const result = await submitCandleHopRun(user.id, {
+    score: input.score,
+    durationMs: input.durationMs,
+    taps: input.taps,
+  });
+  if (!result.ok) {
+    const msg =
+      result.error === 'daily_limit'
+        ? 'Tu as utilisé tes 5 runs du jour. Reviens demain.'
+        : result.error === 'invalid_run'
+          ? 'Run invalide.'
+          : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/hop');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      score: result.score,
+      xpAwarded: result.xpAwarded,
+      bonusXp: result.bonusXp,
+      newTotal: result.newTotal,
+      isPersonalBest: result.isPersonalBest,
+      runsLeftToday: result.runsLeftToday,
     },
   };
 }

@@ -212,6 +212,10 @@ export function routeForStartParam(param: string | null): string | null {
     case 'pattern':
     case 'patterns':
       return '/jeux/pattern';
+    case 'hop':
+    case 'candle':
+    case 'flap':
+      return '/jeux/hop';
     case 'classement':
     case 'leaderboard':
       return '/jeux/classement';

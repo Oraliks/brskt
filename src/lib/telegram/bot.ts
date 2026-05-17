@@ -356,6 +356,7 @@ export function getBot(): Bot<Context> {
         `/aversion — Test d'aversion à la perte (1×/sem)\n` +
         `/anchoring — Test du biais d'ancrage (1×/sem)\n` +
         `/pattern — Pattern Memory (1×/jour)\n` +
+        `/hop — Candle Hop arcade (5×/jour)\n` +
         `/classement — Top XP semaine/mois/all-time\n\n` +
         `<b>🎓 Formations</b>\n` +
         `/formation — Réserver distance ou Dubaï\n` +
@@ -604,6 +605,24 @@ export function getBot(): Bot<Context> {
         `top, triangle…). Tu dois ensuite les replacer dans l'ordre. ` +
         `Entraînement à la reconnaissance rapide — l'arme du scalpeur.\n\n` +
         `1 run / jour. Jusqu'à +150 XP si tu fais 5/5.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['hop', 'candle', 'flap'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🐦 Lancer un run',
+      `${appUrl}/mini?goto=hop`
+    );
+    await ctx.reply(
+      `🐦 <b>Candle Hop</b>\n\n` +
+        `Mini Flappy themé trading. Tap pour sauter, évite les bougies ` +
+        `rouges, choppe les vertes. Vitesse augmente avec le score.\n\n` +
+        `5 runs / jour. Jusqu'à +200 XP par run + bonus si nouveau record.`,
       {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },
