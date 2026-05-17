@@ -1186,6 +1186,36 @@ export const xpEvents = pgTable(
 );
 
 /**
+ * Test d'aversion à la perte. 1 run par user par semaine.
+ *
+ * 10 choix binaires "sûr vs loterie" → on calcule le coefficient lambda
+ * (Kahneman et al. : ~2.25 en moyenne — une perte est ressentie 2.25×
+ * plus fortement qu'un gain équivalent).
+ *
+ * Stocke les choix bruts (jsonb) pour pouvoir recalculer le coef si on
+ * change le barème ou si on veut afficher les questions revisitées.
+ */
+export const lossAversionRuns = pgTable(
+  'loss_aversion_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Array de 10 strings 'safe' | 'lottery' dans l'ordre des questions. */
+    choices: jsonb('choices').$type<Array<'safe' | 'lottery'>>().notNull(),
+    /** Nombre de fois où l'user a choisi 'safe' (0-10). */
+    safeCount: integer('safe_count').notNull(),
+    /** Coefficient lambda calculé. ~1=risk-neutral, ~2.25=moyenne Kahneman. */
+    coefficient: numeric('coefficient', { precision: 4, scale: 2 }).notNull(),
+    completedAt: timestamp('completed_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('loss_aversion_user_idx').on(t.userId, t.completedAt),
+  })
+);
+
+/**
  * Journal d'émotion quotidien. 1 entrée par user par jour.
  *
  *  - `mood` : note 1-10 (1=très négatif, 10=très positif/confiant)

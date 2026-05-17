@@ -16,6 +16,10 @@ import {
 } from '@/lib/games/tap';
 import { MARKET_IDS, type MarketId } from '@/lib/games/markets';
 import { submitEmotionEntry } from '@/lib/games/emotion-journal';
+import {
+  submitLossAversionRun,
+  LOSS_AVERSION_QUESTIONS,
+} from '@/lib/games/loss-aversion';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -302,6 +306,63 @@ export async function submitEmotionEntryAction(input: {
       xpAwarded: result.xpAwarded,
       bonusAwarded: result.bonusAwarded,
       newStreak: result.newStreak,
+      newTotal: result.newTotal,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run complet du test d'aversion à la perte.
+ */
+export async function submitLossAversionAction(input: {
+  choices: Array<'safe' | 'lottery'>;
+}): Promise<
+  ActionResult<{
+    coefficient: number;
+    safeCount: number;
+    newTotal: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `loss_aversion:user:${user.id}`,
+    limit: 3,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  if (
+    !Array.isArray(input.choices) ||
+    input.choices.length !== LOSS_AVERSION_QUESTIONS.length
+  ) {
+    return { success: false, error: 'Choix incomplets ou invalides.' };
+  }
+
+  const result = await submitLossAversionRun(user.id, input.choices);
+  if (!result.ok) {
+    if (result.error === 'cooldown' && result.nextRunAt) {
+      return {
+        success: false,
+        error: `Tu pourras refaire le test le ${result.nextRunAt.toLocaleDateString('fr-FR')}.`,
+      };
+    }
+    const msg =
+      result.error === 'invalid_choices'
+        ? 'Choix invalides.'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/aversion');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      coefficient: result.coefficient,
+      safeCount: result.safeCount,
       newTotal: result.newTotal,
     },
   };
