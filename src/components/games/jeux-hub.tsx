@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
+  Anchor,
   ArrowRight,
   BookHeart,
   Brain,
@@ -10,6 +11,7 @@ import {
   Clock,
   Coins,
   Disc3,
+  Eye,
   Flame,
   LineChart,
   Sparkles,
@@ -32,6 +34,8 @@ interface Availability {
   fomo: { available: boolean; nextAt: string | null };
   patience: { runsLeft: number; runsTotal: number };
   aversion: { available: boolean; nextAt: string | null };
+  anchoring: { available: boolean; nextAt: string | null };
+  pattern: { available: boolean };
 }
 
 interface Props {
@@ -198,6 +202,32 @@ export function JeuxHub({
         status: availability.aversion.available
           ? { kind: 'available', label: 'Dispo' }
           : { kind: 'cooldown', nextAt: availability.aversion.nextAt, label: 'Cooldown' },
+      },
+      {
+        id: 'anchoring',
+        category: ['all', 'weekly', 'challenges'],
+        href: '/jeux/anchoring',
+        icon: Anchor,
+        iconBg: 'from-sky-500/30 to-cyan-700/20',
+        iconColor: 'text-sky-300',
+        title: 'Test d\'ancrage',
+        subtitle: '6 prédictions, 1 piège',
+        status: availability.anchoring.available
+          ? { kind: 'available', label: 'Dispo' }
+          : { kind: 'cooldown', nextAt: availability.anchoring.nextAt, label: 'Cooldown' },
+      },
+      {
+        id: 'pattern',
+        category: ['all', 'daily', 'challenges'],
+        href: '/jeux/pattern',
+        icon: Eye,
+        iconBg: 'from-violet-500/30 to-purple-700/20',
+        iconColor: 'text-violet-300',
+        title: 'Pattern Memory',
+        subtitle: '5 figures, 3s chacune',
+        status: availability.pattern.available
+          ? { kind: 'available', label: 'Dispo' }
+          : { kind: 'done', label: 'Fait' },
       },
     ],
     [

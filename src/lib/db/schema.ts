@@ -1345,6 +1345,70 @@ export const gameTapRuns = pgTable(
 );
 
 /**
+ * Test d'anchoring (biais d'ancrage). 1 run par user par semaine.
+ *
+ * 6 questions de prédiction où on montre une ancre (haute ou basse,
+ * randomisée par question pour cet user). On mesure l'écart entre la
+ * prédiction de l'user et la "valeur neutre" centrée, normalisé par
+ * la distance de l'ancre au centre. shiftRatio ∈ [0,1] → 1 = totalement
+ * ancré, 0 = indépendant. Moyenne × 100 = indice d'ancrage 0-100.
+ */
+export const anchoringRuns = pgTable(
+  'anchoring_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Array de 6 réponses {questionId, anchorVariant, userValue}. */
+    predictions: jsonb('predictions')
+      .$type<
+        Array<{
+          questionId: number;
+          anchorVariant: 'high' | 'low';
+          userValue: number;
+        }>
+      >()
+      .notNull(),
+    /** Indice d'ancrage 0-100 (0 = pas du tout, 100 = totalement ancré). */
+    anchoringIndex: integer('anchoring_index').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    completedAt: timestamp('completed_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('anchoring_runs_user_idx').on(t.userId, t.completedAt),
+  })
+);
+
+/**
+ * Pattern Memory : on flash 5 patterns techniques pendant 3s chacun, puis
+ * on demande à l'user à quelle position était chaque pattern. Score 0-5.
+ *
+ * Limite : 1 run / jour calendaire (Paris). Anti-cheat : validate que les
+ * patternsShown sont des IDs valides + answers même longueur.
+ */
+export const patternMemoryRuns = pgTable(
+  'pattern_memory_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Patterns IDs montrés dans l'ordre (5 distincts). */
+    patternsShown: jsonb('patterns_shown').$type<number[]>().notNull(),
+    /** Patterns IDs que l'user a sélectionnés pour chaque slot. */
+    answers: jsonb('answers').$type<number[]>().notNull(),
+    /** Nombre de réponses correctes (0-5). */
+    score: integer('score').notNull(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('pattern_memory_runs_user_idx').on(t.userId, t.createdAt),
+  })
+);
+
+/**
  * Spins de la roue de la fortune. Une row par spin.
  *
  *  - `rewardType` = 'xp' → `rewardValue` est un montant ("100"), XP déjà

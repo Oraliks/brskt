@@ -354,6 +354,8 @@ export function getBot(): Bot<Context> {
         `/fomo — FOMO Test (10 décisions sous pression)\n` +
         `/patience — Patience Trainer (chart real-time)\n` +
         `/aversion — Test d'aversion à la perte (1×/sem)\n` +
+        `/anchoring — Test du biais d'ancrage (1×/sem)\n` +
+        `/pattern — Pattern Memory (1×/jour)\n` +
         `/classement — Top XP semaine/mois/all-time\n\n` +
         `<b>🎓 Formations</b>\n` +
         `/formation — Réserver distance ou Dubaï\n` +
@@ -564,6 +566,44 @@ export function getBot(): Bot<Context> {
         `(Kahneman ~2.25 en moyenne — une perte est ressentie 2× plus ` +
         `qu'un gain équivalent).\n\n` +
         `1 test / semaine, +250 XP par run complété.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['anchoring', 'ancrage'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '⚓ Tester mon ancrage',
+      `${appUrl}/mini?goto=anchoring`
+    );
+    await ctx.reply(
+      `⚓ <b>Test du biais d'ancrage</b>\n\n` +
+        `6 questions de prédiction marché. Avant chaque question, on te ` +
+        `montre une référence chiffrée arbitraire. Tu ne devrais pas en ` +
+        `tenir compte — on mesure si ton estimé glisse vers cette ancre.\n\n` +
+        `1 test / semaine. +200 XP + bonus +50 si tu y résistes.`,
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        reply_markup: kb,
+      }
+    );
+  });
+
+  bot.command(['pattern', 'patterns'], async (ctx) => {
+    const kb = new InlineKeyboard().webApp(
+      '🃏 Lancer le quiz',
+      `${appUrl}/mini?goto=pattern`
+    );
+    await ctx.reply(
+      `🃏 <b>Pattern Memory</b>\n\n` +
+        `5 figures techniques flashées 3 secondes chacune (drapeau, double ` +
+        `top, triangle…). Tu dois ensuite les replacer dans l'ordre. ` +
+        `Entraînement à la reconnaissance rapide — l'arme du scalpeur.\n\n` +
+        `1 run / jour. Jusqu'à +150 XP si tu fais 5/5.`,
       {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },

@@ -22,6 +22,14 @@ import {
 } from '@/lib/games/loss-aversion';
 import { submitPatienceRun } from '@/lib/games/patience';
 import { submitFomoRun, FOMO_SCENARIOS } from '@/lib/games/fomo';
+import {
+  submitAnchoringRun,
+  ANCHORING_QUESTIONS,
+} from '@/lib/games/anchoring';
+import {
+  submitPatternMemoryRun,
+  PATTERNS_PER_RUN,
+} from '@/lib/games/pattern-memory';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export type ActionResult<T = void> =
@@ -480,6 +488,129 @@ export async function submitFomoRunAction(input: {
       score: result.score,
       xpAwarded: result.xpAwarded,
       newTotal: result.newTotal,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run du test d'ancrage.
+ */
+export async function submitAnchoringAction(input: {
+  predictions: Array<{
+    questionId: number;
+    anchorVariant: 'high' | 'low';
+    userValue: number;
+  }>;
+}): Promise<
+  ActionResult<{
+    anchoringIndex: number;
+    xpAwarded: number;
+    newTotal: number;
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `anchoring:user:${user.id}`,
+    limit: 3,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  if (
+    !Array.isArray(input.predictions) ||
+    input.predictions.length !== ANCHORING_QUESTIONS.length
+  ) {
+    return { success: false, error: 'Prédictions incomplètes.' };
+  }
+
+  const result = await submitAnchoringRun(user.id, input.predictions);
+  if (!result.ok) {
+    if (result.error === 'cooldown' && result.nextRunAt) {
+      return {
+        success: false,
+        error: `Tu pourras refaire le test le ${result.nextRunAt.toLocaleDateString('fr-FR')}.`,
+      };
+    }
+    const msg =
+      result.error === 'invalid_predictions'
+        ? 'Prédictions invalides.'
+        : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/anchoring');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      anchoringIndex: result.anchoringIndex,
+      xpAwarded: result.xpAwarded,
+      newTotal: result.newTotal,
+    },
+  };
+}
+
+/**
+ * Server Action : soumet un run du Pattern Memory.
+ */
+export async function submitPatternMemoryAction(input: {
+  patternsShown: number[];
+  answers: number[];
+}): Promise<
+  ActionResult<{
+    score: number;
+    xpAwarded: number;
+    newTotal: number;
+    correctIds: number[];
+  }>
+> {
+  const { user } = await requireOnboarded();
+
+  const rl = await checkRateLimit({
+    key: `pattern_memory:user:${user.id}`,
+    limit: 5,
+    windowSec: 600,
+  });
+  if (!rl.allowed) {
+    return { success: false, error: 'Trop de tentatives, attends un peu.' };
+  }
+
+  if (
+    !Array.isArray(input.patternsShown) ||
+    input.patternsShown.length !== PATTERNS_PER_RUN ||
+    !Array.isArray(input.answers) ||
+    input.answers.length !== PATTERNS_PER_RUN
+  ) {
+    return { success: false, error: 'Run invalide.' };
+  }
+
+  const result = await submitPatternMemoryRun(
+    user.id,
+    input.patternsShown,
+    input.answers
+  );
+  if (!result.ok) {
+    const msg =
+      result.error === 'daily_limit'
+        ? 'Tu as déjà fait ton run aujourd\'hui. Reviens demain.'
+        : result.error === 'invalid_run'
+          ? 'Run invalide.'
+          : 'Une erreur est survenue.';
+    return { success: false, error: msg };
+  }
+
+  revalidatePath('/jeux/pattern');
+  revalidatePath('/jeux');
+  return {
+    success: true,
+    data: {
+      score: result.score,
+      xpAwarded: result.xpAwarded,
+      newTotal: result.newTotal,
+      correctIds: result.correctIds,
     },
   };
 }

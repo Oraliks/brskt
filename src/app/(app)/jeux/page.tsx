@@ -14,6 +14,8 @@ import { getUserRank } from '@/lib/games/leaderboard';
 import { getFomoState } from '@/lib/games/fomo';
 import { getPatienceState } from '@/lib/games/patience';
 import { getLossAversionState } from '@/lib/games/loss-aversion';
+import { getAnchoringState } from '@/lib/games/anchoring';
+import { getPatternMemoryState } from '@/lib/games/pattern-memory';
 import { getParisDate } from '@/lib/games/markets';
 import { JeuxHub } from '@/components/games/jeux-hub';
 
@@ -31,6 +33,8 @@ export default async function JeuxPage() {
     fomoState,
     patienceState,
     aversionState,
+    anchoringState,
+    patternState,
     todayJournal,
   ] = await Promise.all([
     getUserXpState(user.id),
@@ -40,6 +44,8 @@ export default async function JeuxPage() {
     getFomoState(user.id),
     getPatienceState(user.id),
     getLossAversionState(user.id),
+    getAnchoringState(user.id),
+    getPatternMemoryState(user.id),
     countTodayJournalEntry(user.id),
   ]);
 
@@ -99,6 +105,13 @@ export default async function JeuxPage() {
         aversion: {
           available: aversionState.canPlay,
           nextAt: aversionState.nextRunAt?.toISOString() ?? null,
+        },
+        anchoring: {
+          available: anchoringState.canPlay,
+          nextAt: anchoringState.nextRunAt?.toISOString() ?? null,
+        },
+        pattern: {
+          available: patternState.canPlay,
         },
       }}
     />
