@@ -10,6 +10,7 @@ import {
 import { Section, SectionHeader } from '@/components/shared/section';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { VipPathChoice } from './vip-path-choice';
 
 const benefits = [
   'Setups Forex / indices / crypto au quotidien',
@@ -33,28 +34,49 @@ const conditions = [
   },
 ];
 
-export function VipLanding() {
+export function VipLanding({
+  paidPriceEur = 250,
+  paidEnabled = true,
+}: {
+  paidPriceEur?: number;
+  paidEnabled?: boolean;
+}) {
   return (
     <>
-      <Section className="pt-32 pb-12">
+      <Section className="pt-32 pb-8">
         <div className="max-w-3xl mx-auto text-center space-y-6">
-          <Badge variant="gold">VIP Telegram · 100% gratuit</Badge>
+          <Badge variant="gold">VIP Telegram</Badge>
           <h1 className="font-serif text-5xl md:text-7xl text-gradient leading-[1.05]">
             Le groupe
             <br />
             <span className="italic text-gradient-accent">qui change tout.</span>
           </h1>
           <p className="text-lg text-[var(--color-text-dim)] max-w-xl mx-auto">
-            Aucun frais à nous payer — jamais. On gagne notre commission directement
-            auprès du broker quand tu trades. Toi, tu gardes ton argent pour le trader.
+            Deux chemins pour entrer dans le groupe Telegram privé.
+            Choisis le tien.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-            <Button asChild size="xl" variant="glow">
-              <Link href="/login?redirectTo=/vip">Démarrer le funnel</Link>
-            </Button>
-            <Button asChild size="xl" variant="ghost">
-              <Link href="/formation">Voir la formation</Link>
-            </Button>
+        </div>
+      </Section>
+
+      {/* Choix des 2 chemins — broker (0€) ou accès direct (250€) */}
+      <Section className="py-6">
+        <div className="max-w-4xl mx-auto">
+          {paidEnabled ? (
+            <VipPathChoice priceEur={paidPriceEur} requireLogin />
+          ) : (
+            <div className="text-center">
+              <Button asChild size="xl" variant="glow">
+                <Link href="/login?redirectTo=/vip">Démarrer le funnel</Link>
+              </Button>
+            </div>
+          )}
+          <div className="mt-4 text-center">
+            <Link
+              href="/formation"
+              className="text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)] underline-offset-4 hover:underline"
+            >
+              Plutôt te former d&apos;abord ? Voir nos formations →
+            </Link>
           </div>
         </div>
       </Section>

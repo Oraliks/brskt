@@ -24,7 +24,15 @@ export default async function VipPage({
   const session = await getSession().catch(() => null);
 
   if (!session?.user) {
-    return <VipLanding />;
+    // On lit la config pour exposer l'option d'accès direct sur la landing
+    // publique (sinon les visiteurs non loggés ne savent pas qu'elle existe).
+    const cfg = await getVipPaidAccessConfig().catch(() => ({
+      enabled: true,
+      priceEur: 250,
+    }));
+    return (
+      <VipLanding paidPriceEur={cfg.priceEur} paidEnabled={cfg.enabled} />
+    );
   }
 
   if (!session.user.email || !session.user.onboardingCompletedAt) {

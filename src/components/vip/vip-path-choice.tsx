@@ -16,15 +16,28 @@ import { formatPrice } from '@/lib/utils';
  *  - Funnel broker partenaire (0€) — recommandé, classique
  *  - Accès direct payant — pour ceux qui ont déjà leur broker
  *
- * Pure server component, aucune logique côté client. Les 2 cards sont
- * des liens vers les routes correspondantes.
+ * `requireLogin` : si true, les liens passent par /login?redirectTo=...
+ * Utilisé sur la landing publique (user pas encore loggé).
  */
-export function VipPathChoice({ priceEur }: { priceEur: number }) {
+export function VipPathChoice({
+  priceEur,
+  requireLogin = false,
+}: {
+  priceEur: number;
+  requireLogin?: boolean;
+}) {
+  const brokerHref = requireLogin
+    ? '/login?redirectTo=' + encodeURIComponent('/vip?path=affiliate')
+    : '?path=affiliate';
+  const directHref = requireLogin
+    ? '/login?redirectTo=' + encodeURIComponent('/vip/acces-direct')
+    : '/vip/acces-direct';
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {/* Option 1 — funnel affilié (gratuit, recommandée) */}
       <Link
-        href="?path=affiliate"
+        href={brokerHref}
         scroll={false}
         className="relative glass-strong rounded-[var(--radius-lg)] p-6 flex flex-col gap-4 transition-all hover:-translate-y-0.5 hover:border-[var(--color-border-strong)]"
       >
@@ -61,7 +74,7 @@ export function VipPathChoice({ priceEur }: { priceEur: number }) {
 
       {/* Option 2 — accès direct payant */}
       <Link
-        href="/vip/acces-direct"
+        href={directHref}
         className="relative glass-strong rounded-[var(--radius-lg)] p-6 flex flex-col gap-4 transition-all hover:-translate-y-0.5 hover:border-[var(--color-border-strong)]"
       >
         <div className="absolute -top-2 left-6">
