@@ -8,6 +8,7 @@ import { VipWizard } from '@/components/vip/vip-wizard';
 import { WelcomeBonusBanner } from '@/components/vip/welcome-bonus-banner';
 import { VipPathChoice } from '@/components/vip/vip-path-choice';
 import { VipPaidAccessSummary } from '@/components/vip/vip-paid-access-summary';
+import { VipSwitchToDirectBanner } from '@/components/vip/vip-switch-to-direct-banner';
 import { getWelcomeBonus } from '@/lib/settings/welcome-bonus';
 import { getVipPaidAccessConfig } from '@/lib/settings/vip-paid-access';
 import { getActivePaidAccess } from '@/lib/vip-paid-access';
@@ -146,6 +147,15 @@ export default async function VipPage({
 
         <div className="mt-8 space-y-4">
           {welcomeBonus.enabled && <WelcomeBonusBanner bonus={welcomeBonus} />}
+          {/* Switch path : si l'option payante est activée et l'user
+              n'est pas encore in_group, on lui offre la sortie de secours
+              vers l'accès direct 250€. */}
+          {paidConfig.enabled && application?.step !== 'in_group' && (
+            <VipSwitchToDirectBanner
+              priceEur={paidConfig.priceEur}
+              currentStep={application?.step ?? 'link_generated'}
+            />
+          )}
           <VipWizard
             application={application ?? null}
             tradingProgressPct={tradingProgressPct}
